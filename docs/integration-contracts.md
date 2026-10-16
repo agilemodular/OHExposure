@@ -7,8 +7,8 @@ Source of truth: `CONTRACTS` in `src/services/integrations.ts`.
 | Target | Contract | Version | Direction | Trigger | Status |
 |---|---|---|---|---|---|
 | IntegraRisk | `ohea.reviewed_finding` | 1.0 | out | assessment revision approved | defined, mock |
-| IntegraRisk | `ohea.action` | 1.0 | out | action created/changed | defined, **not yet emitted** |
-| WorkAssura | `ohea.required_controls` | 1.0 | out | control created/changed | defined, **not yet emitted**; informational only, never authorises work |
+| IntegraRisk | `ohea.action` | 1.0 | out | action created and each stage change | defined, mock |
+| WorkAssura | `ohea.required_controls` | 1.0 | out | control created and status changed | defined, mock; informational only, never authorises work |
 | Foresensa | `ohea.exposure_data` | 1.0 | out | assessment revision approved | defined, mock |
 | SentriSafe (SentriAssure) | `ohea.context_event` | 0.1-draft | in | — | blocked: needs a validated use case; cannot be enabled |
 | FireSafe (FireSafe Assure) | `ohea.shared_asset_ref` | 0.1-draft | both | — | blocked: needs justification; cannot be enabled |

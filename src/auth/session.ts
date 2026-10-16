@@ -20,7 +20,7 @@ export async function login(email: string, password: string, ua?: string, ip?: s
   const full = await withActor(
     { userId: u.id, tenantId: u.tenant_id, clientId: null, role: 'client_readonly', name: '', email, perms: new Set() },
     async (tx) => {
-      const usr = await one(tx, 'select u.*, t.mfa_required from users u join tenants t on t.id=u.tenant_id where u.id=$1', [u.id]);
+      const usr = await one(tx, 'select u.id, u.tenant_id, u.client_id, u.role, u.name, u.email, u.mfa_enabled, t.mfa_required from users u join tenants t on t.id=u.tenant_id where u.id=$1', [u.id]);
       await tx.query(
         `insert into sessions (id,user_id,tenant_id,csrf_token,mfa_passed,expires_at,user_agent)
          values ($1,$2,$3,$4,$5, now() + ($6 || ' hours')::interval, $7)`,
@@ -53,21 +53,28 @@ export async function resolveSession(token: string | undefined, ip?: string): Pr
 export async function completeMfa(si: SessionInfo, code: string) {
   // The failure counter must persist, so the outcome is decided inside the transaction and thrown after commit.
   const outcome = await withActor(si.actor, async (tx) => {
-    const u = await one(tx, 'select totp_secret from users where id=$1', [si.actor.userId]);
-    const step = u?.totp_secret ? verifyTotpStep(u.totp_secret, code.trim()) : null;
+    // A locked account cannot complete MFA from any session, including sessions opened before the lock.
+    if ((await one(tx, 'select self_mfa_locked() l'))?.l) {
+      await tx.query('update sessions set revoked_at=now() where id=$1', [si.sessionId]);
+      await audit(tx, si.actor, 'auth.mfa_refused_locked', 'user', si.actor.userId);
+      return 'locked' as const;
+    }
+    const secret = (await one(tx, 'select self_totp_secret() s'))?.s as string | null;
+    const step = secret ? verifyTotpStep(secret, code.trim()) : null;
     // Replay protection: each time-step is accepted once.
     const accepted = step !== null && (await one(tx, 'select self_accept_totp_step($1) ok', [step]))?.ok;
     if (accepted) {
-      await tx.query('select auth_record_mfa($1,true)', [si.actor.userId]);
+      await tx.query('select self_record_mfa(true)');
       await tx.query('update sessions set mfa_passed=true where id=$1', [si.sessionId]);
       await audit(tx, si.actor, si.mfaEnabled ? 'auth.mfa_passed' : 'auth.mfa_enrolled', 'user', si.actor.userId);
       return 'ok' as const;
     }
     const s = await one(tx, `update sessions set mfa_failures = mfa_failures + 1,
       revoked_at = case when mfa_failures + 1 >= 5 then now() else revoked_at end where id=$1 returning mfa_failures`, [si.sessionId]);
-    // Count against the account as well as the session, so signing in again does not reset the attempt budget.
-    await tx.query('select auth_record_mfa($1,false)', [si.actor.userId]);
-    const locked = (s?.mfa_failures ?? 0) >= 5;
+    // Count against the account as well as the session, so signing in again does not reset the attempt budget;
+    // when the account locks, every session that has not passed MFA is revoked.
+    const accountLocked = (await one(tx, 'select self_record_mfa(false) l'))?.l;
+    const locked = accountLocked || (s?.mfa_failures ?? 0) >= 5;
     await audit(tx, si.actor, locked ? 'auth.mfa_session_revoked' : 'auth.mfa_failed', 'user', si.actor.userId);
     return locked ? ('locked' as const) : ('failed' as const);
   });

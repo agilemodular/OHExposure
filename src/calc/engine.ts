@@ -17,7 +17,9 @@
 // 1.1.0: voided samples excluded; overlapping interruptions merged; shifts clustered across midnight;
 // exposure period checked against the register; high excluded/indicative results block a favourable roll-up.
 // 1.2.0: STEL (stel_15) calculation; ppm ↔ mg/m³ conversion for benchmark comparison when molecular weight is recorded.
-export const ENGINE_VERSION = '1.2.0';
+// 1.3.0: results without valid calibration or instrument evidence are indicative only; unconvertible indicative/excluded
+// results block a favourable roll-up; STEL requires the elapsed window to be 15 minutes.
+export const ENGINE_VERSION = '1.3.0';
 
 export type Qualifier = '=' | '<LOD' | '<LOQ' | '>' | 'estimated';
 export type MassUnit = 'ug' | 'mg';
@@ -117,12 +119,19 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
   }
 
   // Instrument / method suitability
-  if (!s.instrument) flags.push({ code: 'NO_INSTRUMENT', severity: 'qualify', message: 'No instrument recorded for this sample.' });
-  else {
-    if (s.instrument.calibrationValidAtSampling === null)
-      flags.push({ code: 'CALIBRATION_MISSING', severity: 'qualify', message: `No calibration evidence for ${s.instrument.assetTag} covering the sampling date.` });
-    else if (!s.instrument.calibrationValidAtSampling)
-      flags.push({ code: 'CALIBRATION_INVALID', severity: 'qualify', message: `Calibration for ${s.instrument.assetTag} was expired or failed at the sampling date.` });
+  // Without instrument and valid calibration evidence a result cannot be formal evidence: it is kept, visible and
+  // labelled indicative, and it can still make a favourable roll-up indeterminate.
+  if (!s.instrument) {
+    out.indicative = true;
+    flags.push({ code: 'NO_INSTRUMENT', severity: 'qualify', message: 'No instrument recorded for this sample; result treated as indicative only.' });
+  } else {
+    if (s.instrument.calibrationValidAtSampling === null) {
+      out.indicative = true;
+      flags.push({ code: 'CALIBRATION_MISSING', severity: 'qualify', message: `No calibration evidence for ${s.instrument.assetTag} covering the sampling date; result treated as indicative only.` });
+    } else if (!s.instrument.calibrationValidAtSampling) {
+      out.indicative = true;
+      flags.push({ code: 'CALIBRATION_INVALID', severity: 'qualify', message: `Calibration for ${s.instrument.assetTag} was expired or failed at the sampling date; result treated as indicative only.` });
+    }
     if (s.instrument.screeningOnly) {
       out.indicative = true;
       flags.push({ code: 'SCREENING_INSTRUMENT', severity: 'qualify', message: `${s.instrument.assetTag} is designated screening-only; result is indicative and excluded from formal benchmark comparison.` });
@@ -390,6 +399,11 @@ export function stel15(samples: SampleOutput[], p: StelParameters): ShiftTwa[] {
       continue;
     }
     const T = s.sampledMinutes, c = s.concentration;
+    const elapsed = s.startMs !== null && s.endMs !== null ? (s.endMs - s.startMs) / MIN : T;
+    if (elapsed > STEL_PERIOD_MIN + STEL_TOLERANCE_MIN && T <= STEL_PERIOD_MIN + STEL_TOLERANCE_MIN) {
+      flags.push({ code: 'STEL_WINDOW_TOO_LONG', severity: 'incomplete', message: `Sampling was spread over ${round(elapsed, 1)} min with interruptions; a short-term result needs a continuous window of about 15 minutes.` });
+      continue;
+    }
     if (T > STEL_PERIOD_MIN + STEL_TOLERANCE_MIN) {
       flags.push({ code: 'STEL_SAMPLE_TOO_LONG', severity: 'incomplete', message: `Sampled for ${round(T, 1)} min. A sample longer than 15 minutes averages out peaks and cannot be used as a short-term result.` });
       continue;
@@ -478,8 +492,8 @@ export interface AssessmentOutput {
 }
 
 export const CALCULATIONS: Record<CalcCode, { code: CalcCode; version: string; averagingMinutes: number; label: string }> = {
-  twa_8h: { code: 'twa_8h', version: '1.1.0', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
-  stel_15: { code: 'stel_15', version: '1.0.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
+  twa_8h: { code: 'twa_8h', version: '1.2.0', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
+  stel_15: { code: 'stel_15', version: '1.1.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
 };
 
 export function runAssessment(input: AssessmentInput): AssessmentOutput {
@@ -525,11 +539,13 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
     }
     // Evidence that was excluded or is only indicative must not be outweighed silently: if any such personal
     // result is itself at or above the benchmark, a favourable roll-up becomes indeterminate.
-    const highSet = samples.filter((s) => {
-      if (s.sampleType !== 'personal' || (s.included && !s.indicative) || !s.concentration) return false;
-      const c = convertInterval(s.concentration, b.unit, input.molecularWeight);
-      return !!c && c.lower >= b.value;
-    });
+    const sideSet = samples.filter((s) => s.sampleType === 'personal' && (!s.included || s.indicative) && s.concentration);
+    const highSet = sideSet.filter((s) => { const c = convertInterval(s.concentration!, b.unit, input.molecularWeight); return !!c && c.lower >= b.value; });
+    const unknownSet = sideSet.filter((s) => !convertInterval(s.concentration!, b.unit, input.molecularWeight));
+    if (unknownSet.length && (benchmarkState === 'below_benchmark' || benchmarkState === 'not_comparable')) {
+      benchmarkState = 'indeterminate';
+      benchmarkNote += ` ${unknownSet.length} excluded or indicative result(s) (${unknownSet.map((s) => s.sampleCode).join(', ')}) are in a unit that cannot be converted to ${b.unit}; they cannot be ruled out as at or above the benchmark.`;
+    }
     if (highSet.length && (benchmarkState === 'below_benchmark' || benchmarkState === 'not_comparable')) {
       benchmarkState = 'indeterminate';
       benchmarkNote += ` ${highSet.length} excluded or indicative result(s) (${highSet.map((s) => s.sampleCode).join(', ')}) are at or above the benchmark value; they must be explained before any favourable conclusion.`;

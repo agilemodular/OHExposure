@@ -1,6 +1,6 @@
 # Release readiness report — first release
 
-**Date:** 16 October 2026 · **Scope:** airborne contaminants, phases A–G implemented, phase H (pilot) not started · **Engine:** v1.1.0
+**Date:** 16 October 2026 · **Scope:** airborne contaminants, phases A–G implemented, phase H (pilot) not started · **Engine:** v1.2.0
 
 ## Recommendation
 
@@ -33,10 +33,8 @@ The same reviewer then re-verified the fixes and found 3 regressions introduced 
 | Offline client tested only in desktop Chromium; data unencrypted on device; revocation waits for reconnection | Medium | D10; managed devices; documented in `offline-field-capture.md` |
 | No penetration test or DPIA; no certifications | High for production | D8 |
 | Single-process login throttle; no alerting; backups rehearsed only in development | Medium | D7 — hosting and monitoring |
-| STEL, ppm↔mg/m³ conversion and statistical compliance testing not implemented | Medium | Results return *not comparable*; reviewer must address |
+| STEL and unit conversion conventions implemented but not professionally validated; statistical compliance testing not implemented | Medium | D1 review; reviewer addresses representativeness |
 | Overlapping samples now flagged, but sampling strategy representativeness is not assessed by software | Medium | Professional interpretation; pilot test P5 |
-| `auth_lookup_user` returns password hashes to the application role (needed for login) | Low | Move verification into the database or a separate auth service before production |
-| Some link tables (plan targets, submission samples) are tenant- rather than client-scoped; no current code path exposes them to client users | Low | Add client columns when those tables gain client-facing views |
 | AI assistance and live integrations absent | — | Blocked by design until D5/D6; core workflows do not need them |
 
 ## Status by delivery phase

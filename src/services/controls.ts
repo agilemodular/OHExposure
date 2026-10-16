@@ -21,6 +21,12 @@ export async function createControl(a: Actor, input: unknown) {
   return withActor(a, async (tx) => {
     const s = await one(tx, 'select client_id from sites where id=$1', [d.site_id]);
     if (!s) throw notFound('Site');
+    for (const [table, id] of [['exposure_groups', d.group_id], ['processes', d.process_id], ['hazards', d.hazard_id]] as const) {
+      if (!id) continue;
+      const r = await one(tx, `select client_id from ${table} where id=$1`, [id]);
+      if (!r) throw notFound('Linked record');
+      if (r.client_id !== s.client_id) throw invalid('Linked records must belong to the same client as the site');
+    }
     const r = await one(tx, `insert into controls (tenant_id,client_id,site_id,name,kind,purpose,process_id,hazard_id,group_id,owner_user_id,performance_criteria,status)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12) returning *`,
       [a.tenantId, s.client_id, d.site_id, d.name, d.kind, d.purpose, d.process_id, d.hazard_id, d.group_id, d.owner_user_id, d.performance_criteria, d.status]);
@@ -102,6 +108,16 @@ export async function createAction(a: Actor, input: unknown) {
     else if (d.source_type === 'assessment' && d.source_id) clientId = (await one(tx, 'select client_id from assessments where id=$1', [d.source_id]))?.client_id;
     clientId = clientId ?? a.clientId ?? (await one(tx, 'select id from clients where is_default limit 1'))?.id;
     if (!clientId) throw invalid('Link the action to a control, group or assessment');
+    for (const [table, id] of [['exposure_groups', d.group_id], ['controls', d.control_id]] as const) {
+      if (!id) continue;
+      const r = await one(tx, `select client_id from ${table} where id=$1`, [id]);
+      if (!r) throw notFound('Linked record');
+      if (r.client_id !== clientId) throw invalid('Linked records must belong to the same client');
+    }
+    if (d.source_type === 'assessment' && d.source_id) {
+      const r = await one(tx, 'select client_id from assessments where id=$1', [d.source_id]);
+      if (!r || r.client_id !== clientId) throw invalid('The source assessment belongs to a different client');
+    }
     if (d.owner_user_id) {
       const o = await one(tx, 'select role, status from users where id=$1', [d.owner_user_id]);
       if (!o || o.status !== 'active') throw notFound('Owner');
@@ -169,6 +185,7 @@ export async function submitEvidence(a: Actor, id: string, input: unknown) {
     if (d.inspection_id) {
       const ins = await one(tx, 'select * from control_inspections where id=$1', [d.inspection_id]);
       if (!ins) throw notFound('Inspection');
+      if (ins.client_id !== act.client_id) throw invalid('Inspection belongs to a different client');
       if (act.control_id && ins.control_id !== act.control_id) throw invalid('Inspection is for a different control');
       if (new Date(ins.at) < new Date(act.implemented_at.toISOString().slice(0, 10))) throw invalid('Evidence inspection pre-dates implementation');
     } else if (!att.n) throw invalid('Attach evidence or link a post-implementation inspection/test');

@@ -134,8 +134,11 @@ export async function updateDraft(a: Actor, revId: string, input: unknown) {
     const r = await loadRev(tx, revId, true);
     if (r.status !== 'draft') throw invalid(`Only draft revisions can be edited (this one is ${r.status}). Create a new revision.`);
     for (const sid of d.sample_ids) {
-      const e = await one(tx, 'select client_id, substance_id from sampling_events where id=$1', [sid]);
+      const e = await one(tx, `select e.client_id, e.substance_id, e.sample_code,
+          exists (select 1 from lab_results lr where lr.sampling_event_id=e.id and lr.substance_id=$2) has_result
+        from sampling_events e where e.id=$1`, [sid, r.substance_id]);
       if (!e || e.client_id !== r.client_id) throw notFound('Sample');
+      if (e.substance_id !== r.substance_id && !e.has_result) throw invalid(`Sample ${e.sample_code} was not taken or analysed for this assessment's substance`);
     }
     if (d.benchmark_version_id) {
       const b = await one(tx, 'select b.substance_id from benchmark_versions v join benchmarks b on b.id=v.benchmark_id where v.id=$1', [d.benchmark_version_id]);

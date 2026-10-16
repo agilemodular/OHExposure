@@ -17,7 +17,7 @@ import { controlRoutes } from './routes/controls.js';
 import { adminRoutes } from './routes/admin.js';
 
 export async function buildApp() {
-  const app = Fastify({ logger: process.env.NODE_ENV === 'test' ? false : { level: 'info', redact: ['req.headers.cookie', 'req.headers.authorization'] }, trustProxy: true, bodyLimit: 2 * 1024 * 1024 });
+  const app = Fastify({ logger: process.env.NODE_ENV === 'test' ? false : { level: 'info', redact: ['req.headers.cookie', 'req.headers.authorization'] }, trustProxy: config.trustProxy, bodyLimit: 2 * 1024 * 1024 });
   await app.register(cookie);
   await app.register(formbody);
   await app.register(multipart, { limits: { fileSize: config.maxUploadBytes, files: 1 } });

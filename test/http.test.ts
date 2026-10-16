@@ -87,6 +87,15 @@ describe('authentication', () => {
     expect((await app.inject({ url: '/', headers: { cookie } })).statusCode).toBe(200);
   });
 
+  it('ignores X-Forwarded-For unless a trusted proxy is configured', async () => {
+    const admin = new pg.Client({ connectionString: process.env.DATABASE_ADMIN_URL }); await admin.connect();
+    const u = await createUserDirect(admin, { tenantId: w.A.tenant.id, email: `xff${Date.now()}@t.test`, name: 'X', role: 'practitioner', password: PW });
+    await app.inject({ method: 'POST', url: '/login', headers: { 'x-forwarded-for': '10.9.9.9' }, remoteAddress: '203.0.113.9', payload: { email: u.email, password: PW } });
+    const ip = (await admin.query(`select ip from audit_events where user_id=$1 and action='auth.login' order by id desc limit 1`, [u.id])).rows[0].ip;
+    expect(ip).toBe('203.0.113.9');
+    await admin.end();
+  });
+
   it('sets security headers', async () => {
     const r = await app.inject({ url: '/login' });
     expect(r.headers['content-security-policy']).toContain("script-src 'self'");

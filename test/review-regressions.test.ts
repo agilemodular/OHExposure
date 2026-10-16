@@ -4,7 +4,7 @@ import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildWorld, type World } from './fixtures.js';
 import { closePool, getPool, withActor } from '../src/db.js';
-import { runAssessment, sampleConcentration, twa8h, type SampleInput } from '../src/calc/engine.js';
+import { runAssessment, sampleConcentration, stel15, twa8h, type SampleInput } from '../src/calc/engine.js';
 import { completeMfa, login, resolveSession } from '../src/auth/session.js';
 import { totpAt } from '../src/auth/crypto.js';
 import { createUserDirect } from '../scripts/bootstrap.js';
@@ -274,5 +274,69 @@ describe('residual gap fixes', () => {
     const ov = await integ.integrationsOverview(w.a.admin);
     expect(ov.outbox.some((o) => o.contract === 'ohea.action')).toBe(true);
     expect(ov.outbox.some((o) => o.contract === 'ohea.required_controls')).toBe(true);
+  });
+});
+
+describe('third-round review fixes', () => {
+  it('H1: a session opened before an MFA lock cannot complete MFA', async () => {
+    const admin = new pg.Client({ connectionString: process.env.DATABASE_ADMIN_URL }); await admin.connect();
+    const secret = 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP';
+    const u = await createUserDirect(admin, { tenantId: w.A.tenant.id, email: `pre${Date.now()}@t.test`, name: 'P', role: 'practitioner', password: 'correct horse battery', totpSecret: secret, mfaEnabled: true });
+    await admin.end();
+    const sessions = [];
+    for (let i = 0; i < 3; i++) sessions.push((await resolveSession((await login(u.email, 'correct horse battery')).token))!);
+    for (const si of sessions.slice(0, 2)) for (let i = 0; i < 5; i++) await completeMfa(si, '000000').catch(() => null);
+    await expect(completeMfa(sessions[2], totpAt(secret, Date.now()))).rejects.toThrow(/Too many|Sign in again/);
+  });
+  it('H2: client sessions cannot delete link rows', async () => {
+    const r = await withActor(w.a.client1, (tx) => tx.query('delete from exposure_group_tasks where group_id=$1', [S.group1.id]));
+    expect(r.rowCount).toBe(0);
+    const t = await withActor(w.a.client1, (tx) => tx.query('delete from plan_targets where plan_id=$1', [S.plan1.id]));
+    expect(t.rowCount).toBe(0);
+  });
+  it('H3/L2: the application role cannot call account bookkeeping or read secrets', async () => {
+    const c = await getPool().connect();
+    try {
+      await expect(c.query('select auth_record_login($1,false)', [w.a.admin.userId])).rejects.toThrow(/permission denied/);
+      await expect(c.query('select auth_record_mfa($1,false)', [w.a.admin.userId])).rejects.toThrow(/permission denied/);
+    } finally { c.release(); }
+    await expect(withActor(w.a.client1, (tx) => tx.query('select password_hash, totp_secret from users'))).rejects.toThrow(/permission denied/);
+  });
+  it('H4: a result without valid calibration evidence is indicative only', () => {
+    const o = sampleConcentration(base({ startAt: '2026-01-01T08:00:00Z', endAt: '2026-01-01T16:00:00Z', instrument: { assetTag: 'P', screeningOnly: false, calibrationValidAtSampling: false } }));
+    expect(o.indicative).toBe(true);
+    const r = runAssessment({ calc: 'twa_8h', samples: [base({ startAt: '2026-01-01T08:00:00Z', endAt: '2026-01-01T16:00:00Z', result: { revision: 1, value: 10, unit: 'ug', qualifier: '=', lod: 1, loq: 2 }, instrument: { assetTag: 'P', screeningOnly: false, calibrationValidAtSampling: null } })],
+      parameters: { exposureMinutesPerShift: 480, unsampledAssumption: 'none' }, benchmark: { versionId: 'b', type: 'T', averagingMinutes: 480, value: 0.5, unit: 'mg/m3', verificationStatus: 'verified', isSynthetic: true, source: 'synthetic' } });
+    expect(r.benchmarkState).not.toBe('below_benchmark');
+  });
+  it('H5: an indicative result in an unconvertible unit blocks a favourable roll-up', () => {
+    const bm = { versionId: 'b', type: 'T', averagingMinutes: 480, value: 1, unit: 'mg/m3' as const, verificationStatus: 'verified' as const, isSynthetic: true, source: 'synthetic' };
+    const formal = base({ sampleCode: 'f', subjectRef: 'W1', startAt: '2026-01-01T08:00:00Z', endAt: '2026-01-01T16:00:00Z', result: { revision: 1, value: 96, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } });
+    const screen = base({ sampleCode: 'scr', subjectRef: 'W2', startAt: '2026-01-01T08:00:00Z', endAt: '2026-01-01T16:00:00Z', method: { code: 'D', version: '1', resultBasis: 'concentration', flowDriftTolerancePct: null, minVolumeL: null, suitableForFormalAssessment: false }, result: { revision: 1, value: 500, unit: 'ppm', qualifier: '=', lod: null, loq: null } });
+    const o = runAssessment({ calc: 'twa_8h', samples: [formal, screen], parameters: { exposureMinutesPerShift: 480, unsampledAssumption: 'none' }, benchmark: bm });
+    expect(o.benchmarkState).toBe('indeterminate');
+    expect(o.benchmarkNote).toMatch(/cannot be converted/);
+  });
+  it('M1: evidence from another client cannot close an action', async () => {
+    const c1 = await ctl.createControl(w.a.prac, { site_id: S.site1.id, name: 'C1 LEV', kind: 'local_exhaust_ventilation', purpose: 'Capture at source', performance_criteria: 'Face velocity 1 m/s' });
+    const c2 = await ctl.createControl(w.a.prac, { site_id: S.site2.id, name: 'C2 LEV', kind: 'local_exhaust_ventilation', purpose: 'Capture at source', performance_criteria: 'Face velocity 1 m/s' });
+    await expect(ctl.createControl(w.a.prac, { site_id: S.site1.id, name: 'Cross link', kind: 'enclosure', purpose: 'Contain at source', performance_criteria: 'Integrity', group_id: S.group2.id })).rejects.toThrow(/same client/);
+    const act = await ctl.createAction(w.a.prac, { title: 'Fix C1', client_id: C1(), owner_user_id: w.a.owner.userId, verification_requirement: 'Performance test of the face velocity' });
+    await ctl.markImplemented(w.a.owner, act.id, { notes: 'Repaired the extraction' });
+    const ins = await ctl.recordInspection(w.a.owner, c2.id, { at: new Date().toISOString().slice(0, 10), kind: 'performance_test', outcome: 'satisfactory' });
+    await expect(ctl.submitEvidence(w.a.owner, act.id, { inspection_id: ins.id, notes: 'Test passed elsewhere' })).rejects.toThrow(/different client/);
+    void c1;
+  });
+  it('M2: a field technician cannot void an analysed sample', async () => {
+    const id = await sample(`M2-${w.tag}`);
+    await lab.createSubmission(w.a.prac, { laboratory_id: S.lab.id, reference: `M2S-${w.tag}`, sample_ids: [id], dispatched_at: '2026-04-02T09:00' });
+    await expect(field.voidSamplingEvent(w.a.tech, id, { reason: 'Changed my mind about this one' })).rejects.toThrow(/Only a practitioner/);
+  });
+  it('M3: a STEL result needs a continuous 15-minute window', () => {
+    const s = sampleConcentration(base({ startAt: '2026-01-01T08:00:00Z', endAt: '2026-01-01T09:00:00Z', interruptions: [{ start: '2026-01-01T08:10:00Z', end: '2026-01-01T08:55:00Z' }] }));
+    expect(s.sampledMinutes).toBe(15);
+    const [r] = stel15([s], {});
+    expect(r.result).toBeNull();
+    expect(r.flags[0].code).toBe('STEL_WINDOW_TOO_LONG');
   });
 });

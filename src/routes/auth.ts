@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { completeMfa, login, logout, resolveSession } from '../auth/session.js';
-import { newTotpSecret, otpauthUri, hashPassword, verifyPassword } from '../auth/crypto.js';
+import { deriveFromParams, newTotpSecret, otpauthUri, hashPassword } from '../auth/crypto.js';
 import { config } from '../config.js';
 import { audit, one, withActor } from '../db.js';
 import { AppError } from '../errors.js';
@@ -48,10 +48,10 @@ export function authRoutes(app: FastifyInstance) {
     let secret: string | null = null;
     if (!si.mfaEnabled) {
       secret = await withActor(si.actor, async (tx) => {
-        const u = await one(tx, 'select totp_secret from users where id=$1', [si.actor.userId]);
-        if (u.totp_secret) return u.totp_secret;
+        const existing = (await one(tx, 'select self_totp_secret() s'))?.s;
+        if (existing) return existing;
         await tx.query('select self_set_totp_secret($1)', [newTotpSecret()]);
-        return (await one(tx, 'select totp_secret from users where id=$1', [si.actor.userId])).totp_secret;
+        return (await one(tx, 'select self_totp_secret() s')).s;
       });
     }
     const err = (req.query as any).e;
@@ -96,8 +96,9 @@ export function authRoutes(app: FastifyInstance) {
   }));
   action(app, '/account/password', async (c) => {
     await withActor(c.actor, async (tx) => {
-      const u = await one(tx, 'select password_hash from users where id=$1', [c.actor.userId]);
-      if (!verifyPassword(String(c.body.current ?? ''), u.password_hash)) throw new AppError(422, 'invalid', 'Current password is incorrect');
+      const params = (await one(tx, 'select self_password_params() p'))?.p;
+      const ok = params && (await one(tx, 'select self_verify_dk($1) ok', [deriveFromParams(String(c.body.current ?? ''), params)]))?.ok;
+      if (!ok) throw new AppError(422, 'invalid', 'Current password is incorrect');
       let h: string;
       try { h = hashPassword(String(c.body.next ?? '')); } catch (e: any) { throw new AppError(422, 'invalid', e.message); }
       await tx.query('select self_set_password($1)', [h]);

@@ -6,6 +6,8 @@ export const config = {
   storageDir: process.env.STORAGE_DIR ?? new URL('../storage/', import.meta.url).pathname,
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   sessionHours: Number(process.env.SESSION_HOURS ?? 10),
+  // Only trust X-Forwarded-For from known proxies: a hop count (e.g. '1') or a comma-separated list of proxy IPs/CIDRs.
+  trustProxy: (() => { const v = process.env.TRUST_PROXY; if (!v) return false; if (/^\d+$/.test(v)) { const n = Number(v); return (_addr: string, hop: number) => hop < n; } return v.split(',').map((x) => x.trim()); })() as boolean | string[] | ((addr: string, hop: number) => boolean),
   loginIpLimit: Number(process.env.LOGIN_IP_LIMIT ?? 20),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 15 * 1024 * 1024),
   aiProvider: (process.env.AI_PROVIDER ?? 'none') as 'none',

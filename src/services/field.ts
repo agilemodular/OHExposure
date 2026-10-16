@@ -143,7 +143,8 @@ const LOCKED = ['dispatched', 'received', 'analysed', 'void'];
 
 async function applyUpdate(tx: Tx, a: Actor, current: any, d: SamplingInput, offline: boolean) {
   if (LOCKED.includes(current.status)) throw invalid(`Sample ${current.sample_code} is ${current.status}; field records can no longer be edited. Record a deviation note via the practitioner.`);
-  const { values, status, warnings } = await prepare(tx, a, d);
+  const { clientId, values, status, warnings } = await prepare(tx, a, d);
+  if (clientId !== current.client_id) throw invalid('A sample cannot be moved to a plan or worker belonging to a different client');
   const sets = FIELD_COLUMNS.map((c, i) => `${c}=$${i + 2}`).join(',');
   const r = await one(tx, `update sampling_events set ${sets}, status=$${FIELD_COLUMNS.length + 2}, version=version+1, updated_at=now() where id=$1 returning *`,
     [current.id, ...FIELD_COLUMNS.map((c) => values[c]), status]);
@@ -168,6 +169,13 @@ export async function voidSamplingEvent(a: Actor, id: string, input: unknown) {
   if (!can(a, 'assess.write') && !can(a, 'field.capture')) throw forbidden();
   const d = parse(z.object({ reason: reqStr(5) }), input);
   return withActor(a, async (tx) => {
+    const cur = await one(tx, 'select status from sampling_events where id=$1', [id]);
+    if (!cur) throw notFound('Sampling event');
+    // Once a sample is with the laboratory or has results, voiding it changes evidence: practitioners only, with a full reason.
+    if (['dispatched', 'received', 'analysed'].includes(cur.status)) {
+      if (!can(a, 'assess.write')) throw forbidden('Only a practitioner can void a sample that has been dispatched or analysed');
+      if (d.reason.length < 20) throw invalid('Give a full reason (at least 20 characters) for voiding a dispatched or analysed sample');
+    }
     const r = await one(tx, `update sampling_events set status='void', void_reason=$2, version=version+1, updated_at=now() where id=$1 and status <> 'void' returning *`, [id, d.reason]);
     if (!r) throw notFound('Sampling event');
     await audit(tx, a, 'sample.void', 'sampling_event', id, d);

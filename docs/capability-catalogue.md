@@ -15,7 +15,7 @@ Classification used throughout:
 
 | Capability | Status | Evidence / notes |
 |---|---|---|
-| Password sign-in (scrypt), sessions (hashed tokens, httpOnly, SameSite) | Verified | http tests |
+| Password sign-in (scrypt; comparison inside the database, hashes never returned to the app), sessions (hashed tokens, httpOnly, SameSite) | Verified | http + regression tests |
 | TOTP MFA enrolment and challenge; tenant-level enforcement (default on); replay protection; session revoked after 5 wrong codes; account locked after 10 across sessions | Verified | http + review-regressions tests (real TOTP codes) |
 | Account lockout (5 failures/15 min) and per-IP throttle | Verified | http: lockout test; throttle triggered during test development |
 | Forced change of administrator-issued temporary passwords | Verified | http test |
@@ -68,8 +68,8 @@ Classification used throughout:
 | Staleness notices (evidence changed, newer/withdrawn benchmark) | Verified (evidence), Unverified (benchmark path) | workflow test |
 | Before/after comparability | Verified (engine), Unverified (page) | calc test |
 | Benchmark versions with second-person verification | Verified (rule), Unverified (UI) | service rule |
-| STEL (15-minute) calculation | Proposed | Returns *not comparable* |
-| ppm ↔ mg/m³ conversion | Proposed | Returns *not comparable* |
+| STEL (15-minute) calculation `stel_15` | Verified (software) | calc tests + service test |
+| ppm ↔ mg/m³ conversion using recorded molecular weight | Verified (software) | calc tests |
 | Statistical compliance testing (e.g. BS EN 689) | Proposed | |
 | Real jurisdiction benchmark content | Blocked | D2 |
 

@@ -1,6 +1,6 @@
 # Calculation and benchmark specifications
 
-Engine: `src/calc/engine.ts`, engine version **1.1.0** (calculation `twa_8h` v1.1.0). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
+Engine: `src/calc/engine.ts`, engine version **1.2.0** (calculations `twa_8h` v1.1.0 and `stel_15` v1.0.0). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
 
 > **Methodological sources must be confirmed by a competent occupational hygienist against the current editions before pilot use.** The references below identify the conventions the engine implements; they were not re-checked against the live publications during this build (no access was attempted), and no text from them is reproduced.
 
@@ -34,7 +34,7 @@ Direct-concentration results in µg/m³ are converted to mg/m³; ppm and f/ml ar
 
 **Assumptions.** Flow changes linearly so the arithmetic mean represents the sampling period. Interruptions are periods when the pump was not sampling.
 
-**Limitations.** No correction for temperature/pressure. No ppm ↔ mg/m³ conversion (requires molecular weight and reference conditions; deferred). No blank correction (field blanks are excluded and listed). No measurement-uncertainty propagation; uncertainty reported by the laboratory is displayed but not used.
+**Limitations.** No correction of sampled air volume for temperature/pressure. Unit conversion is applied only at benchmark comparison (§3a). No blank correction (field blanks are excluded and listed). No measurement-uncertainty propagation; uncertainty reported by the laboratory is displayed but not used.
 
 **Validation rules → outcome.**
 
@@ -77,7 +77,30 @@ Intervals propagate: lower and upper bounds are calculated separately. Exposure 
 
 **Not calculated:** static samples (listed as contextual evidence only); excluded samples; any worker-shift containing a sample with no calculable concentration or mixed units.
 
-**Limitations.** Overlapping samples on the same worker are not detected and would double count — a plan/QC responsibility in this release. No statistical treatment of between-worker or day-to-day variability (e.g. BS EN 689 compliance testing) — the professional interpretation must address representativeness. STEL (15-minute) calculation is **not** implemented; a benchmark with a non-480-minute averaging period returns *not comparable*.
+**Limitations.** No statistical treatment of between-worker or day-to-day variability (e.g. BS EN 689 compliance testing) — the professional interpretation must address representativeness. A benchmark whose averaging period is not 480 minutes returns *not comparable* for this calculation; use `stel_15` for 15-minute benchmarks.
+
+## 2a. `stel_15` v1.0.0
+
+**Intended use.** Personal short-term (15-minute reference period) results for comparison with a 15-minute benchmark. Each personal sample intended as a short-term measurement gives one result.
+
+| Sampled time T | Result |
+|---|---|
+| 14–16 min | C (the measured concentration) |
+| < 14 min, assumption *none* (default) | not calculated — *incomplete* |
+| < 14 min, assumption *zero_remainder* with ≥ 20-character justification | C × T / 15, flagged *qualify* |
+| > 16 min | not calculated — a longer average dilutes peaks (*incomplete*) |
+
+The short-sample convention (averaging over 15 minutes assuming no exposure for the remainder) must be confirmed by the reviewing hygienist against current guidance before use.
+
+## 3a. Unit conversion (ppm ↔ mg/m³)
+
+Applied only when a result and the benchmark use different units and the substance has a recorded molecular weight (with its source):
+
+```
+mg/m³ = ppm × MW / Vm        Vm = R·T/P = 8.314462618 × 293.15 / 101.325 = 24.0548 L/mol  (20 °C, 101.325 kPa)
+```
+
+Both interval bounds are converted. No conversion for fibres (f/ml). Without a molecular weight the comparison is *not comparable*. The note on the revision and the report states that conversion was applied and the values used. The reference conditions are those used for GB limits and must be confirmed per jurisdiction.
 
 ## 3. Benchmark comparison
 
@@ -88,7 +111,7 @@ otherwise                      → indeterminate   (e.g. a non-detect whose LOD 
 units differ                   → not_comparable
 ```
 
-Roll-up for the revision: any *at or above* → at_or_above; any indeterminate or incomplete worker-shift → indeterminate; any excluded or indicative personal result whose lower bound is at or above the benchmark → indeterminate (named in the note); only indicative or static evidence → not_comparable; no benchmark or benchmark not *verified* → no_verified_benchmark.
+Roll-up for the revision: any *at or above* → at_or_above; every formal result *not comparable* → not_comparable; any indeterminate or incomplete worker-shift → indeterminate; any excluded or indicative personal result whose lower bound is at or above the benchmark → indeterminate (named in the note); only indicative or static evidence → not_comparable; no benchmark or benchmark not *verified* → no_verified_benchmark.
 
 The output always carries the statement that a benchmark comparison is not a compliance conclusion. There is no "safe" or "compliant" field anywhere in the model (asserted in tests).
 
@@ -114,4 +137,4 @@ Each benchmark version records substance, jurisdiction, type, averaging period, 
 
 ## 6. Test cases
 
-`test/calc.test.ts` (30 cases) and the calculation section of `test/review-regressions.test.ts` (4 cases: night shift, overlapping interruptions, high indicative/excluded results, exposure-period guard) cover, with hand-calculated expected values: volume and concentration (120 µg, 2.0 L/min, 240 min → 0.25 mg/m³); interruption subtraction (210 min); non-detect interval (upper = 5 µg / 0.48 m³); non-detect without limit → incomplete; over-range → ∞; missing flow/duration/invalid duration; flow drift and undefined tolerance; QC fail unresolved/accepted; screening instrument; missing calibration; unit/basis mismatch; µg/m³ conversion; consecutive-sample TWA (0.175 mg/m³); incomplete coverage with no assumption; unjustified assumption; zero and same-as-sampled assumptions (0.125, 0.25); 600-minute shift (0.125); missing exposure period; static exclusion; all four comparison states; unverified benchmark; no verdict field; static-only; screening-only; all-excluded → failed; partial incomplete → indeterminate; averaging-period mismatch; determinism; before/after comparability.
+`test/calc.test.ts` (37 cases, including STEL and conversion) and the calculation section of `test/review-regressions.test.ts` (4 cases: night shift, overlapping interruptions, high indicative/excluded results, exposure-period guard) cover, with hand-calculated expected values: volume and concentration (120 µg, 2.0 L/min, 240 min → 0.25 mg/m³); interruption subtraction (210 min); non-detect interval (upper = 5 µg / 0.48 m³); non-detect without limit → incomplete; over-range → ∞; missing flow/duration/invalid duration; flow drift and undefined tolerance; QC fail unresolved/accepted; screening instrument; missing calibration; unit/basis mismatch; µg/m³ conversion; consecutive-sample TWA (0.175 mg/m³); incomplete coverage with no assumption; unjustified assumption; zero and same-as-sampled assumptions (0.125, 0.25); 600-minute shift (0.125); missing exposure period; static exclusion; all four comparison states; unverified benchmark; no verdict field; static-only; screening-only; all-excluded → failed; partial incomplete → indeterminate; averaging-period mismatch; determinism; before/after comparability.

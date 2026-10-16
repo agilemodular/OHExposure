@@ -241,7 +241,8 @@ describe('tenant and client isolation', () => {
     const c = await getPool().connect();
     try {
       expect((await c.query('select * from sampling_events')).rowCount).toBe(0);
-      expect((await c.query('select * from users')).rowCount).toBe(0);
+      expect((await c.query('select id from users')).rowCount).toBe(0);
+      await expect(c.query('select password_hash from users')).rejects.toThrow(/permission denied/);
       await expect(c.query(`insert into sites (tenant_id,client_id,name) values ($1,$2,'x')`, [w.A.tenant.id, w.A.clients['Client One']])).rejects.toThrow(/row-level security/);
     } finally { c.release(); }
   });
