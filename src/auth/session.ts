@@ -1,0 +1,73 @@
+import { config } from '../config.js';
+import { actorFrom, audit, one, withActor, withAnon, type Actor } from '../db.js';
+import { AppError } from '../errors.js';
+import { hashPassword, randomToken, sha256, verifyPassword, verifyTotp } from './crypto.js';
+
+// A dummy hash so unknown-email logins take the same time as known ones.
+const DUMMY = hashPassword('dummy-password-for-timing');
+
+export type LoginResult = { token: string; mfaPending: boolean; enrolMfa: boolean };
+
+export async function login(email: string, password: string, ua?: string, ip?: string): Promise<LoginResult> {
+  const u = await withAnon((tx) => one(tx, 'select * from auth_lookup_user($1)', [email]));
+  const ok = verifyPassword(password, u?.password_hash ?? DUMMY);
+  if (!u || u.status !== 'active') throw new AppError(401, 'auth_failed', 'Email or password not recognised');
+  if (u.locked_until && new Date(u.locked_until) > new Date())
+    throw new AppError(429, 'locked', 'Account temporarily locked after repeated failed sign-ins. Try again later.');
+  await withAnon((tx) => tx.query('select auth_record_login($1,$2)', [u.id, ok]));
+  if (!ok) throw new AppError(401, 'auth_failed', 'Email or password not recognised');
+
+  const token = randomToken();
+  const sid = sha256(token);
+  const full = await withActor(
+    { userId: u.id, tenantId: u.tenant_id, clientId: null, role: 'client_readonly', name: '', email, perms: new Set() },
+    async (tx) => {
+      const usr = await one(tx, 'select u.*, t.mfa_required from users u join tenants t on t.id=u.tenant_id where u.id=$1', [u.id]);
+      await tx.query(
+        `insert into sessions (id,user_id,tenant_id,csrf_token,mfa_passed,expires_at,user_agent)
+         values ($1,$2,$3,$4,$5, now() + ($6 || ' hours')::interval, $7)`,
+        [sid, u.id, u.tenant_id, randomToken(18), !usr.mfa_enabled && !usr.mfa_required, String(config.sessionHours), ua ?? null],
+      );
+      await audit(tx, actorFrom(usr, ip), 'auth.login', 'user', u.id);
+      return usr;
+    },
+  );
+  return { token, mfaPending: full.mfa_enabled, enrolMfa: !full.mfa_enabled && full.mfa_required };
+}
+
+export type SessionInfo = { actor: Actor; csrf: string; mfaPassed: boolean; sessionId: string; mfaEnabled: boolean; mfaRequired: boolean; tenant: any };
+
+export async function resolveSession(token: string | undefined, ip?: string): Promise<SessionInfo | null> {
+  if (!token) return null;
+  const sid = sha256(token);
+  const s = await withAnon((tx) => one(tx, 'select * from auth_session($1)', [sid]));
+  if (!s) return null;
+  const boot: Actor = { userId: s.user_id, tenantId: s.tenant_id, clientId: null, role: 'client_readonly', name: '', email: '', perms: new Set() };
+  const { u, t } = await withActor(boot, async (tx) => ({
+    u: await one(tx, 'select id,tenant_id,client_id,role,name,email,mfa_enabled from users where id=$1', [s.user_id]),
+    t: await one(tx, 'select id,name,kind,is_demo,mfa_required from tenants where id=$1', [s.tenant_id]),
+  }));
+  if (!u) return null;
+  await withAnon((tx) => tx.query('select auth_touch_session($1)', [sid]));
+  return { actor: actorFrom(u, ip), csrf: s.csrf_token, mfaPassed: s.mfa_passed, sessionId: sid, mfaEnabled: u.mfa_enabled, mfaRequired: t.mfa_required, tenant: t };
+}
+
+export async function completeMfa(si: SessionInfo, code: string) {
+  await withActor(si.actor, async (tx) => {
+    const u = await one(tx, 'select totp_secret, mfa_enabled from users where id=$1', [si.actor.userId]);
+    if (!u?.totp_secret || !verifyTotp(u.totp_secret, code.trim())) {
+      await audit(tx, si.actor, 'auth.mfa_failed', 'user', si.actor.userId);
+      throw new AppError(401, 'mfa_failed', 'Code not accepted');
+    }
+    if (!u.mfa_enabled) await tx.query('update users set mfa_enabled=true where id=$1', [si.actor.userId]);
+    await tx.query('update sessions set mfa_passed=true where id=$1', [si.sessionId]);
+    await audit(tx, si.actor, u.mfa_enabled ? 'auth.mfa_passed' : 'auth.mfa_enrolled', 'user', si.actor.userId);
+  });
+}
+
+export async function logout(si: SessionInfo) {
+  await withActor(si.actor, async (tx) => {
+    await tx.query('update sessions set revoked_at=now() where id=$1', [si.sessionId]);
+    await audit(tx, si.actor, 'auth.logout', 'user', si.actor.userId);
+  });
+}
