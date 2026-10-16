@@ -244,3 +244,35 @@ describe('STEL through the assessment service', () => {
     expect(r.benchmark_state).toBe('at_or_above_benchmark');
   });
 });
+
+describe('residual gap fixes', () => {
+  it('the application role never receives password hashes', async () => {
+    const c = await getPool().connect();
+    try {
+      await expect(c.query(`select * from auth_lookup_user('x')`)).rejects.toThrow(/does not exist|permission/);
+      const p = (await c.query('select auth_password_params($1) p', [w.a.prac.email])).rows[0].p as string;
+      expect(p.split('$')).toHaveLength(5);
+      const u1 = (await c.query('select auth_password_params($1) p', ['nobody@x.test'])).rows[0].p;
+      const u2 = (await c.query('select auth_password_params($1) p', ['nobody@x.test'])).rows[0].p;
+      expect(u1).toBe(u2);
+      expect(u1.split('$')).toHaveLength(5);
+    } finally { c.release(); }
+  });
+  it('link tables follow their parent record’s client scoping', async () => {
+    const own = await withActor(w.a.client1, (tx) => tx.query('select * from plan_targets where plan_id=$1', [S.plan1.id]));
+    const other = await withActor(w.a.client2, (tx) => tx.query('select * from plan_targets where plan_id=$1', [S.plan1.id]));
+    expect(own.rowCount).toBeGreaterThan(0);
+    expect(other.rowCount).toBe(0);
+    expect((await withActor(w.a.client2, (tx) => tx.query('select * from exposure_group_hazards where group_id=$1', [S.group1.id]))).rowCount).toBe(0);
+  });
+  it('emits action and required-control messages to enabled links (mock only)', async () => {
+    const integ = await import('../src/services/integrations.js');
+    await integ.upsertLink(w.a.admin, { target: 'integrarisk', external_tenant_ref: 'IR-REG', enabled: 'on' });
+    await integ.upsertLink(w.a.admin, { target: 'workassura', external_tenant_ref: 'WA-REG', enabled: 'on' });
+    const c = await ctl.createControl(w.a.prac, { site_id: S.site1.id, name: 'Wet cutting', kind: 'suppression', purpose: 'Suppress dust at the blade', performance_criteria: 'Water flow at the blade throughout cutting' });
+    await ctl.createAction(w.a.prac, { title: 'Fit water feed', control_id: c.id, owner_user_id: w.a.owner.userId, verification_requirement: 'Performance test of water flow rate at the blade' });
+    const ov = await integ.integrationsOverview(w.a.admin);
+    expect(ov.outbox.some((o) => o.contract === 'ohea.action')).toBe(true);
+    expect(ov.outbox.some((o) => o.contract === 'ohea.required_controls')).toBe(true);
+  });
+});

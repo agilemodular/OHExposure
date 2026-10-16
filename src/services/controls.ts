@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { forbidden, invalid, notFound } from '../errors.js';
 import { flagGroupsForReview } from './register.js';
+import { enqueue } from './integrations.js';
 import { bool, date, optDate, optStr, optUuid, parse, reqStr, uuid } from './util.js';
 
 const ENGINEERING = ['enclosure', 'local_exhaust_ventilation', 'general_ventilation', 'suppression', 'process_change', 'elimination_substitution'];
@@ -25,6 +26,7 @@ export async function createControl(a: Actor, input: unknown) {
       [a.tenantId, s.client_id, d.site_id, d.name, d.kind, d.purpose, d.process_id, d.hazard_id, d.group_id, d.owner_user_id, d.performance_criteria, d.status]);
     if (d.group_id) await flagGroupsForReview(tx, a, `Control "${d.name}" added`, { groupId: d.group_id });
     await audit(tx, a, 'control.create', 'control', r.id, d);
+    await emitControl(tx, r.id);
     return r;
   });
 }
@@ -41,6 +43,7 @@ export async function setControlStatus(a: Actor, id: string, input: unknown) {
     if (!c) throw notFound('Control');
     if (c.group_id) await flagGroupsForReview(tx, a, `Control "${c.name}" status changed to ${d.status}`, { groupId: c.group_id });
     await audit(tx, a, 'control.status', 'control', id, d);
+    await emitControl(tx, id);
     return c;
   });
 }
@@ -111,6 +114,7 @@ export async function createAction(a: Actor, input: unknown) {
     }
     const r = await insertAction(tx, a, clientId, d);
     await audit(tx, a, 'action.create', 'action', r.id, d);
+    await emitAction(tx, r.id);
     return r;
   });
 }
@@ -118,6 +122,27 @@ export async function createAction(a: Actor, input: unknown) {
 async function event(tx: Tx, a: Actor, act: any, to: string, notes: string | null) {
   await tx.query('insert into action_events (tenant_id,client_id,action_id,from_status,to_status,notes,by_user) values ($1,$2,$3,$4,$5,$6,$7)', [act.tenant_id, act.client_id, act.id, act.status, to, notes, a.userId]);
   await audit(tx, a, `action.${to}`, 'action', act.id, { from: act.status, notes });
+  await emitAction(tx, act.id);
+}
+
+/** Optional outbound messages (only when the tenant enabled the link; mock transport by default). */
+async function emitAction(tx: Tx, actionId: string) {
+  const x = await one(tx, 'select * from actions where id=$1', [actionId]);
+  const seq = (await one(tx, 'select count(*)::int n from action_events where action_id=$1', [actionId]))?.n ?? 0;
+  await enqueue(tx, x.tenant_id, 'integrarisk', 'ohea.action', `status:${x.status}`, `${x.id}:${seq}`, {
+    action_id: x.id, title: x.title, status: x.status, priority: x.priority, due_date: x.due_date, verification_requirement: x.verification_requirement,
+    source_assessment_id: x.source_type === 'assessment' ? x.source_id : null, provenance: { source: 'ohea', action_event_seq: seq },
+  });
+}
+async function emitControl(tx: Tx, controlId: string) {
+  const c = await one(tx, `select c.*, s.reference site_ref, p.name process_ref from controls c join sites s on s.id=c.site_id left join processes p on p.id=c.process_id where c.id=$1`, [controlId]);
+  const tasks = c.group_id ? await many(tx, 'select t.name from exposure_group_tasks gt join tasks t on t.id=gt.task_id where gt.group_id=$1', [c.group_id]) : [];
+  const asmts = c.group_id ? await many(tx, `select r.id from assessments a join assessment_revisions r on r.assessment_id=a.id and r.status='approved' where a.group_id=$1`, [c.group_id]) : [];
+  await enqueue(tx, c.tenant_id, 'workassura', 'ohea.required_controls', `status:${c.status}`, `${c.id}:${c.status}:${Date.now()}`, {
+    control_id: c.id, name: c.name, kind: c.kind, status: c.status, site_ref: c.site_ref, process_ref: c.process_ref,
+    task_refs: tasks.map((t) => t.name), assessment_refs: asmts.map((r) => r.id),
+    provenance: { source: 'ohea', note: 'Informational. Does not authorise work.' },
+  });
 }
 
 export async function markImplemented(a: Actor, id: string, input: unknown) {

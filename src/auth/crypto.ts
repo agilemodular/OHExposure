@@ -16,6 +16,13 @@ export function verifyPassword(pw: string, stored: string): boolean {
   return timingSafeEqual(dk, expected);
 }
 
+/** Derives the scrypt key for a candidate password from stored parameters ('scrypt$N$r$p$salt'); the stored key never leaves the DB. */
+export function deriveFromParams(pw: string, params: string): string {
+  const [alg, n, r, p, salt] = params.split('$');
+  if (alg !== 'scrypt') throw new Error('Unsupported password hash');
+  return scryptSync(pw, Buffer.from(salt, 'base64'), KEYLEN, { N: +n, r: +r, p: +p, maxmem: 128 * +n * +r * 2 }).toString('base64');
+}
+
 export const randomToken = (bytes = 32) => randomBytes(bytes).toString('base64url');
 export const sha256 = (s: string | Buffer) => createHash('sha256').update(s).digest('hex');
 

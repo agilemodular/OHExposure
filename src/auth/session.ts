@@ -1,21 +1,19 @@
 import { config } from '../config.js';
 import { actorFrom, audit, one, withActor, withAnon, type Actor } from '../db.js';
 import { AppError } from '../errors.js';
-import { hashPassword, randomToken, sha256, verifyPassword, verifyTotpStep } from './crypto.js';
-
-// A dummy hash so unknown-email logins take the same time as known ones.
-const DUMMY = hashPassword('dummy-password-for-timing');
+import { deriveFromParams, randomToken, sha256, verifyTotpStep } from './crypto.js';
 
 export type LoginResult = { token: string; mfaPending: boolean; enrolMfa: boolean };
 
 export async function login(email: string, password: string, ua?: string, ip?: string): Promise<LoginResult> {
-  const u = await withAnon((tx) => one(tx, 'select * from auth_lookup_user($1)', [email]));
-  const ok = verifyPassword(password, u?.password_hash ?? DUMMY);
-  if (!u || u.status !== 'active') throw new AppError(401, 'auth_failed', 'Email or password not recognised');
-  if (u.locked_until && new Date(u.locked_until) > new Date())
-    throw new AppError(429, 'locked', 'Account temporarily locked after repeated failed sign-ins. Try again later.');
-  await withAnon((tx) => tx.query('select auth_record_login($1,$2)', [u.id, ok]));
-  if (!ok) throw new AppError(401, 'auth_failed', 'Email or password not recognised');
+  // The database returns only salt and cost parameters, then compares the derived key itself:
+  // the application role never receives password hashes.
+  const params = await withAnon((tx) => one<{ p: string }>(tx, 'select auth_password_params($1) p', [email]));
+  const dk = deriveFromParams(password, params!.p);
+  const r = await withAnon((tx) => one<{ user_id: string | null; tenant_id: string | null; outcome: string }>(tx, 'select * from auth_login($1,$2)', [email, dk]));
+  if (r?.outcome === 'locked') throw new AppError(429, 'locked', 'Account temporarily locked after repeated failed attempts. Try again later.');
+  if (r?.outcome !== 'ok' || !r.user_id || !r.tenant_id) throw new AppError(401, 'auth_failed', 'Email or password not recognised');
+  const u = { id: r.user_id, tenant_id: r.tenant_id };
 
   const token = randomToken();
   const sid = sha256(token);
