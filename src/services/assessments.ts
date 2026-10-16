@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { sha256 } from '../auth/crypto.js';
-import { CALCULATIONS, comparability, runAssessment, type BenchmarkRef, type SampleInput } from '../calc/engine.js';
+import { CALCULATIONS, comparability, runAssessment, type BenchmarkRef, type CalcCode, type SampleInput } from '../calc/engine.js';
 import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
@@ -49,7 +49,7 @@ export async function listBenchmarks(a: Actor, substanceId?: string) {
 }
 
 // ───── Inputs
-type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any; recordedExposureMinutes: number | null };
+type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any; recordedExposureMinutes: number | null; molecularWeight?: number | null };
 
 async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Snapshot> {
   const samples: SampleInput[] = [];
@@ -82,9 +82,11 @@ async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Sna
   const rec = await one(tx, `select greatest(max(h.exposure_duration_min), max(t.duration_min_per_shift)) m
     from exposure_group_hazards gh join hazards h on h.id=gh.hazard_id left join tasks t on t.id=h.task_id
     where gh.group_id=$1 and h.substance_id=$2`, [rev.group_id, substanceId]);
-  return { samples, refs, benchmark, parameters: rev.parameters, recordedExposureMinutes: rec?.m ?? null };
+  const mw = (await one(tx, 'select molecular_weight from substances where id=$1', [substanceId]))?.molecular_weight ?? null;
+  return { samples, refs, benchmark, parameters: rev.parameters, recordedExposureMinutes: rec?.m ?? null, molecularWeight: mw };
 }
-const hashOf = (s: Snapshot) => sha256(JSON.stringify({ samples: s.samples, refs: s.refs, benchmark: s.benchmark, parameters: s.parameters, recorded: s.recordedExposureMinutes, calc: CALCULATIONS.twa_8h }));
+const calcOf = (code: string | null | undefined) => CALCULATIONS[(code as CalcCode) ?? 'twa_8h'] ?? CALCULATIONS.twa_8h;
+const hashOf = (s: Snapshot, calcCode: string | null | undefined) => sha256(JSON.stringify({ samples: s.samples, refs: s.refs, benchmark: s.benchmark, parameters: s.parameters, recorded: s.recordedExposureMinutes, mw: s.molecularWeight ?? null, calc: calcOf(calcCode) }));
 
 // ───── Lifecycle
 export async function createAssessment(a: Actor, input: unknown) {
@@ -105,6 +107,9 @@ export async function createAssessment(a: Actor, input: unknown) {
 }
 
 const draftSchema = z.object({
+  calc_code: z.enum(['twa_8h', 'stel_15']).default('twa_8h'),
+  short_sample_assumption: z.enum(['none', 'zero_remainder']).default('none'),
+  short_sample_justification: optStr,
   sample_ids: strArray.pipe(z.array(uuid)),
   benchmark_version_id: optUuid,
   exposure_minutes_per_shift: optNum,
@@ -137,10 +142,12 @@ export async function updateDraft(a: Actor, revId: string, input: unknown) {
       if (!b) throw notFound('Benchmark version');
       if (b.substance_id !== r.substance_id) throw invalid('Benchmark is for a different substance');
     }
-    const parameters = { exposureMinutesPerShift: d.exposure_minutes_per_shift, unsampledAssumption: d.unsampled_assumption, unsampledJustification: d.unsampled_justification ?? undefined };
+    const parameters = d.calc_code === 'stel_15'
+      ? { shortSampleAssumption: d.short_sample_assumption, shortSampleJustification: d.short_sample_justification ?? undefined }
+      : { exposureMinutesPerShift: d.exposure_minutes_per_shift, unsampledAssumption: d.unsampled_assumption, unsampledJustification: d.unsampled_justification ?? undefined };
     const out = await one(tx, `update assessment_revisions set sample_ids=$2, benchmark_version_id=$3, parameters=$4, interpretation=$5, conclusion_category=$6, limitations=$7,
-        calc_output=null, data_quality_state=null, benchmark_state=null, inputs_snapshot=null, inputs_hash=null where id=$1 returning *`,
-      [revId, d.sample_ids, d.benchmark_version_id, parameters, d.interpretation, d.conclusion_category, d.limitations]);
+        calc_code=$8, calc_version=$9, calc_output=null, data_quality_state=null, benchmark_state=null, inputs_snapshot=null, inputs_hash=null where id=$1 returning *`,
+      [revId, d.sample_ids, d.benchmark_version_id, parameters, d.interpretation, d.conclusion_category, d.limitations, d.calc_code, calcOf(d.calc_code).version]);
     await audit(tx, a, 'assessment.draft_update', 'assessment_revision', revId, { ...d, interpretation: d.interpretation ? `[${d.interpretation.length} chars]` : null });
     return out;
   });
@@ -152,10 +159,11 @@ export async function calculate(a: Actor, revId: string) {
     const r = await loadRev(tx, revId, true);
     if (r.status !== 'draft') throw invalid('Only draft revisions can be recalculated');
     const snap = await buildSnapshot(tx, r, r.substance_id);
-    const output = runAssessment({ calc: 'twa_8h', samples: snap.samples, parameters: { ...snap.parameters, recordedExposureMinutes: snap.recordedExposureMinutes }, benchmark: snap.benchmark });
-    const hash = hashOf(snap);
-    const out = await one(tx, `update assessment_revisions set calc_output=$2, data_quality_state=$3, benchmark_state=$4, inputs_snapshot=$5, inputs_hash=$6, calc_code='twa_8h', calc_version=$7 where id=$1 returning *`,
-      [revId, JSON.stringify(output, (_, v) => (v === Infinity ? 'Infinity' : v)), output.dataQualityState, output.benchmarkState, snap, hash, CALCULATIONS.twa_8h.version]);
+    const calc = calcOf(r.calc_code);
+    const output = runAssessment({ calc: calc.code, samples: snap.samples, parameters: { ...snap.parameters, recordedExposureMinutes: snap.recordedExposureMinutes }, benchmark: snap.benchmark, molecularWeight: snap.molecularWeight });
+    const hash = hashOf(snap, calc.code);
+    const out = await one(tx, `update assessment_revisions set calc_output=$2, data_quality_state=$3, benchmark_state=$4, inputs_snapshot=$5, inputs_hash=$6, calc_code=$8, calc_version=$7 where id=$1 returning *`,
+      [revId, JSON.stringify(output, (_, v) => (v === Infinity ? 'Infinity' : v)), output.dataQualityState, output.benchmarkState, snap, hash, calc.version, calc.code]);
     await audit(tx, a, 'assessment.calculated', 'assessment_revision', revId, { dq: output.dataQualityState, benchmark: output.benchmarkState, hash });
     return out;
   });
@@ -164,7 +172,7 @@ export async function calculate(a: Actor, revId: string) {
 async function assertCurrent(tx: Tx, r: any) {
   if (!r.calc_output || !r.inputs_hash) throw invalid('Run the calculation first');
   const snap = await buildSnapshot(tx, r, r.substance_id);
-  if (hashOf(snap) !== r.inputs_hash) throw conflict('Underlying evidence has changed since the calculation was run (e.g. an amended laboratory result or QC disposition). Recalculate before continuing.');
+  if (hashOf(snap, r.calc_code) !== r.inputs_hash) throw conflict('Underlying evidence has changed since the calculation was run (e.g. an amended laboratory result or QC disposition). Recalculate before continuing.');
 }
 
 function checkConclusion(r: any) {
@@ -247,7 +255,7 @@ export async function newRevision(a: Actor, assessmentId: string, input: unknown
     const n = as.current_revision + 1;
     const rev = await one(tx, `insert into assessment_revisions (tenant_id,client_id,assessment_id,revision,sample_ids,calc_code,calc_version,parameters,benchmark_version_id,interpretation,conclusion_category,limitations,supersedes_revision_id,change_reason,created_by)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
-      [as.tenant_id, as.client_id, assessmentId, n, cur.sample_ids, 'twa_8h', CALCULATIONS.twa_8h.version, cur.parameters, cur.benchmark_version_id, cur.interpretation, cur.conclusion_category, cur.limitations, cur.id, d.change_reason, a.userId]);
+      [as.tenant_id, as.client_id, assessmentId, n, cur.sample_ids, cur.calc_code ?? 'twa_8h', calcOf(cur.calc_code).version, cur.parameters, cur.benchmark_version_id, cur.interpretation, cur.conclusion_category, cur.limitations, cur.id, d.change_reason, a.userId]);
     await tx.query('update assessments set current_revision=$2 where id=$1', [assessmentId, n]);
     await audit(tx, a, 'assessment.new_revision', 'assessment', assessmentId, { revision: n, reason: d.change_reason });
     return rev;
@@ -262,8 +270,9 @@ export async function staleness(tx: Tx, r: any) {
     // calculation version, so an engine update never hides a real evidence change.
     const snap = await buildSnapshot(tx, r, r.substance_id);
     if (JSON.stringify(snap.refs) !== JSON.stringify(r.inputs_snapshot.refs)) reasons.push('Underlying sample, QC or laboratory evidence has changed since this revision was calculated.');
-    if (r.calc_version && r.calc_version !== CALCULATIONS.twa_8h.version)
-      reasons.push(`The calculation method has been updated (v${r.calc_version} → v${CALCULATIONS.twa_8h.version}) since this revision was calculated; reassessment may be required. This revision's results are unchanged.`);
+    const latest = calcOf(r.calc_code).version;
+    if (r.calc_version && r.calc_version !== latest)
+      reasons.push(`The calculation method has been updated (v${r.calc_version} → v${latest}) since this revision was calculated; reassessment may be required. This revision's results are unchanged.`);
   }
   if (r.benchmark_version_id) {
     const newer = await one(tx, `select v2.id, v2.value, v2.unit, v2.source_version from benchmark_versions v1 join benchmark_versions v2 on v2.benchmark_id=v1.benchmark_id

@@ -175,3 +175,51 @@ describe('before/after comparability', () => {
     expect(r.differences.map((d) => d.aspect)).toEqual(['Control status during sampling', 'Mean sampled duration (min)']);
   });
 });
+
+import { convertInterval, MOLAR_VOLUME_L, stel15 } from '../src/calc/engine.js';
+
+describe('stel_15 v1', () => {
+  const st = (o: Partial<SampleInput>) => sampleConcentration(s({ startAt: '2026-03-02T10:00:00Z', endAt: '2026-03-02T10:15:00Z', result: { revision: 1, value: 60, unit: 'ug', qualifier: '=', lod: 1, loq: 2 }, ...o }));
+  it('uses a 15-minute sample directly (60 µg / 30 L = 2 mg/m³)', () => {
+    const [r] = stel15([st({})], {});
+    expect(r.result).toEqual({ lower: 2, upper: 2, unit: 'mg/m3' });
+  });
+  it('rejects a sample longer than 15 minutes', () => {
+    const [r] = stel15([st({ endAt: '2026-03-02T10:30:00Z' })], {});
+    expect(r.result).toBeNull();
+    expect(r.flags[0].code).toBe('STEL_SAMPLE_TOO_LONG');
+  });
+  it('needs a justified assumption for a short sample, then averages over 15 min', () => {
+    const short = st({ endAt: '2026-03-02T10:10:00Z', result: { revision: 1, value: 40, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } }); // 2 mg/m³ for 10 min
+    expect(stel15([short], {})[0].flags[0].code).toBe('STEL_SAMPLE_SHORT');
+    expect(stel15([short], { shortSampleAssumption: 'zero_remainder', shortSampleJustification: 'short' })[0].result).toBeNull();
+    const [r] = stel15([short], { shortSampleAssumption: 'zero_remainder', shortSampleJustification: 'Task observed to last 10 minutes with no other source nearby.' });
+    expect(r.result!.upper).toBeCloseTo(4 / 3, 5);
+  });
+  it('compares only with a 15-minute benchmark', () => {
+    const p = { exposureMinutesPerShift: null, unsampledAssumption: 'none' as const };
+    expect(runAssessment({ calc: 'stel_15', samples: [s({ startAt: '2026-03-02T10:00:00Z', endAt: '2026-03-02T10:15:00Z', result: { revision: 1, value: 60, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } })], parameters: p, benchmark: bm({ averagingMinutes: 15, value: 1 }) }).benchmarkState).toBe('at_or_above_benchmark');
+    expect(runAssessment({ calc: 'stel_15', samples: [s({ startAt: '2026-03-02T10:00:00Z', endAt: '2026-03-02T10:15:00Z' })], parameters: p, benchmark: bm() }).benchmarkState).toBe('not_comparable');
+  });
+});
+
+describe('ppm ↔ mg/m³ conversion', () => {
+  it('uses the molar volume at 20 °C and 101.325 kPa', () => {
+    expect(MOLAR_VOLUME_L).toBeCloseTo(24.0548, 3);
+    const c = convertInterval({ lower: 10, upper: 10, unit: 'ppm' }, 'mg/m3', 78.11)!;
+    expect(c.upper).toBeCloseTo((10 * 78.11) / 24.0548, 3);
+    expect(convertInterval(c, 'ppm', 78.11)!.upper).toBeCloseTo(10, 4);
+  });
+  it('refuses to convert without a molecular weight, or for fibres', () => {
+    expect(convertInterval({ lower: 1, upper: 1, unit: 'ppm' }, 'mg/m3', null)).toBeNull();
+    expect(convertInterval({ lower: 1, upper: 1, unit: 'f/ml' }, 'mg/m3', 50)).toBeNull();
+  });
+  it('compares a ppm result with a mg/m³ benchmark only when molecular weight is known', () => {
+    const ppm = s({ method: { ...method, resultBasis: 'concentration' }, startAt: '2026-03-02T08:00:00Z', endAt: '2026-03-02T16:00:00Z', result: { revision: 1, value: 2, unit: 'ppm', qualifier: '=', lod: null, loq: null } });
+    const p = { exposureMinutesPerShift: 480, unsampledAssumption: 'none' as const };
+    expect(runAssessment({ calc: 'twa_8h', samples: [ppm], parameters: p, benchmark: bm({ value: 10 }) }).benchmarkState).toBe('not_comparable');
+    const o = runAssessment({ calc: 'twa_8h', samples: [ppm], parameters: p, benchmark: bm({ value: 10 }), molecularWeight: 78.11 });
+    expect(o.benchmarkState).toBe('below_benchmark'); // 2 ppm ≈ 6.49 mg/m³ < 10
+    expect(o.benchmarkNote).toMatch(/converted/);
+  });
+});

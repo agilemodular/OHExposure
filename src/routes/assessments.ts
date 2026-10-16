@@ -20,9 +20,9 @@ function calcOutput(out: any) {
     <div class="tablewrap"><table><thead><tr><th>Sample</th><th>Type</th><th>Subject</th><th class="num">Sampled min</th><th class="num">Volume L</th><th>Concentration</th><th>Used</th></tr></thead><tbody>
     ${out.samples.map((s: any) => html`<tr><td>${s.sampleCode}</td><td>${label(s.sampleType)}</td><td>${s.subjectRef ?? '—'}</td><td class="num">${fmtNum(s.sampledMinutes)}</td><td class="num">${fmtNum(s.volumeL)}</td>
       <td>${interval(s.concentration)}${s.indicative ? html` <span class="tag tag-q">indicative</span>` : ''}</td><td>${s.included ? 'Yes' : html`<span class="badge b-bad">Excluded</span>`}</td></tr>`)}</tbody></table></div>
-    <h3>8-hour TWA by worker and shift</h3>
-    ${out.shifts.length ? html`<div class="tablewrap"><table><thead><tr><th>Worker</th><th>Shift</th><th>Samples</th><th class="num">Coverage</th><th>8-h TWA</th><th>Benchmark comparison</th></tr></thead><tbody>
-      ${out.shifts.map((s: any) => html`<tr><td>${s.subjectRef}</td><td>${s.shiftDate}</td><td>${s.sampleCodes.join(', ')}</td><td class="num">${s.coveragePct ?? '—'}%</td><td>${interval(s.twa8h)}</td>
+    ${out.calcCode === 'stel_15' ? html`<h3>15-minute short-term results</h3>` : html`<h3>8-hour TWA by worker and shift</h3>`}
+    ${out.shifts.length ? html`<div class="tablewrap"><table><thead><tr><th>Worker</th><th>${out.calcCode === 'stel_15' ? 'Date' : 'Shift'}</th><th>Samples</th><th class="num">${out.calcCode === 'stel_15' ? 'Sampled min' : 'Coverage'}</th><th>${out.calcCode === 'stel_15' ? '15-min value' : '8-h TWA'}</th><th>Benchmark comparison</th></tr></thead><tbody>
+      ${out.shifts.map((s: any) => html`<tr><td>${s.subjectRef}</td><td>${s.shiftDate}</td><td>${s.sampleCodes.join(', ')}</td><td class="num">${out.calcCode === 'stel_15' ? fmtNum(s.sampledMinutes) : html`${s.coveragePct ?? '—'}%`}</td><td>${interval(s.result ?? s.twa8h)}${s.comparison?.converted ? html`<br><span class="small muted">≈ ${interval(s.comparison.converted)}</span>` : ''}</td>
         <td>${s.comparison ? html`${label(s.comparison.state)}${s.comparison.ratio ? html` <span class="small muted">(${fmtNum(s.comparison.ratio.lower)}${s.comparison.ratio.upper !== s.comparison.ratio.lower ? html`–${fmtNum(s.comparison.ratio.upper)}` : ''} × benchmark)</span>` : ''}` : html`<span class="muted">not compared</span>`}</td></tr>`)}</tbody></table></div>` : empty('No personal worker-shift results.')}
     ${out.staticSamples.length ? html`<p class="note">Static samples are shown as contextual evidence only and are never compared with personal exposure benchmarks.</p>` : ''}
     <p><b>Benchmark:</b> ${out.benchmarkNote}</p>
@@ -36,6 +36,9 @@ function draftForm(c: PageCtx, d: any) {
     <fieldset class="panel"><legend>Samples included</legend>
       ${d.candidates.length ? d.candidates.map((s: any) => html`<label class="check"><input type="checkbox" name="sample_ids" value="${s.id}" ${r.sample_ids.includes(s.id) ? html`checked` : ''}> ${s.sample_code} — ${label(s.sample_type)}, ${s.ref_code ?? 'no worker'}, ${fmtDate(s.start_at)} <span class="small muted">(${label(s.status)})</span></label>`) : html`<p class="muted">No samples for this substance.</p>`}
     </fieldset>
+    <label>Calculation<select name="calc_code">
+      <option value="twa_8h" ${r.calc_code !== 'stel_15' ? html`selected` : ''}>8-hour time-weighted average (long-term benchmark, 480 min)</option>
+      <option value="stel_15" ${r.calc_code === 'stel_15' ? html`selected` : ''}>15-minute short-term exposure (short-term benchmark, 15 min)</option></select></label>
     <label>Benchmark version<select name="benchmark_version_id">${options(d.benchmarks, 'id', (b: any) => `${b.jurisdiction} ${b.benchmark_type} ${b.value} ${b.unit} — ${b.source_version} (${b.verification_status}${b.is_synthetic ? ', SYNTHETIC' : ''})`, r.benchmark_version_id, '— no benchmark —')}</select></label>
     <div class="row"><label>Exposure duration per shift (min) <span class="hint">From task records; required for an 8-hour TWA</span><input type="number" min="1" name="exposure_minutes_per_shift" value="${p.exposureMinutesPerShift ?? ''}"></label>
     <label>Unsampled exposure time<select name="unsampled_assumption">
@@ -43,6 +46,12 @@ function draftForm(c: PageCtx, d: any) {
       <option value="zero_exposure" ${p.unsampledAssumption === 'zero_exposure' ? html`selected` : ''}>Assume no exposure during unsampled time</option>
       <option value="same_as_sampled" ${p.unsampledAssumption === 'same_as_sampled' ? html`selected` : ''}>Assume the sampled mean applies to unsampled time</option></select></label></div>
     <label>Justification for the unsampled-time assumption <span class="hint">Required for either assumption; it is printed in the report</span><textarea name="unsampled_justification">${p.unsampledJustification ?? ''}</textarea></label>
+    <fieldset class="panel"><legend>15-minute calculation only</legend>
+      <label>Samples shorter than 15 minutes<select name="short_sample_assumption">
+        <option value="none" ${p.shortSampleAssumption !== 'zero_remainder' ? html`selected` : ''}>No assumption — do not calculate</option>
+        <option value="zero_remainder" ${p.shortSampleAssumption === 'zero_remainder' ? html`selected` : ''}>Assume no exposure for the rest of the 15 minutes</option></select></label>
+      <label>Justification for the short-sample assumption<textarea name="short_sample_justification">${p.shortSampleJustification ?? ''}</textarea></label>
+      <p class="small muted">Samples longer than 15 minutes cannot be used for a short-term result.</p></fieldset>
     <h3>Professional interpretation</h3>
     <label>Interpretation<textarea name="interpretation" rows="5">${r.interpretation ?? ''}</textarea></label>
     <label>Conclusion<select name="conclusion_category">${options(CONCLUSIONS.map(([v, l]) => ({ v, l })), 'v', (x: any) => x.l, r.conclusion_category, '— select —')}</select></label>
@@ -131,7 +140,7 @@ export function assessmentRoutes(app: FastifyInstance) {
 
   page(app, '/assessments/:id/compare', async (c) => {
     const r = await asmt.compareRevisions(c.actor, String(c.query.before), String(c.query.after));
-    const tw = (rev: any) => (rev.calc_output?.shifts ?? []).map((s: any) => html`${s.subjectRef} ${s.shiftDate}: ${interval(s.twa8h)}<br>`);
+    const tw = (rev: any) => (rev.calc_output?.shifts ?? []).map((s: any) => html`${s.subjectRef} ${s.shiftDate}: ${interval(s.result ?? s.twa8h)}<br>`);
     return {
       title: 'Before and after comparison', crumbs: [['Assessments', '/assessments'], ['Assessment', `/assessments/${c.params.id}`], ['Compare']],
       body: html`${r.comparable ? html`<div class="note">No differences were found in method, tasks, operating conditions, control status, sample types or duration. Differences in results may still have other causes.</div>`

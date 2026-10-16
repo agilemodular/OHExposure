@@ -5,7 +5,7 @@ export async function lookups(a: Actor) {
   return withActor(a, async (tx) => ({
     clients: await many(tx, 'select id, name, is_default from clients order by name'),
     sites: await many(tx, 'select s.id, s.name, c.name client_name from sites s join clients c on c.id=s.client_id order by c.name, s.name'),
-    substances: await many(tx, 'select id, name, cas_number, is_synthetic, tenant_id is null as platform from substances order by name'),
+    substances: await many(tx, 'select id, name, cas_number, is_synthetic, molecular_weight, tenant_id is null as platform from substances order by name'),
     users: await many(tx, `select id, name, role from users where status='active' order by name`),
     workers: await many(tx, `select w.id, w.ref_code, w.client_id, wi.full_name from workers w left join worker_identities wi on wi.worker_id=w.id and wi.disposed_at is null order by w.ref_code`),
     groups: await many(tx, 'select g.id, g.name, s.name site_name, g.client_id from exposure_groups g join sites s on s.id=g.site_id order by g.name'),

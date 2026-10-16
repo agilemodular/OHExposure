@@ -225,3 +225,22 @@ describe('second-round review fixes', () => {
     expect(row.locked_until).not.toBeNull();
   });
 });
+
+describe('STEL through the assessment service', () => {
+  it('calculates a 15-minute assessment and freezes the calculation code in the revision', async () => {
+    const admin = new pg.Client({ connectionString: process.env.DATABASE_ADMIN_URL }); await admin.connect();
+    const stelB = (await admin.query(`insert into benchmarks (tenant_id,substance_id,jurisdiction,benchmark_type,averaging_minutes) values (null,$1,'DEMO','STEL-${w.tag}',15) returning id`, [w.ref.substanceId])).rows[0].id;
+    const stelV = (await admin.query(`insert into benchmark_versions (tenant_id,benchmark_id,value,unit,source_title,source_version,effective_from,verification_status,verified_by,verified_at,is_synthetic)
+      values (null,$1,1.5,'mg/m3','SYNTHETIC DEMONSTRATION VALUE','demo-stel','2020-01-01','verified','platform (synthetic)',now(),true) returning id`, [stelB])).rows[0].id;
+    await admin.end();
+    const id = await sample(`ST-${w.tag}`, { start_local: '2026-04-01T10:00', end_local: '2026-04-01T10:15' });
+    await lab.createSubmission(w.a.prac, { laboratory_id: S.lab.id, reference: `STS-${w.tag}`, sample_ids: [id], dispatched_at: '2026-04-02T09:00' });
+    await lab.recordResult(w.a.prac, { sampling_event_id: id, substance_id: w.ref.substanceId, value: '60', unit: 'ug', qualifier: '=' });
+    const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group1.id, substance_id: w.ref.substanceId, title: 'Peak task', assessment_question: 'Short-term peaks during decanting?' });
+    await asmt.updateDraft(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: [id], benchmark_version_id: stelV });
+    const r = await asmt.calculate(w.a.prac, revision.id);
+    expect(r.calc_code).toBe('stel_15');
+    expect(r.calc_output.shifts[0].result).toEqual({ lower: 2, upper: 2, unit: 'mg/m3' });
+    expect(r.benchmark_state).toBe('at_or_above_benchmark');
+  });
+});

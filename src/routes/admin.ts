@@ -119,8 +119,9 @@ export function adminRoutes(app: FastifyInstance) {
         <div class="row"><label>Result basis<select name="result_basis"><option value="mass_on_sample">mass on sample</option><option value="concentration">concentration</option></select></label></div>
         <label class="check"><input type="checkbox" name="suitable_for_formal_assessment" value="on" checked> Suitable for formal exposure assessment</label><div><button>Add method version</button></div></form></details>` : ''}
       <h2 id="substances">Substances</h2>
-      <p>${lk.substances.map((s) => html`${substanceLabel(s)}<br>`)}</p>
-      ${can(c.actor, 'register.write') ? html`<form method="post" action="/reference/substances" class="actions-row panel">${csrfField(c)}<input name="name" placeholder="Substance name" required><input name="cas_number" placeholder="CAS number"><input name="ec_number" placeholder="EC number"><button class="secondary">Add substance</button></form>` : ''}`,
+      <p>${lk.substances.map((s) => html`${substanceLabel(s)}${s.molecular_weight ? html` <span class="small muted">MW ${s.molecular_weight} g/mol</span>` : ''}<br>`)}</p>
+      <p class="small muted">Molecular weight is used only to convert between ppm and mg/m³ at 20 °C and 101.325 kPa when a result and benchmark use different units.</p>
+      ${can(c.actor, 'register.write') ? html`<form method="post" action="/reference/substances" class="actions-row panel">${csrfField(c)}<input name="name" placeholder="Substance name" required><input name="cas_number" placeholder="CAS number"><input name="ec_number" placeholder="EC number"><input type="number" step="any" min="0" name="molecular_weight" placeholder="Molecular weight g/mol"><input name="molecular_weight_source" placeholder="Source of molecular weight"><button class="secondary">Add substance</button></form>` : ''}`,
     };
   });
   action(app, '/reference/benchmarks', async (c) => { await asmt.createBenchmarkVersion(c.actor, c.body); return { to: '/reference', ok: 'Benchmark saved as unverified. A second person must verify it before use.' }; });

@@ -75,9 +75,12 @@ export async function updateTask(a: Actor, id: string, input: unknown) {
 // ───── Substances (tenant-defined; platform reference rows are read-only)
 export async function createSubstance(a: Actor, input: unknown) {
   requirePerm(a, 'register.write');
-  const d = parse(z.object({ name: reqStr(2, 200), cas_number: z.preprocess((v) => (v === '' ? undefined : v), z.string().regex(/^\d{2,7}-\d{2}-\d$/, 'CAS format NNNNNNN-NN-N').optional()).transform((v) => v ?? null), ec_number: optStr }), input);
+  const d = parse(z.object({ name: reqStr(2, 200), cas_number: z.preprocess((v) => (v === '' ? undefined : v), z.string().regex(/^\d{2,7}-\d{2}-\d$/, 'CAS format NNNNNNN-NN-N').optional()).transform((v) => v ?? null), ec_number: optStr,
+    molecular_weight: optNum, molecular_weight_source: optStr }), input);
+  if (d.molecular_weight != null && !(d.molecular_weight > 0 && d.molecular_weight < 5000)) throw invalid('Molecular weight must be a positive value in g/mol');
+  if (d.molecular_weight != null && !d.molecular_weight_source) throw invalid('State the source of the molecular weight');
   return withActor(a, async (tx) => {
-    const r = await one(tx, 'insert into substances (tenant_id,name,cas_number,ec_number) values ($1,$2,$3,$4) returning *', [a.tenantId, d.name, d.cas_number, d.ec_number]);
+    const r = await one(tx, 'insert into substances (tenant_id,name,cas_number,ec_number,molecular_weight,molecular_weight_source) values ($1,$2,$3,$4,$5,$6) returning *', [a.tenantId, d.name, d.cas_number, d.ec_number, d.molecular_weight, d.molecular_weight_source]);
     await audit(tx, a, 'substance.create', 'substance', r.id, d);
     return r;
   });

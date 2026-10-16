@@ -16,7 +16,8 @@
 
 // 1.1.0: voided samples excluded; overlapping interruptions merged; shifts clustered across midnight;
 // exposure period checked against the register; high excluded/indicative results block a favourable roll-up.
-export const ENGINE_VERSION = '1.1.0';
+// 1.2.0: STEL (stel_15) calculation; ppm ↔ mg/m³ conversion for benchmark comparison when molecular weight is recorded.
+export const ENGINE_VERSION = '1.2.0';
 
 export type Qualifier = '=' | '<LOD' | '<LOQ' | '>' | 'estimated';
 export type MassUnit = 'ug' | 'mg';
@@ -256,6 +257,9 @@ export interface ShiftTwa {
   exposureMinutes: number | null;
   coveragePct: number | null;
   twa8h: Interval | null;
+  /** The calculated result for the reference period (equals twa8h for twa_8h; the 15-minute value for stel_15). */
+  result: Interval | null;
+  averagingMinutes: number;
   indicative: boolean;
   flags: Flag[];
 }
@@ -297,7 +301,7 @@ export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
     const sampled = ss.reduce((a, s) => a + (s.sampledMinutes ?? 0), 0);
     const out: ShiftTwa = {
       subjectRef, shiftDate, sampleCodes: ss.map((s) => s.sampleCode), sampledMinutes: round(sampled, 3),
-      exposureMinutes: p.exposureMinutesPerShift, coveragePct: null, twa8h: null,
+      exposureMinutes: p.exposureMinutesPerShift, coveragePct: null, twa8h: null, result: null, averagingMinutes: REFERENCE_PERIOD_MIN,
       indicative: ss.some((s) => s.indicative), flags,
     };
     res.push(out);
@@ -350,8 +354,77 @@ export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
       }
     }
     out.twa8h = { lower: round(lo / REFERENCE_PERIOD_MIN), upper: Number.isFinite(hi) ? round(hi / REFERENCE_PERIOD_MIN) : Infinity, unit };
+    out.result = out.twa8h;
   }
   return res;
+}
+
+// ───────────────────────── 15-minute STEL ─────────────────────────
+
+export const STEL_PERIOD_MIN = 15;
+export const STEL_TOLERANCE_MIN = 1;
+export interface StelParameters {
+  /** How to treat a sample shorter than 15 minutes. 'none' = not calculated. */
+  shortSampleAssumption?: 'none' | 'zero_remainder';
+  shortSampleJustification?: string;
+}
+
+/**
+ * stel_15 v1.0.0 — one result per personal sample intended as a 15-minute reference-period measurement.
+ *  - 14–16 min sampled: the measured concentration is the 15-minute value.
+ *  - < 14 min: only with the documented 'zero_remainder' assumption (C × T / 15) and a justification.
+ *  - > 16 min: not valid — averaging over a longer period dilutes peaks; flagged incomplete.
+ */
+export function stel15(samples: SampleOutput[], p: StelParameters): ShiftTwa[] {
+  const res: ShiftTwa[] = [];
+  for (const s of samples) {
+    if (!s.included || s.sampleType !== 'personal') continue;
+    const flags: Flag[] = [];
+    const out: ShiftTwa = {
+      subjectRef: s.subjectRef ?? '?', shiftDate: s.shiftDate ?? '?', sampleCodes: [s.sampleCode], sampledMinutes: s.sampledMinutes ?? 0,
+      exposureMinutes: null, coveragePct: null, twa8h: null, result: null, averagingMinutes: STEL_PERIOD_MIN, indicative: s.indicative, flags,
+    };
+    res.push(out);
+    if (!s.concentration || s.sampledMinutes == null) {
+      flags.push({ code: 'SAMPLE_NOT_CALCULABLE', severity: 'incomplete', message: 'Sample has no calculable concentration.' });
+      continue;
+    }
+    const T = s.sampledMinutes, c = s.concentration;
+    if (T > STEL_PERIOD_MIN + STEL_TOLERANCE_MIN) {
+      flags.push({ code: 'STEL_SAMPLE_TOO_LONG', severity: 'incomplete', message: `Sampled for ${round(T, 1)} min. A sample longer than 15 minutes averages out peaks and cannot be used as a short-term result.` });
+      continue;
+    }
+    if (T < STEL_PERIOD_MIN - STEL_TOLERANCE_MIN) {
+      const just = (p.shortSampleJustification ?? '').trim();
+      if (p.shortSampleAssumption !== 'zero_remainder') {
+        flags.push({ code: 'STEL_SAMPLE_SHORT', severity: 'incomplete', message: `Sampled for ${round(T, 1)} min, less than 15 min, and no documented assumption was selected for the rest of the period.` });
+        continue;
+      }
+      if (just.length < 20) {
+        flags.push({ code: 'ASSUMPTION_UNJUSTIFIED', severity: 'incomplete', message: 'The short-sample assumption requires a written justification (min 20 characters).' });
+        continue;
+      }
+      out.result = { lower: round((c.lower * T) / STEL_PERIOD_MIN), upper: Number.isFinite(c.upper) ? round((c.upper * T) / STEL_PERIOD_MIN) : Infinity, unit: c.unit };
+      flags.push({ code: 'STEL_ZERO_REMAINDER', severity: 'qualify', message: `Exposure assumed to be zero for the remaining ${round(STEL_PERIOD_MIN - T, 1)} min of the 15-minute period. Justification: ${just}` });
+      continue;
+    }
+    out.result = { ...c };
+  }
+  return res;
+}
+
+// ───────────────────────── Unit conversion ─────────────────────────
+
+/** Molar volume of an ideal gas at 20 °C and 101.325 kPa (R·T/P), L/mol — reference conditions used for GB limits. */
+export const MOLAR_VOLUME_L = round((8.314462618 * 293.15) / 101.325, 4);
+
+/** Converts an interval between ppm and mg/m³ using molecular weight (g/mol). Returns null when not possible. */
+export function convertInterval(i: Interval, to: ConcUnit, molecularWeight: number | null | undefined): Interval | null {
+  if (i.unit === to) return i;
+  if (!molecularWeight || !(molecularWeight > 0)) return null;
+  const f = i.unit === 'ppm' && to === 'mg/m3' ? molecularWeight / MOLAR_VOLUME_L : i.unit === 'mg/m3' && to === 'ppm' ? MOLAR_VOLUME_L / molecularWeight : null;
+  if (f === null) return null;
+  return { lower: round(i.lower * f), upper: Number.isFinite(i.upper) ? round(i.upper * f) : Infinity, unit: to };
 }
 
 // ───────────────────────── Benchmark comparison ─────────────────────────
@@ -368,22 +441,27 @@ export interface BenchmarkRef {
 }
 export type ComparisonState = 'below_benchmark' | 'at_or_above_benchmark' | 'indeterminate' | 'not_comparable';
 
-export function compareInterval(i: Interval | null, b: BenchmarkRef): { state: ComparisonState; ratio: { lower: number; upper: number } | null; reason?: string } {
-  if (!i) return { state: 'not_comparable', ratio: null, reason: 'No calculated exposure.' };
-  if (i.unit !== b.unit) return { state: 'not_comparable', ratio: null, reason: `Exposure unit ${i.unit} differs from benchmark unit ${b.unit}; unit conversion is not supported in this version.` };
+export function compareInterval(i0: Interval | null, b: BenchmarkRef, molecularWeight?: number | null): { state: ComparisonState; ratio: { lower: number; upper: number } | null; reason?: string; converted?: Interval } {
+  if (!i0) return { state: 'not_comparable', ratio: null, reason: 'No calculated exposure.' };
+  const i = convertInterval(i0, b.unit, molecularWeight);
+  if (!i) return { state: 'not_comparable', ratio: null, reason: `Exposure unit ${i0.unit} differs from benchmark unit ${b.unit} and cannot be converted${i0.unit === 'f/ml' || b.unit === 'f/ml' ? '' : ' (no molecular weight recorded for the substance)'}.` };
+  const conv = i0.unit !== b.unit ? { converted: i, reason: `Converted from ${i0.unit} to ${b.unit} at 20 °C, 101.325 kPa (molar volume ${MOLAR_VOLUME_L} L/mol, molecular weight ${molecularWeight} g/mol).` } : {};
   const ratio = { lower: round(i.lower / b.value, 4), upper: Number.isFinite(i.upper) ? round(i.upper / b.value, 4) : Infinity };
-  if (i.upper < b.value) return { state: 'below_benchmark', ratio };
-  if (i.lower >= b.value) return { state: 'at_or_above_benchmark', ratio };
-  return { state: 'indeterminate', ratio, reason: 'The result interval spans the benchmark value (e.g. a non-detect whose limit exceeds the benchmark).' };
+  if (i.upper < b.value) return { state: 'below_benchmark', ratio, ...conv };
+  if (i.lower >= b.value) return { state: 'at_or_above_benchmark', ratio, ...conv };
+  return { state: 'indeterminate', ratio, ...conv, reason: `The result interval spans the benchmark value (e.g. a non-detect whose limit exceeds the benchmark).${'reason' in conv ? ' ' + conv.reason : ''}` };
 }
 
 // ───────────────────────── Assessment roll-up ─────────────────────────
 
+export type CalcCode = 'twa_8h' | 'stel_15';
 export interface AssessmentInput {
-  calc: 'twa_8h';
+  calc: CalcCode;
   samples: SampleInput[];
-  parameters: TwaParameters;
+  parameters: TwaParameters & StelParameters;
   benchmark: BenchmarkRef | null;
+  /** Molecular weight (g/mol) of the substance, used only for ppm ↔ mg/m³ conversion. */
+  molecularWeight?: number | null;
 }
 export interface AssessmentOutput {
   engineVersion: string;
@@ -399,13 +477,17 @@ export interface AssessmentOutput {
   disclaimer: string;
 }
 
-export const CALCULATIONS = {
-  twa_8h: { code: 'twa_8h', version: '1.1.0' },
+export const CALCULATIONS: Record<CalcCode, { code: CalcCode; version: string; averagingMinutes: number; label: string }> = {
+  twa_8h: { code: 'twa_8h', version: '1.1.0', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
+  stel_15: { code: 'stel_15', version: '1.0.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
 };
 
 export function runAssessment(input: AssessmentInput): AssessmentOutput {
+  const calc = CALCULATIONS[input.calc] ?? CALCULATIONS.twa_8h;
   const samples = input.samples.map(sampleConcentration);
-  const shifts = twa8h(samples, input.parameters);
+  const shifts = calc.code === 'stel_15' ? stel15(samples, input.parameters) : twa8h(samples, input.parameters);
+  const REF = calc.averagingMinutes;
+  const what = calc.code === 'stel_15' ? '15-minute' : 'worker-shift';
   const issues: Flag[] = [];
   const staticSamples = samples
     .filter((s) => s.sampleType === 'static' && s.included)
@@ -414,33 +496,40 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
   const b = input.benchmark;
   let benchmarkState: AssessmentOutput['benchmarkState'];
   let benchmarkNote = '';
-  const usable = b && b.verificationStatus === 'verified' && b.averagingMinutes === REFERENCE_PERIOD_MIN;
+  const usable = b && b.verificationStatus === 'verified' && b.averagingMinutes === REF;
   const withCmp = shifts.map((sh) => ({
     ...sh,
-    comparison: usable && !sh.indicative ? compareInterval(sh.twa8h, b!) : null,
+    comparison: usable && !sh.indicative ? compareInterval(sh.result, b!, input.molecularWeight) : null,
   }));
 
   if (!b) { benchmarkState = 'no_verified_benchmark'; benchmarkNote = 'No benchmark selected.'; }
   else if (b.verificationStatus !== 'verified') { benchmarkState = 'no_verified_benchmark'; benchmarkNote = `Selected benchmark version is ${b.verificationStatus}; it cannot be used for comparison until verified.`; }
-  else if (b.averagingMinutes !== REFERENCE_PERIOD_MIN) { benchmarkState = 'not_comparable'; benchmarkNote = `Benchmark averaging period (${b.averagingMinutes} min) does not match the 8-hour TWA calculation.`; }
+  else if (b.averagingMinutes !== REF) { benchmarkState = 'not_comparable'; benchmarkNote = `Benchmark averaging period (${b.averagingMinutes} min) does not match the ${calc.label} calculation (${REF} min).`; }
   else {
     const formal = withCmp.filter((s) => s.comparison);
     if (!formal.length) {
       benchmarkState = 'not_comparable';
-      benchmarkNote = shifts.length ? 'Only indicative (screening) personal results are available; no formal benchmark comparison.' : 'No personal 8-hour TWA results are available; static results are not comparable with personal benchmarks.';
+      benchmarkNote = shifts.length ? 'Only indicative (screening) personal results are available; no formal benchmark comparison.' : `No personal ${calc.label} results are available; static results are not comparable with personal benchmarks.`;
     } else {
       const st = formal.map((s) => s.comparison!.state);
       benchmarkState = st.includes('at_or_above_benchmark') ? 'at_or_above_benchmark'
+        : st.every((x) => x === 'not_comparable') ? 'not_comparable'
         : st.includes('indeterminate') || st.includes('not_comparable') ? 'indeterminate'
         : 'below_benchmark';
-      const incompleteShifts = withCmp.filter((s) => !s.twa8h).length;
+      const incompleteShifts = withCmp.filter((s) => !s.result).length;
       if (incompleteShifts && benchmarkState === 'below_benchmark') benchmarkState = 'indeterminate';
-      benchmarkNote = `${formal.length} formal worker-shift result(s) compared with ${b.type} ${b.value} ${b.unit} (${b.source}).`;
-      if (incompleteShifts) benchmarkNote += ` ${incompleteShifts} worker-shift(s) could not be calculated.`;
+      benchmarkNote = `${formal.length} formal ${what} result(s) compared with ${b.type} ${b.value} ${b.unit} (${b.source}).`;
+      if (incompleteShifts) benchmarkNote += ` ${incompleteShifts} ${what} result(s) could not be calculated.`;
+      const conv = formal.find((s) => s.comparison?.converted);
+      if (conv) benchmarkNote += ` Results were converted to ${b.unit} at 20 °C and 101.325 kPa (molar volume ${MOLAR_VOLUME_L} L/mol) using molecular weight ${input.molecularWeight} g/mol.`;
     }
     // Evidence that was excluded or is only indicative must not be outweighed silently: if any such personal
     // result is itself at or above the benchmark, a favourable roll-up becomes indeterminate.
-    const highSet = samples.filter((s) => s.sampleType === 'personal' && (!s.included || s.indicative) && s.concentration && s.concentration.unit === b.unit && s.concentration.lower >= b.value);
+    const highSet = samples.filter((s) => {
+      if (s.sampleType !== 'personal' || (s.included && !s.indicative) || !s.concentration) return false;
+      const c = convertInterval(s.concentration, b.unit, input.molecularWeight);
+      return !!c && c.lower >= b.value;
+    });
     if (highSet.length && (benchmarkState === 'below_benchmark' || benchmarkState === 'not_comparable')) {
       benchmarkState = 'indeterminate';
       benchmarkNote += ` ${highSet.length} excluded or indicative result(s) (${highSet.map((s) => s.sampleCode).join(', ')}) are at or above the benchmark value; they must be explained before any favourable conclusion.`;
@@ -454,13 +543,13 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
   const usableSamples = samples.filter((s) => s.included && s.sampleType !== 'field_blank');
   let dq: AssessmentOutput['dataQualityState'];
   if (!usableSamples.length) dq = 'failed';
-  else if (issues.some((f) => f.severity === 'incomplete') || shifts.some((s) => !s.twa8h)) dq = 'incomplete';
+  else if (issues.some((f) => f.severity === 'incomplete') || shifts.some((s) => !s.result)) dq = 'incomplete';
   else if (issues.length) dq = 'qualified';
   else dq = 'complete';
   if (samples.some((s) => !s.included && s.sampleType !== 'field_blank') && dq === 'complete') dq = 'qualified';
 
   return {
-    engineVersion: ENGINE_VERSION, calcCode: 'twa_8h', calcVersion: CALCULATIONS.twa_8h.version,
+    engineVersion: ENGINE_VERSION, calcCode: calc.code, calcVersion: calc.version,
     samples, shifts: withCmp, staticSamples, dataQualityState: dq, benchmarkState, benchmarkNote, issues,
     disclaimer: 'Calculated outputs and benchmark comparisons are not a compliance conclusion. Professional interpretation by a competent person is required.',
   };
