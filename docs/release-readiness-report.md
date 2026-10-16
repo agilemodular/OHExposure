@@ -10,7 +10,7 @@ A controlled pilot becomes appropriate once the *before pilot* items below are c
 
 ## What exists and is verified
 
-All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **75 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
+All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **80 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
 
 Strongest areas:
 
@@ -20,7 +20,9 @@ Strongest areas:
 
 ## Independent review
 
-A separate reviewer, with no part in writing the code, tried to break isolation, safety rules, authentication and calculations. It reported 3 critical, 5 high, 6 medium and 2 low defects, including cross-client evidence mixing, voided samples counted as evidence, and client users able to write. All 16 were fixed and each has a regression test. The calculations it checked by hand matched. Re-verification of the fixes by the same reviewer: see the addendum at the end of this report.
+A separate reviewer, with no part in writing the code, tried to break isolation, safety rules, authentication and calculations. It reported 3 critical, 5 high, 6 medium and 2 low defects, including cross-client evidence mixing, voided samples counted as evidence, and client users able to write. All 16 were fixed and each has a regression test. The calculations it checked by hand matched.
+
+The same reviewer then re-verified the fixes and found 3 regressions introduced by them (split shifts under-estimated, defect actions uncancellable, staleness notice masking evidence changes) and 4 partial fixes (MFA attempt limit per session only, missing register duration not flagged, tenant/reference tables writable by client sessions, rejected import files visible across clients). All 7 were fixed with regression tests. **A third verification round has not been run** and should be done before pilot.
 
 ## Remaining risks
 
@@ -57,6 +59,7 @@ A separate reviewer, with no part in writing the code, tried to break isolation,
 3. Hosting with TLS, changed credentials, backups and one restore test (D7).
 4. DPIA and agreed retention periods (D8, D9).
 5. Field device testing on pilot hardware (D10).
+6. A third independent verification round of security and safety rules.
 
 ## Next decision
 

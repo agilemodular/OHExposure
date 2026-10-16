@@ -16,12 +16,12 @@ Classification used throughout:
 | Capability | Status | Evidence / notes |
 |---|---|---|
 | Password sign-in (scrypt), sessions (hashed tokens, httpOnly, SameSite) | Verified | http tests |
-| TOTP MFA enrolment and challenge; tenant-level enforcement (default on) | Verified | http: *requires MFA enrolment…* (real TOTP codes) |
+| TOTP MFA enrolment and challenge; tenant-level enforcement (default on); replay protection; session revoked after 5 wrong codes; account locked after 10 across sessions | Verified | http + review-regressions tests (real TOTP codes) |
 | Account lockout (5 failures/15 min) and per-IP throttle | Verified | http: lockout test; throttle triggered during test development |
 | Forced change of administrator-issued temporary passwords | Verified | http test |
 | CSRF protection on all forms and the sync API | Verified | http test; browser run |
 | Security headers (CSP, frame-deny, no-store) | Verified | http test |
-| Tenant isolation via forced RLS on all 52 tables | Verified | isolation tests; catalogue query |
+| Tenant isolation via forced RLS on all 52 tables; client-scoped sessions read-only at DB level | Verified | isolation + regression tests; catalogue query |
 | Consultancy client scoping | Verified | isolation tests (client 1 vs client 2, users, reports, attachments) |
 | Restricted identifiable worker data | Verified | workflow: RLS hides names from field technicians |
 | Role-based permission matrix and separation-of-duties rules | Verified | workflow + http tests |
