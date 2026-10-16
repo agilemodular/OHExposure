@@ -257,11 +257,13 @@ export async function newRevision(a: Actor, assessmentId: string, input: unknown
 /** Detects evidence or reference changes since a revision was calculated/approved. Never mutates the revision. */
 export async function staleness(tx: Tx, r: any) {
   const reasons: string[] = [];
-  if (r.inputs_hash && r.calc_version && r.calc_version !== CALCULATIONS.twa_8h.version) {
-    reasons.push(`The calculation method has been updated (v${r.calc_version} → v${CALCULATIONS.twa_8h.version}) since this revision was calculated; reassessment may be required. This revision's results are unchanged.`);
-  } else if (r.inputs_hash) {
+  if (r.inputs_snapshot) {
+    // Evidence references (sample versions, result revisions, QC dispositions) are compared independently of the
+    // calculation version, so an engine update never hides a real evidence change.
     const snap = await buildSnapshot(tx, r, r.substance_id);
-    if (hashOf(snap) !== r.inputs_hash) reasons.push('Underlying sample, QC or laboratory evidence has changed since this revision was calculated.');
+    if (JSON.stringify(snap.refs) !== JSON.stringify(r.inputs_snapshot.refs)) reasons.push('Underlying sample, QC or laboratory evidence has changed since this revision was calculated.');
+    if (r.calc_version && r.calc_version !== CALCULATIONS.twa_8h.version)
+      reasons.push(`The calculation method has been updated (v${r.calc_version} → v${CALCULATIONS.twa_8h.version}) since this revision was calculated; reassessment may be required. This revision's results are unchanged.`);
   }
   if (r.benchmark_version_id) {
     const newer = await one(tx, `select v2.id, v2.value, v2.unit, v2.source_version from benchmark_versions v1 join benchmark_versions v2 on v2.benchmark_id=v1.benchmark_id

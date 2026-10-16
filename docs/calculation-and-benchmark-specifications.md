@@ -1,10 +1,10 @@
 # Calculation and benchmark specifications
 
-Engine: `src/calc/engine.ts`, engine version **1.0.0**. Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
+Engine: `src/calc/engine.ts`, engine version **1.1.0** (calculation `twa_8h` v1.1.0). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
 
 > **Methodological sources must be confirmed by a competent occupational hygienist against the current editions before pilot use.** The references below identify the conventions the engine implements; they were not re-checked against the live publications during this build (no access was attempted), and no text from them is reproduced.
 
-## 1. `sample_concentration` v1.0.0
+## 1. `sample_concentration` (engine 1.1.0)
 
 **Intended use.** Convert one laboratory result for one sample into an airborne concentration, carried as an interval so qualified results are never turned into false point values.
 
@@ -13,7 +13,7 @@ Engine: `src/calc/engine.ts`, engine version **1.0.0**. Pure functions, no I/O, 
 **Formula** (mass-on-sample methods):
 
 ```
-sampled minutes  T = (end − start) − Σ overlap(interruption, [start, end])
+sampled minutes  T = (end − start) − |∪ interruptions ∩ [start, end]|   (overlapping interruptions merged first)
 mean flow        Q = (Q_pre + Q_post) / 2                         L/min
 air volume       V = Q × T                                        L
 concentration    C = m[mg] / (V / 1000)                           mg/m³     (µg are divided by 1000)
@@ -53,8 +53,9 @@ Direct-concentration results in µg/m³ are converted to mg/m³; ppm and f/ml ar
 | Failed QC check, disposition *sample invalidated* | exclude | excluded, listed |
 | Failed QC check, disposition *accepted with justification* | qualify | included, flagged |
 | Field blank | exclude | not an exposure result |
+| Sample voided | exclude | listed, never used |
 
-## 2. `twa_8h` v1.0.0
+## 2. `twa_8h` v1.1.0
 
 **Intended use.** Personal 8-hour time-weighted average per worker per shift date, for comparison with a long-term (480-minute) benchmark. Convention as used for GB workplace exposure limits (HSE EH40, *Workplace exposure limits*; sampling strategy guidance in HSE HSG173) — to be confirmed by the reviewing hygienist.
 
@@ -64,7 +65,7 @@ Direct-concentration results in µg/m³ are converted to mg/m³; ppm and f/ml ar
 TWA₈ = ( Σ Cᵢ·Tᵢ  +  C_u·T_u ) / 480 min
 ```
 
-Samples are grouped by worker reference and local shift date (the sample's own time zone). `E` = exposure minutes per shift for the group (recorded from task data and entered on the revision). Unsampled exposure `T_u = max(0, E − ΣTᵢ)`.
+Samples are grouped by worker reference into shifts: consecutive samples separated by gaps of less than 240 minutes form one shift, so night shifts crossing midnight are not split. The shift is labelled with the local date of its first sample. Overlapping samples for one worker make the shift *incomplete*. If the exposure period entered is shorter than the longest duration recorded in the register for that group and substance, the shift is *incomplete* (unsampled time cannot be dropped by under-stating the period). `E` = exposure minutes per shift for the group (recorded from task data and entered on the revision). Unsampled exposure `T_u = max(0, E − ΣTᵢ)`.
 
 | Unsampled-time assumption | C_u | Requirement |
 |---|---|---|
@@ -87,7 +88,7 @@ otherwise                      → indeterminate   (e.g. a non-detect whose LOD 
 units differ                   → not_comparable
 ```
 
-Roll-up for the revision: any *at or above* → at_or_above; any indeterminate or incomplete worker-shift → indeterminate; only indicative or static evidence → not_comparable; no benchmark or benchmark not *verified* → no_verified_benchmark.
+Roll-up for the revision: any *at or above* → at_or_above; any indeterminate or incomplete worker-shift → indeterminate; any excluded or indicative personal result whose lower bound is at or above the benchmark → indeterminate (named in the note); only indicative or static evidence → not_comparable; no benchmark or benchmark not *verified* → no_verified_benchmark.
 
 The output always carries the statement that a benchmark comparison is not a compliance conclusion. There is no "safe" or "compliant" field anywhere in the model (asserted in tests).
 
@@ -100,7 +101,7 @@ The output always carries the statement that a benchmark comparison is not a com
 | Professional review | draft · in review · approved · superseded · withdrawn | people |
 | Conclusion category | insufficient evidence · improvement required · urgent action required · exposure adequately controlled | reviewer-approved interpretation |
 
-Guard: *exposure adequately controlled* cannot be submitted or approved when data quality is *failed/incomplete* or the comparison is *at or above benchmark*.
+Guard: *exposure adequately controlled* can only be submitted or approved when data quality is *complete/qualified* **and** the comparison is *below benchmark*.
 
 ## 5. Benchmark and jurisdiction management
 
@@ -113,4 +114,4 @@ Each benchmark version records substance, jurisdiction, type, averaging period, 
 
 ## 6. Test cases
 
-`test/calc.test.ts` (30 cases) covers, with hand-calculated expected values: volume and concentration (120 µg, 2.0 L/min, 240 min → 0.25 mg/m³); interruption subtraction (210 min); non-detect interval (upper = 5 µg / 0.48 m³); non-detect without limit → incomplete; over-range → ∞; missing flow/duration/invalid duration; flow drift and undefined tolerance; QC fail unresolved/accepted; screening instrument; missing calibration; unit/basis mismatch; µg/m³ conversion; consecutive-sample TWA (0.175 mg/m³); incomplete coverage with no assumption; unjustified assumption; zero and same-as-sampled assumptions (0.125, 0.25); 600-minute shift (0.125); missing exposure period; static exclusion; all four comparison states; unverified benchmark; no verdict field; static-only; screening-only; all-excluded → failed; partial incomplete → indeterminate; averaging-period mismatch; determinism; before/after comparability.
+`test/calc.test.ts` (30 cases) and the calculation section of `test/review-regressions.test.ts` (4 cases: night shift, overlapping interruptions, high indicative/excluded results, exposure-period guard) cover, with hand-calculated expected values: volume and concentration (120 µg, 2.0 L/min, 240 min → 0.25 mg/m³); interruption subtraction (210 min); non-detect interval (upper = 5 µg / 0.48 m³); non-detect without limit → incomplete; over-range → ∞; missing flow/duration/invalid duration; flow drift and undefined tolerance; QC fail unresolved/accepted; screening instrument; missing calibration; unit/basis mismatch; µg/m³ conversion; consecutive-sample TWA (0.175 mg/m³); incomplete coverage with no assumption; unjustified assumption; zero and same-as-sampled assumptions (0.125, 0.25); 600-minute shift (0.125); missing exposure period; static exclusion; all four comparison states; unverified benchmark; no verdict field; static-only; screening-only; all-excluded → failed; partial incomplete → indeterminate; averaging-period mismatch; determinism; before/after comparability.

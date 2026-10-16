@@ -60,12 +60,15 @@ export async function completeMfa(si: SessionInfo, code: string) {
     // Replay protection: each time-step is accepted once.
     const accepted = step !== null && (await one(tx, 'select self_accept_totp_step($1) ok', [step]))?.ok;
     if (accepted) {
+      await tx.query('select auth_record_mfa($1,true)', [si.actor.userId]);
       await tx.query('update sessions set mfa_passed=true where id=$1', [si.sessionId]);
       await audit(tx, si.actor, si.mfaEnabled ? 'auth.mfa_passed' : 'auth.mfa_enrolled', 'user', si.actor.userId);
       return 'ok' as const;
     }
     const s = await one(tx, `update sessions set mfa_failures = mfa_failures + 1,
       revoked_at = case when mfa_failures + 1 >= 5 then now() else revoked_at end where id=$1 returning mfa_failures`, [si.sessionId]);
+    // Count against the account as well as the session, so signing in again does not reset the attempt budget.
+    await tx.query('select auth_record_mfa($1,false)', [si.actor.userId]);
     const locked = (s?.mfa_failures ?? 0) >= 5;
     await audit(tx, si.actor, locked ? 'auth.mfa_session_revoked' : 'auth.mfa_failed', 'user', si.actor.userId);
     return locked ? ('locked' as const) : ('failed' as const);

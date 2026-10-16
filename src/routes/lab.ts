@@ -54,7 +54,8 @@ export function labRoutes(app: FastifyInstance) {
       if (!file) throw invalid('Choose a file');
       if (!att.sniff(file.data, file.filename)?.startsWith('text/')) throw invalid('Import files must be CSV text');
       const b = await lab.stageImport(si.actor, { filename: file.filename, csv: file.data.toString('utf8'), laboratory_id: fields.laboratory_id || null });
-      await att.saveAttachment(si.actor, { entity_type: 'import_batch', entity_id: b.id, filename: file.filename, data: file.data });
+      // Keep the source file only when the batch is tied to one client; otherwise it could be visible across clients.
+      if (b.client_id) await att.saveAttachment(si.actor, { entity_type: 'import_batch', entity_id: b.id, filename: file.filename, data: file.data });
       setFlash(reply, b.status === 'validated' ? 'ok' : 'err', b.status === 'validated' ? `All ${b.row_count} rows are valid. Review and commit.` : `${b.error_count} of ${b.row_count} rows have problems. Nothing has been saved.`);
       return reply.redirect(`/lab/imports/${b.id}`, 303);
     } catch (e: any) {

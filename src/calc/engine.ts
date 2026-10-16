@@ -280,7 +280,10 @@ export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
     let lastEnd = -Infinity;
     const flush = () => { if (cur.length) groups.set(`${subject}|${cur[0].shiftDate ?? '?'}|${groups.size}`, cur); cur = []; };
     for (const s of sorted) {
-      if (s.startMs === null || s.startMs - lastEnd > SHIFT_GAP_MIN * MIN) flush();
+      // Start a new shift only when the gap is long AND the local date differs: this keeps night shifts that
+      // cross midnight together, and keeps split shifts on the same day together.
+      const sameDay = cur.length > 0 && s.shiftDate === cur[0].shiftDate;
+      if (s.startMs === null || (!sameDay && s.startMs - lastEnd > SHIFT_GAP_MIN * MIN)) flush();
       cur.push(s);
       lastEnd = Math.max(lastEnd, s.endMs ?? s.startMs ?? lastEnd);
     }
@@ -313,7 +316,11 @@ export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
     }
     const E = p.exposureMinutesPerShift;
     if (overlaps) { flags.push({ code: 'SAMPLES_OVERLAP', severity: 'incomplete', message: 'Samples for this worker overlap in time and would be double counted.' }); continue; }
-    if (p.recordedExposureMinutes != null && E < p.recordedExposureMinutes - 0.5) {
+    if (p.recordedExposureMinutes === null) {
+      flags.push({ code: 'EXPOSURE_NOT_IN_REGISTER', severity: 'incomplete', message: 'No exposure duration is recorded in the exposure register for this group and substance, so the exposure period entered cannot be checked. Link the group to its tasks/hazards and record their durations.' });
+      continue;
+    }
+    if (p.recordedExposureMinutes !== undefined && E < p.recordedExposureMinutes - 0.5) {
       flags.push({ code: 'EXPOSURE_BELOW_RECORDED', severity: 'incomplete', message: `The exposure period entered (${E} min) is shorter than the duration recorded in the exposure register (${p.recordedExposureMinutes} min). Correct the entry or update the register; unsampled time must not be dropped silently.` });
       continue;
     }

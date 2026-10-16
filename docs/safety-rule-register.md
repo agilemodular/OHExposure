@@ -27,3 +27,10 @@ Each rule from the product brief, how it is enforced, and the evidence. "DB" = e
 | S21 | Field records never silently overwritten | Optimistic version check online; offline stale edits stored as conflicts with both copies; locked once dispatched. | workflow: offline sync test; browser test (test-evidence) |
 | S22 | AI cannot invent, approve or decide | No AI provider configured; the suggestion interface only stores labelled pending text and can only write into a *draft* interpretation after human acceptance. | Code review: `src/services/ai.ts` |
 | S23 | Demonstration data labelled and isolated | Demo is its own tenant (`is_demo`), banner on every page and report; synthetic reference rows flagged. | Screenshots; seed script |
+| S24 | Voided samples are never evidence | Engine excludes `voided` samples; voiding after calculation changes the inputs hash and blocks approval. | review-regressions: *C2 void samples* |
+| S25 | Evidence from one client cannot enter another client's assessment | Service checks on group/plan/assessment client; DB trigger on `sampling_events`. | review-regressions: *C1* |
+| S26 | Excluded or indicative results at or above the benchmark cannot be outweighed silently | Roll-up becomes *indeterminate* with the sample codes named. | review-regressions: *M3*; calc test |
+| S27 | Unsampled time cannot be dropped by under-stating the exposure period | Exposure period shorter than the register duration is *incomplete*. | review-regressions: *H4* |
+| S28 | "Exposure adequately controlled" only when every formal result is below a verified benchmark | Submission and approval guard. | service rule (`checkConclusion`) |
+| S29 | Defect actions cannot be cancelled by their creator or without reviewer rights; a defective control cannot return to service while defect actions are open | Service rules. | review-regressions: *H5* |
+

@@ -182,3 +182,46 @@ describe('M1/M2/M3 calculation fixes', () => {
     }
   });
 });
+
+describe('second-round review fixes', () => {
+  it('keeps a same-day split shift together (no under-estimate)', () => {
+    const a = sampleConcentration(base({ sampleCode: 'a', startAt: '2026-01-05T06:00:00Z', endAt: '2026-01-05T08:00:00Z', result: { revision: 1, value: 240, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } }));
+    const b = sampleConcentration(base({ sampleCode: 'b', startAt: '2026-01-05T13:00:00Z', endAt: '2026-01-05T15:00:00Z', result: { revision: 1, value: 240, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } }));
+    const r = twa8h([a, b], { exposureMinutesPerShift: 240, unsampledAssumption: 'none' });
+    expect(r).toHaveLength(1);
+    expect(r[0].twa8h!.upper).toBe(0.5);
+  });
+  it('treats a group with no recorded register duration as incomplete', () => {
+    const a = sampleConcentration(base({ startAt: '2026-01-05T08:00:00Z', endAt: '2026-01-05T09:00:00Z' }));
+    const [r] = twa8h([a], { exposureMinutesPerShift: 60, unsampledAssumption: 'none', recordedExposureMinutes: null });
+    expect(r.twa8h).toBeNull();
+    expect(r.flags[0].code).toBe('EXPOSURE_NOT_IN_REGISTER');
+  });
+  it('a reviewer (not the creator) can cancel a defect action', async () => {
+    const c = await ctl.createControl(w.a.prac, { site_id: S.site1.id, name: 'Booth', kind: 'enclosure', purpose: 'Contain spray mist', performance_criteria: 'Inward air velocity maintained', status: 'in_service' });
+    await ctl.recordInspection(w.a.tech, c.id, { at: '2026-04-03', kind: 'routine_inspection', outcome: 'defect_found', notes: 'Door seal worn' });
+    const act = (await ctl.controlDetail(w.a.prac, c.id)).actions[0];
+    await ctl.cancelAction(w.a.rev, act.id, { reason: 'Duplicate of an existing repair action' });
+    expect((await ctl.actionDetail(w.a.prac, act.id)).action.status).toBe('cancelled');
+  });
+  it('client-scoped sessions cannot change tenant settings or reference data', async () => {
+    await expect(withActor(w.a.client1, async (tx) => {
+      const r = await tx.query('update tenants set mfa_required=false');
+      if (r.rowCount) throw new Error('tenant updated');
+    })).resolves.toBeUndefined();
+    await expect(withActor(w.a.client1, (tx) => tx.query(`insert into substances (tenant_id,name) values ($1,'x')`, [w.A.tenant.id]))).rejects.toThrow(/row-level security/);
+  });
+  it('MFA failures count against the account across sessions', async () => {
+    const admin = new pg.Client({ connectionString: process.env.DATABASE_ADMIN_URL }); await admin.connect();
+    const u = await createUserDirect(admin, { tenantId: w.A.tenant.id, email: `mfa2${Date.now()}@t.test`, name: 'T', role: 'practitioner', password: 'correct horse battery', totpSecret: 'JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP', mfaEnabled: true });
+    for (let s = 0; s < 4; s++) {
+      const l = await login(u.email, 'correct horse battery').catch((e) => e);
+      if (l instanceof Error) { expect(l.message).toMatch(/locked/); break; }
+      const si = (await resolveSession(l.token))!;
+      for (let i = 0; i < 3; i++) await completeMfa(si, '000000').catch(() => null);
+    }
+    const row = (await admin.query('select locked_until from users where id=$1', [u.id])).rows[0];
+    await admin.end();
+    expect(row.locked_until).not.toBeNull();
+  });
+});

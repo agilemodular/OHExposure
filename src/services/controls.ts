@@ -202,7 +202,6 @@ export async function closeVerified(a: Actor, id: string, input: unknown) {
 }
 
 export async function cancelAction(a: Actor, id: string, input: unknown) {
-  requirePerm(a, 'actions.assign');
   const d = parse(z.object({ reason: reqStr(10) }), input);
   return withActor(a, async (tx) => {
     const act = await one(tx, 'select * from actions where id=$1 for update', [id]);
@@ -210,7 +209,7 @@ export async function cancelAction(a: Actor, id: string, input: unknown) {
     if (act.source_type === 'control_inspection' || act.priority === 'urgent') {
       if (!can(a, 'actions.review')) throw forbidden('Defect and urgent actions can only be cancelled by a technical reviewer');
       if (act.created_by === a.userId) throw forbidden('Defect and urgent actions must be cancelled by someone other than their creator');
-    }
+    } else requirePerm(a, 'actions.assign');
     await tx.query(`update actions set status='cancelled' where id=$1`, [id]);
     await event(tx, a, act, 'cancelled', d.reason);
   });

@@ -183,7 +183,7 @@ export async function stageImport(a: Actor, input: { filename: string; csv: stri
     const status = errors ? 'rejected' : 'validated';
     await tx.query('update import_batches set status=$2, row_count=$3, error_count=$4 where id=$1', [b.id, status, rows.length - 1, errors]);
     await audit(tx, a, 'import.staged', 'import_batch', b.id, { filename: input.filename, rows: rows.length - 1, errors });
-    return { ...b, status, row_count: rows.length - 1, error_count: errors };
+    return { ...b, status, row_count: rows.length - 1, error_count: errors, client_id: clientsSeen.size === 1 ? [...clientsSeen][0] : null };
   });
 }
 
