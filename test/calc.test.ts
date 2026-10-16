@@ -205,9 +205,9 @@ describe('stel_15 v1', () => {
 
 describe('ppm ↔ mg/m³ conversion', () => {
   it('uses the molar volume at 20 °C and 101.325 kPa', () => {
-    expect(MOLAR_VOLUME_L).toBeCloseTo(24.0548, 3);
+    expect(MOLAR_VOLUME_L).toBeCloseTo(24.0551, 3);
     const c = convertInterval({ lower: 10, upper: 10, unit: 'ppm' }, 'mg/m3', 78.11)!;
-    expect(c.upper).toBeCloseTo((10 * 78.11) / 24.0548, 3);
+    expect(c.upper).toBeCloseTo((10 * 78.11) / 24.0551, 3);
     expect(convertInterval(c, 'ppm', 78.11)!.upper).toBeCloseTo(10, 4);
   });
   it('refuses to convert without a molecular weight, or for fibres', () => {

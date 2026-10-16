@@ -25,6 +25,8 @@ Classification used throughout:
 | Consultancy client scoping | Verified | isolation tests (client 1 vs client 2, users, reports, attachments) |
 | Restricted identifiable worker data | Verified | workflow: RLS hides names from field technicians |
 | Role-based permission matrix and separation-of-duties rules | Verified | workflow + http tests |
+| Cross-client link prevention (services + database triggers) | Verified | review-regressions |
+| Secrets (password hashes, TOTP seeds) unreadable by the application role | Verified | review-regressions |
 | MFA recovery codes / self-service reset | Proposed | Admin can reset MFA |
 | Single sign-on (SAML/OIDC) | Proposed | |
 

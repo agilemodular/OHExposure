@@ -340,3 +340,23 @@ describe('third-round review fixes', () => {
     expect(r.flags[0].code).toBe('STEL_WINDOW_TOO_LONG');
   });
 });
+
+describe('third-round re-verification follow-ups', () => {
+  it('self-service functions refuse a user id from another tenant', async () => {
+    const c = await getPool().connect();
+    try {
+      await c.query('begin');
+      await c.query(`select set_config('app.tenant_id',$1,true), set_config('app.user_id',$2,true)`, [w.B.tenant.id, w.a.admin.userId]);
+      expect((await c.query('select self_password_params() p')).rows[0].p).toBeNull();
+      await expect(c.query('select self_record_mfa(false)')).rejects.toThrow(/no user context/);
+    } finally { await c.query('rollback'); c.release(); }
+  });
+  it('lab import resolves a tenant’s own substance before a platform substance of the same name', async () => {
+    const own = await reg.createSubstance(w.a.prac, { name: 'Demo Dust X (synthetic)' });
+    const id = await sample(`SUBS-${w.tag}`);
+    await lab.createSubmission(w.a.prac, { laboratory_id: S.lab.id, reference: `SUBS-${w.tag}`, sample_ids: [id], dispatched_at: '2026-04-02T09:00' });
+    const b = await lab.stageImport(w.a.prac, { filename: 's.csv', csv: `sample_code,analyte,value,unit,qualifier\nSUBS-${w.tag},Demo Dust X (synthetic),5,ug,=\n` });
+    const d = await lab.importDetail(w.a.prac, b.id);
+    expect(d.rows[0].parsed.substance_id).toBe(own.id);
+  });
+});

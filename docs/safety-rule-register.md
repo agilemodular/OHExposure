@@ -33,4 +33,7 @@ Each rule from the product brief, how it is enforced, and the evidence. "DB" = e
 | S27 | Unsampled time cannot be dropped by under-stating the exposure period | Exposure period shorter than the register duration is *incomplete*. | review-regressions: *H4* |
 | S28 | "Exposure adequately controlled" only when every formal result is below a verified benchmark | Submission and approval guard. | service rule (`checkConclusion`) |
 | S29 | Defect actions cannot be cancelled by their creator or without reviewer rights; a defective control cannot return to service while defect actions are open | Service rules. | review-regressions: *H5* |
-
+| S30 | Results without instrument or valid calibration evidence are not formal evidence | Engine labels them indicative; they cannot support a below-benchmark roll-up and can make it indeterminate. | review-regressions: *H4* |
+| S31 | Indicative or excluded results in an unconvertible unit cannot be ignored | Roll-up becomes indeterminate and names them. | review-regressions: *H5* |
+| S32 | Short-term results need a continuous ~15-minute window | STEL refuses samples whose elapsed window exceeds 16 minutes. | review-regressions: *M3* |
+| S33 | Evidence behind assessments cannot be voided casually | Voiding a dispatched/received/analysed sample needs practitioner rights and a full reason; approved assessments show a staleness notice. | review-regressions: *M2* |

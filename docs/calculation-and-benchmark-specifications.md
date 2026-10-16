@@ -1,6 +1,6 @@
 # Calculation and benchmark specifications
 
-Engine: `src/calc/engine.ts`, engine version **1.2.0** (calculations `twa_8h` v1.1.0 and `stel_15` v1.0.0). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
+Engine: `src/calc/engine.ts`, engine version **1.3.0** (calculations `twa_8h` v1.2.0 and `stel_15` v1.1.0). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
 
 > **Methodological sources must be confirmed by a competent occupational hygienist against the current editions before pilot use.** The references below identify the conventions the engine implements; they were not re-checked against the live publications during this build (no access was attempted), and no text from them is reproduced.
 
@@ -47,7 +47,7 @@ Direct-concentration results in µg/m³ are converted to mg/m³; ppm and f/ml ar
 | Flow drift above method tolerance | qualify | included, flagged |
 | Method has no flow tolerance defined | qualify | included, flagged (no universal default is assumed) |
 | Volume below method minimum | qualify | included, flagged |
-| No / expired / failed calibration on sampling date | qualify | included, flagged |
+| No instrument, or no / expired / failed calibration on sampling date | qualify | labelled *indicative*; excluded from formal benchmark comparison |
 | Screening-only instrument or method not suitable for formal assessment | qualify | labelled *indicative*; excluded from formal benchmark comparison |
 | Failed QC check without disposition | exclude | sample excluded, failure listed |
 | Failed QC check, disposition *sample invalidated* | exclude | excluded, listed |
@@ -79,7 +79,7 @@ Intervals propagate: lower and upper bounds are calculated separately. Exposure 
 
 **Limitations.** No statistical treatment of between-worker or day-to-day variability (e.g. BS EN 689 compliance testing) — the professional interpretation must address representativeness. A benchmark whose averaging period is not 480 minutes returns *not comparable* for this calculation; use `stel_15` for 15-minute benchmarks.
 
-## 2a. `stel_15` v1.0.0
+## 2a. `stel_15` v1.1.0
 
 **Intended use.** Personal short-term (15-minute reference period) results for comparison with a 15-minute benchmark. Each personal sample intended as a short-term measurement gives one result.
 
@@ -89,6 +89,7 @@ Intervals propagate: lower and upper bounds are calculated separately. Exposure 
 | < 14 min, assumption *none* (default) | not calculated — *incomplete* |
 | < 14 min, assumption *zero_remainder* with ≥ 20-character justification | C × T / 15, flagged *qualify* |
 | > 16 min | not calculated — a longer average dilutes peaks (*incomplete*) |
+| Elapsed window > 16 min (e.g. 15 sampled minutes spread over an hour by interruptions) | not calculated (*incomplete*) |
 
 The short-sample convention (averaging over 15 minutes assuming no exposure for the remainder) must be confirmed by the reviewing hygienist against current guidance before use.
 
@@ -97,7 +98,7 @@ The short-sample convention (averaging over 15 minutes assuming no exposure for 
 Applied only when a result and the benchmark use different units and the substance has a recorded molecular weight (with its source):
 
 ```
-mg/m³ = ppm × MW / Vm        Vm = R·T/P = 8.314462618 × 293.15 / 101.325 = 24.0548 L/mol  (20 °C, 101.325 kPa)
+mg/m³ = ppm × MW / Vm        Vm = R·T/P = 8.314462618 × 293.15 / 101.325 = 24.0551 L/mol  (20 °C, 101.325 kPa)
 ```
 
 Both interval bounds are converted. No conversion for fibres (f/ml). Without a molecular weight the comparison is *not comparable*. The note on the revision and the report states that conversion was applied and the values used. The reference conditions are those used for GB limits and must be confirmed per jurisdiction.
@@ -111,7 +112,7 @@ otherwise                      → indeterminate   (e.g. a non-detect whose LOD 
 units differ                   → not_comparable
 ```
 
-Roll-up for the revision: any *at or above* → at_or_above; every formal result *not comparable* → not_comparable; any indeterminate or incomplete worker-shift → indeterminate; any excluded or indicative personal result whose lower bound is at or above the benchmark → indeterminate (named in the note); only indicative or static evidence → not_comparable; no benchmark or benchmark not *verified* → no_verified_benchmark.
+Roll-up for the revision: any *at or above* → at_or_above; every formal result *not comparable* → not_comparable; any indeterminate or incomplete worker-shift → indeterminate; any excluded or indicative personal result whose lower bound is at or above the benchmark, or that cannot be converted to the benchmark unit → indeterminate (named in the note); only indicative or static evidence → not_comparable; no benchmark or benchmark not *verified* → no_verified_benchmark.
 
 The output always carries the statement that a benchmark comparison is not a compliance conclusion. There is no "safe" or "compliant" field anywhere in the model (asserted in tests).
 

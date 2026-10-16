@@ -1,6 +1,6 @@
 # Release readiness report — first release
 
-**Date:** 16 October 2026 · **Scope:** airborne contaminants, phases A–G implemented, phase H (pilot) not started · **Engine:** v1.2.0
+**Date:** 17 October 2026 · **Scope:** airborne contaminants, phases A–G implemented, phase H (pilot) not started · **Engine:** v1.3.0
 
 ## Recommendation
 
@@ -10,7 +10,7 @@ A controlled pilot becomes appropriate once the *before pilot* items below are c
 
 ## What exists and is verified
 
-All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **80 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
+All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **102 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
 
 Strongest areas:
 
@@ -18,11 +18,14 @@ Strongest areas:
 - **Evidence integrity:** append-only custody, lab revisions, action history, audit and reports; approved assessments immutable by trigger; approval blocked if any input changed after calculation.
 - **Safety rules** (23 rules in `safety-rule-register.md`): no automatic verdicts, non-detects as intervals, explicit unsampled-time assumptions, static/screening exclusion, separation of duties, and verification before closure.
 
-## Independent review
+## Independent verification
 
-A separate reviewer, with no part in writing the code, tried to break isolation, safety rules, authentication and calculations. It reported 3 critical, 5 high, 6 medium and 2 low defects, including cross-client evidence mixing, voided samples counted as evidence, and client users able to write. All 16 were fixed and each has a regression test. The calculations it checked by hand matched.
+Three review rounds by two independent reviewers who did not write the code, each actively trying to break isolation, safety rules, authentication and calculations:
 
-The same reviewer then re-verified the fixes and found 3 regressions introduced by them (split shifts under-estimated, defect actions uncancellable, staleness notice masking evidence changes) and 4 partial fixes (MFA attempt limit per session only, missing register duration not flagged, tenant/reference tables writable by client sessions, rejected import files visible across clients). All 7 were fixed with regression tests. **A third verification round has not been run** and should be done before pilot.
+- **Round 1** found 3 critical, 5 high, 6 medium and 2 low defects (including cross-client evidence mixing, voided samples counted as evidence, and client users able to write). Its re-check found 3 regressions introduced by the fixes and 4 partial fixes.
+- **Round 3**, by a fresh reviewer, found no critical defects but 5 high, 4 medium and 3 low (including an MFA lockout bypass from pre-opened sessions, client deletes on link tables, and expired calibration supporting a favourable conclusion). Its re-check confirmed the fixes and found one remaining hardening gap, now closed.
+
+Every finding is fixed and covered by a regression test (102 tests in total). Reviewer hand calculations matched the engine in every case. **No open critical or high findings remain from software review.** This is not a substitute for a penetration test (D8) or professional review (D1).
 
 ## Remaining risks
 
@@ -57,7 +60,6 @@ The same reviewer then re-verified the fixes and found 3 regressions introduced 
 3. Hosting with TLS, changed credentials, backups and one restore test (D7).
 4. DPIA and agreed retention periods (D8, D9).
 5. Field device testing on pilot hardware (D10).
-6. A third independent verification round of security and safety rules.
 
 ## Next decision
 

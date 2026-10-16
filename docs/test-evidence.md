@@ -1,30 +1,40 @@
 # Test evidence
 
-Run: 16 October 2026, Node 22.22, PostgreSQL 16, commit after "Second review round". Command: `npm test` (Vitest 5). The test database is dropped, migrated from scratch and exercised as the least-privilege application role, so row-level security is active in every test.
+Run: 17 October 2026, Node 22.22, PostgreSQL 16, engine 1.3.0. Command: `npm test` (Vitest 5). The test database is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security is active throughout.
 
-**Result: 80 passed, 0 failed, across 4 suites.**
+**Result: 102 passed, 0 failed, across 4 suites.**
 
 | Suite | Tests | Covers |
 |---|---|---|
-| `calc.test.ts` | 30 | Calculation engine with hand-calculated expected values |
-| `workflow.test.ts` | 22 | End-to-end workflow (register → plan → offline capture → lab import → assessment → approval → report → controls), tenant/client isolation, attachments, append-only evidence, governance, integrations |
-| `http.test.ts` | 9 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, sign-out, headers, role access, every page for every role |
-| `review-regressions.test.ts` | 19 | One or more tests for each defect found by the independent review, including second-round fixes |
+| `calc.test.ts` | 37 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values |
+| `workflow.test.ts` | 22 | End-to-end workflow, tenant/client isolation, attachments, append-only evidence, governance, integrations |
+| `http.test.ts` | 10 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, sign-out, proxy trust, headers, every page for every role |
+| `review-regressions.test.ts` | 33 | Regression tests for every defect found in three independent review rounds, plus STEL service flow |
+
+## Independent verification
+
+| Round | Reviewer | Found | Outcome |
+|---|---|---|---|
+| 1 | Reviewer A (no part in writing the code) | 3 critical, 5 high, 6 medium, 2 low | All fixed with tests |
+| 1 re-check | Reviewer A | 3 regressions from the fixes, 4 partial fixes | All fixed with tests |
+| 3 | Reviewer B (fresh, no prior context) | 0 critical, 5 high, 4 medium, 3 low | All fixed with tests |
+| 3 re-check | Reviewer B | 10 of 12 fixed; 1 hardening gap (self-service functions not bound to tenant); 1 low item that was an error in the reviewer's reference value | Gap fixed with tests; reference value corrected (molar volume is 24.0551 L/mol) |
+
+Reviewer B independently hand-checked six calculation cases (full and partial 8-h TWA, STEL short and long samples, non-detect, overlapping interruptions); all matched.
 
 ## Other evidence
 
 | Evidence | Result |
 |---|---|
-| Headless Chromium 141 run of the offline field client | Shell loaded from service-worker cache while offline; sample saved offline; synchronised on reconnect; re-sent record returned *duplicate*; sync without CSRF header refused (403) |
-| Screenshots of overview, assessment workspace, sample, register, action and issued report pages | Reviewed for layout, labelling of synthetic data, and separation of the three assessment states |
-| RLS coverage query | 52 of 52 tables have row-level security enabled and forced |
-| Backup rehearsal (`pg_dump` → `pg_restore` into a new database) | Record counts and all RLS policies identical after restore |
-| Demo seed through the service layer | All workflow steps completed; TWA values hand-checked (e.g. 210 µg over 720 L → 0.2917 mg/m³; × 360/480 → 0.2188 mg/m³) |
-| Independent review, two rounds | Round 1: 3 critical, 5 high, 6 medium, 2 low — all fixed. Round 2 (re-verification): 3 regressions and 4 partial fixes — all fixed and covered by tests above. A third verification round has not been run. |
+| Headless Chromium 141 run of the offline field client | Shell loaded from cache offline; record saved offline; synchronised on reconnect; re-sent record returned *duplicate*; sync without CSRF header refused |
+| Page screenshots (overview, assessment, sample, register, action, reference, issued report) | Reviewed for layout, synthetic-data labelling and separate assessment states |
+| RLS coverage query | All application tables have row-level security enabled and forced |
+| Backup rehearsal (`pg_dump` → `pg_restore`) | Record counts and RLS policies identical after restore |
+| Demo seed through the service layer | All steps complete; TWA values hand-checked |
 
 ## Not tested
 
-Physical mobile devices; Safari/Firefox; load and concurrency; penetration testing; email delivery (not built); live integrations (not built); restore of the attachment store in a hosted environment.
+Physical mobile devices; Safari/Firefox; load and concurrency; penetration testing; email (not built); live integrations (not built); attachment-store restore in a hosted environment.
 
 ## Full test list
 
@@ -34,6 +44,7 @@ Physical mobile devices; Safari/Firefox; load and concurrency; penetration testi
 - ✓ `http.test.ts` › authentication › enforces CSRF tokens on form posts and the sync API
 - ✓ `http.test.ts` › authentication › revokes the session on sign-out
 - ✓ `http.test.ts` › authentication › forces a password change after sign-in with an administrator-issued temporary password
+- ✓ `http.test.ts` › authentication › ignores X-Forwarded-For unless a trusted proxy is configured
 - ✓ `http.test.ts` › authentication › sets security headers
 - ✓ `http.test.ts` › authorisation over HTTP › blocks pages and actions outside a role, and other tenants’ records
 - ✓ `http.test.ts` › authorisation over HTTP › every main page renders for each role without server errors
@@ -56,6 +67,20 @@ Physical mobile devices; Safari/Firefox; load and concurrency; penetration testi
 - ✓ `review-regressions.test.ts` › second-round review fixes › a reviewer (not the creator) can cancel a defect action
 - ✓ `review-regressions.test.ts` › second-round review fixes › client-scoped sessions cannot change tenant settings or reference data
 - ✓ `review-regressions.test.ts` › second-round review fixes › MFA failures count against the account across sessions
+- ✓ `review-regressions.test.ts` › STEL through the assessment service › calculates a 15-minute assessment and freezes the calculation code in the revision
+- ✓ `review-regressions.test.ts` › residual gap fixes › the application role never receives password hashes
+- ✓ `review-regressions.test.ts` › residual gap fixes › link tables follow their parent record’s client scoping
+- ✓ `review-regressions.test.ts` › residual gap fixes › emits action and required-control messages to enabled links (mock only)
+- ✓ `review-regressions.test.ts` › third-round review fixes › H1: a session opened before an MFA lock cannot complete MFA
+- ✓ `review-regressions.test.ts` › third-round review fixes › H2: client sessions cannot delete link rows
+- ✓ `review-regressions.test.ts` › third-round review fixes › H3/L2: the application role cannot call account bookkeeping or read secrets
+- ✓ `review-regressions.test.ts` › third-round review fixes › H4: a result without valid calibration evidence is indicative only
+- ✓ `review-regressions.test.ts` › third-round review fixes › H5: an indicative result in an unconvertible unit blocks a favourable roll-up
+- ✓ `review-regressions.test.ts` › third-round review fixes › M1: evidence from another client cannot close an action
+- ✓ `review-regressions.test.ts` › third-round review fixes › M2: a field technician cannot void an analysed sample
+- ✓ `review-regressions.test.ts` › third-round review fixes › M3: a STEL result needs a continuous 15-minute window
+- ✓ `review-regressions.test.ts` › third-round re-verification follow-ups › self-service functions refuse a user id from another tenant
+- ✓ `review-regressions.test.ts` › third-round re-verification follow-ups › lab import resolves a tenant’s own substance before a platform substance of the same name
 - ✓ `workflow.test.ts` › end-to-end vertical workflow (Client One) › builds the register: site → area → process → task → hazard → group → worker
 - ✓ `workflow.test.ts` › end-to-end vertical workflow (Client One) › restricts identifiable worker data to authorised roles (RLS)
 - ✓ `workflow.test.ts` › end-to-end vertical workflow (Client One) › records instruments with calibration evidence
@@ -108,3 +133,10 @@ Physical mobile devices; Safari/Firefox; load and concurrency; penetration testi
 - ✓ `calc.test.ts` › assessment roll-up › rejects a benchmark with a non-matching averaging period
 - ✓ `calc.test.ts` › assessment roll-up › is deterministic
 - ✓ `calc.test.ts` › before/after comparability › surfaces differences that affect comparability
+- ✓ `calc.test.ts` › stel_15 v1 › uses a 15-minute sample directly (60 µg / 30 L = 2 mg/m³)
+- ✓ `calc.test.ts` › stel_15 v1 › rejects a sample longer than 15 minutes
+- ✓ `calc.test.ts` › stel_15 v1 › needs a justified assumption for a short sample, then averages over 15 min
+- ✓ `calc.test.ts` › stel_15 v1 › compares only with a 15-minute benchmark
+- ✓ `calc.test.ts` › ppm ↔ mg/m³ conversion › uses the molar volume at 20 °C and 101.325 kPa
+- ✓ `calc.test.ts` › ppm ↔ mg/m³ conversion › refuses to convert without a molecular weight, or for fibres
+- ✓ `calc.test.ts` › ppm ↔ mg/m³ conversion › compares a ppm result with a mg/m³ benchmark only when molecular weight is known

@@ -13,7 +13,7 @@ A controlled pilot can start when every **Before pilot** item is ticked. **Durin
 - [ ] MFA enforced for the pilot tenant (default on for new tenants); all pilot users enrolled.
 - [ ] Pilot users trained; written procedure stating that the platform does not authorise work or replace emergency arrangements.
 - [ ] Demo tenant not present in the pilot environment.
-- [ ] Third independent security/safety verification round completed with no open critical or high findings.
+- [x] Third independent security/safety verification round completed with no open critical or high findings (17 Oct 2026).
 
 ## During pilot — acceptance tests
 
