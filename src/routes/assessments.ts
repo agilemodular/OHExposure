@@ -9,6 +9,7 @@ import { config } from '../config.js';
 import { evidenceStrip, fmtDate, fmtDateTime, fmtNum, html, interval, label } from '../ui/html.js';
 import { csrfField, empty, options, type PageCtx } from '../ui/layout.js';
 import { action, back, page } from './kit.js';
+import { authed } from './kit.js';
 
 const CONCLUSIONS = [['insufficient_evidence', 'Insufficient evidence to conclude'], ['improvement_required', 'Improvement required'], ['urgent_action_required', 'Urgent action required'], ['exposure_adequately_controlled', 'Exposure adequately controlled (professional judgement)']];
 
@@ -160,9 +161,8 @@ export function assessmentRoutes(app: FastifyInstance) {
     };
   });
   app.get('/reports/:id', async (req, reply) => {
-    const { resolveSession } = await import('../auth/session.js');
-    const si = await resolveSession(req.cookies.ohea_sid, req.ip);
-    if (!si || !si.mfaPassed) return reply.redirect('/login');
+    const si = await authed(req, reply);
+    if (!si) return reply;
     try {
       const r = await rep.getReport(si.actor, (req.params as any).id);
       return reply.type('text/html').header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'none'").send(r.content_html);

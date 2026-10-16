@@ -1,5 +1,4 @@
 import type { FastifyInstance } from 'fastify';
-import { resolveSession } from '../auth/session.js';
 import { can, many, withActor } from '../db.js';
 import { invalid } from '../errors.js';
 import * as lab from '../services/lab.js';
@@ -8,7 +7,7 @@ import * as inst from '../services/instruments.js';
 import { lookups } from '../services/lookups.js';
 import { fmtDate, fmtDateTime, html, label } from '../ui/html.js';
 import { csrfField, empty, options } from '../ui/layout.js';
-import { action, back, page, setFlash } from './kit.js';
+import { action, authedMultipart, back, page, setFlash } from './kit.js';
 import { attachmentsBlock } from './field.js';
 
 export function labRoutes(app: FastifyInstance) {
@@ -24,7 +23,7 @@ export function labRoutes(app: FastifyInstance) {
           <td>${r.qualifier === '=' ? '' : html`<span class="tag tag-q">${r.qualifier}</span> `}${r.value ?? (r.qualifier === '<LOD' ? r.lod : '')} ${r.unit}</td><td>${r.revision}</td><td>${r.lab_name ?? '—'} ${r.lab_report_ref ?? ''}</td><td>${fmtDateTime(r.entered_at)}</td></tr>`)}</tbody></table></div>` : empty('No results yet.')}
       <div class="cols"><div>
       <h2>Import results from a file</h2>
-      ${can(c.actor, 'lab.import') ? html`<form method="post" action="/lab/import?_csrf=${c.csrf}" enctype="multipart/form-data" class="stack panel">
+      ${can(c.actor, 'lab.import') ? html`<form method="post" action="/lab/import" enctype="multipart/form-data" class="stack panel">${csrfField(c)}
         <p class="small">CSV columns: <code>${lab.IMPORT_COLUMNS.join(', ')}</code>. <code>sample_code</code>, <code>value</code>, <code>unit</code>, <code>qualifier</code> and either <code>analyte</code> or <code>cas_number</code> are required.
         Qualifiers: <code>=</code>, <code>&lt;LOD</code>, <code>&lt;LOQ</code>, <code>&gt;</code>, <code>estimated</code>. Every row is validated first; nothing is saved unless the whole file is valid.</p>
         <label>Laboratory<select name="laboratory_id">${options(lk.labs, 'id', (l) => l.name)}</select></label>
@@ -48,11 +47,9 @@ export function labRoutes(app: FastifyInstance) {
   action(app, '/lab/laboratories', async (c) => { await inst.createLaboratory(c.actor, c.body); return { to: '/lab', ok: 'Laboratory added' }; });
 
   app.post('/lab/import', async (req, reply) => {
-    const si = await resolveSession(req.cookies.ohea_sid, req.ip);
-    if (!si || !si.mfaPassed) return reply.redirect('/login', 303);
-    if ((req.query as any)._csrf !== si.csrf) return reply.code(403).send('Invalid form token');
-    const fields: Record<string, string> = {}; let file: { filename: string; data: Buffer } | null = null;
-    for await (const p of req.parts()) { if (p.type === 'file') file = { filename: p.filename, data: await p.toBuffer() }; else fields[p.fieldname] = String(p.value); }
+    const m = await authedMultipart(req, reply);
+    if (!m) return reply;
+    const { si, fields, file } = m;
     try {
       if (!file) throw invalid('Choose a file');
       if (!att.sniff(file.data, file.filename)?.startsWith('text/')) throw invalid('Import files must be CSV text');
@@ -68,6 +65,7 @@ export function labRoutes(app: FastifyInstance) {
   });
 
   page(app, '/lab/imports/:id', async (c) => {
+    if (!can(c.actor, 'lab.import') && !can(c.actor, 'lab.write')) throw new (await import('../errors.js')).AppError(403, 'forbidden', 'Your role cannot view laboratory import files');
     const d = await lab.importDetail(c.actor, c.params.id);
     if (!d.batch) throw invalid('Import not found');
     const files = await att.listAttachments(c.actor, 'import_batch', c.params.id);

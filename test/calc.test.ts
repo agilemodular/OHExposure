@@ -142,8 +142,10 @@ describe('assessment roll-up', () => {
     expect(o.staticSamples).toHaveLength(1);
   });
   it('treats screening-only evidence as not formally comparable', () => {
-    const o = runAssessment({ calc: 'twa_8h', samples: [s({ instrument: { ...inst, screeningOnly: true } })], parameters: params, benchmark: bm() });
+    const o = runAssessment({ calc: 'twa_8h', samples: [s({ instrument: { ...inst, screeningOnly: true } })], parameters: params, benchmark: bm({ value: 10 }) });
     expect(o.benchmarkState).toBe('not_comparable');
+    // …but an indicative result at or above the benchmark makes the comparison indeterminate, not silently ignorable
+    expect(runAssessment({ calc: 'twa_8h', samples: [s({ instrument: { ...inst, screeningOnly: true } })], parameters: params, benchmark: bm() }).benchmarkState).toBe('indeterminate');
   });
   it('reports failed data quality when every sample is excluded', () => {
     const o = runAssessment({ calc: 'twa_8h', samples: [s({ qc: [{ checkType: 'flow', outcome: 'fail', disposition: null }] })], parameters: params, benchmark: bm() });

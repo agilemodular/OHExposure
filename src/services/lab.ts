@@ -144,6 +144,7 @@ export async function stageImport(a: Actor, input: { filename: string; csv: stri
       [a.tenantId, 'lab_results_csv', input.filename, input.laboratory_id ?? null, input.source_attachment_id ?? null, a.userId]);
     let errors = 0;
     const seen = new Set<string>();
+    const clientsSeen = new Set<string>();
     for (let i = 1; i < rows.length; i++) {
       const raw = Object.fromEntries(header.map((h, j) => [h, (rows[i][j] ?? '').trim()]));
       const errs: string[] = [];
@@ -171,9 +172,14 @@ export async function stageImport(a: Actor, input: { filename: string; csv: stri
         const exists = await one(tx, 'select 1 from lab_results where sampling_event_id=$1 and substance_id=$2', [ev.id, sub.id]);
         if (exists && !parsed.amendment_reason) errs.push('A result already exists; supply amendment_reason to record a revision');
       }
+      if (ev) {
+        clientsSeen.add(ev.client_id);
+        if (clientsSeen.size > 1) errs.push('An import file may only contain samples for one client; split the file by client');
+      }
       if (errs.length) errors++;
-      await tx.query('insert into import_rows (tenant_id,batch_id,row_no,raw,parsed,errors) values ($1,$2,$3,$4,$5,$6)', [a.tenantId, b.id, i + 1, raw, parsed, JSON.stringify(errs)]);
+      await tx.query('insert into import_rows (tenant_id,client_id,batch_id,row_no,raw,parsed,errors) values ($1,$2,$3,$4,$5,$6,$7)', [a.tenantId, ev?.client_id ?? null, b.id, i + 1, raw, parsed, JSON.stringify(errs)]);
     }
+    if (clientsSeen.size === 1) await tx.query('update import_batches set client_id=$2 where id=$1', [b.id, [...clientsSeen][0]]);
     const status = errors ? 'rejected' : 'validated';
     await tx.query('update import_batches set status=$2, row_count=$3, error_count=$4 where id=$1', [b.id, status, rows.length - 1, errors]);
     await audit(tx, a, 'import.staged', 'import_batch', b.id, { filename: input.filename, rows: rows.length - 1, errors });

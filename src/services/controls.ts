@@ -33,6 +33,10 @@ export async function setControlStatus(a: Actor, id: string, input: unknown) {
   requirePerm(a, 'controls.write');
   const d = parse(z.object({ status: z.enum(['proposed', 'in_service', 'defective', 'withdrawn']), reason: reqStr(5) }), input);
   return withActor(a, async (tx) => {
+    if (d.status === 'in_service') {
+      const open = await one(tx, `select count(*)::int n from actions where control_id=$1 and source_type='control_inspection' and status not in ('verified_closed','cancelled')`, [id]);
+      if (open?.n) throw invalid(`${open.n} defect action(s) are still open; the control returns to service when they are closed as verified`);
+    }
     const c = await one(tx, 'update controls set status=$2 where id=$1 returning *', [id, d.status]);
     if (!c) throw notFound('Control');
     if (c.group_id) await flagGroupsForReview(tx, a, `Control "${c.name}" status changed to ${d.status}`, { groupId: c.group_id });
@@ -95,6 +99,11 @@ export async function createAction(a: Actor, input: unknown) {
     else if (d.source_type === 'assessment' && d.source_id) clientId = (await one(tx, 'select client_id from assessments where id=$1', [d.source_id]))?.client_id;
     clientId = clientId ?? a.clientId ?? (await one(tx, 'select id from clients where is_default limit 1'))?.id;
     if (!clientId) throw invalid('Link the action to a control, group or assessment');
+    if (d.owner_user_id) {
+      const o = await one(tx, 'select role, status from users where id=$1', [d.owner_user_id]);
+      if (!o || o.status !== 'active') throw notFound('Owner');
+      if (o.role === 'client_readonly') throw invalid('Client read-only users cannot own actions');
+    }
     if (d.control_id) {
       const c = await one(tx, 'select kind from controls where id=$1', [d.control_id]);
       if (c && ENGINEERING.includes(c.kind) && !d.requires_exposure_reassessment && !/test|examination|measure|velocity|sampl/i.test(d.verification_requirement))
@@ -116,7 +125,7 @@ export async function markImplemented(a: Actor, id: string, input: unknown) {
   return withActor(a, async (tx) => {
     const act = await one(tx, 'select * from actions where id=$1 for update', [id]);
     if (!act) throw notFound('Action');
-    if (!(can(a, 'actions.implement') && act.owner_user_id === a.userId) && !can(a, 'actions.assign')) throw forbidden('Only the action owner or a practitioner can record implementation');
+    if (!((can(a, 'actions.implement') || can(a, 'actions.assign')) && act.owner_user_id === a.userId) && !can(a, 'actions.assign')) throw forbidden('Only the action owner or a practitioner can record implementation');
     if (act.status !== 'assigned') throw invalid(`Action is ${act.status}`);
     await tx.query(`update actions set status='implemented', implemented_by=$2, implemented_at=now() where id=$1`, [id, a.userId]);
     await event(tx, a, act, 'implemented', d.notes);
@@ -129,7 +138,7 @@ export async function submitEvidence(a: Actor, id: string, input: unknown) {
   return withActor(a, async (tx) => {
     const act = await one(tx, 'select * from actions where id=$1 for update', [id]);
     if (!act) throw notFound('Action');
-    if (!(act.owner_user_id === a.userId) && !can(a, 'actions.assign')) throw forbidden();
+    if (!((can(a, 'actions.implement') || can(a, 'actions.assign')) && act.owner_user_id === a.userId) && !can(a, 'actions.assign')) throw forbidden();
     if (act.status !== 'implemented') throw invalid(`Action is ${act.status}; evidence follows implementation`);
     const att = await one(tx, `select count(*)::int n from attachments where entity_type='action' and entity_id=$1 and disposed_at is null`, [id]);
     if (d.inspection_id) {
@@ -152,8 +161,9 @@ export async function reviewEffectiveness(a: Actor, id: string, input: unknown) 
     if (act.status !== 'evidence_submitted') throw invalid(`Action is ${act.status}`);
     if (act.implemented_by === a.userId) throw forbidden('Effectiveness must be reviewed by someone other than the implementer');
     if (d.verification_assessment_revision_id) {
-      const r = await one(tx, 'select status, approved_at from assessment_revisions where id=$1', [d.verification_assessment_revision_id]);
+      const r = await one(tx, 'select r.status, r.approved_at, r.client_id, a.group_id from assessment_revisions r join assessments a on a.id=r.assessment_id where r.id=$1', [d.verification_assessment_revision_id]);
       if (!r || r.status !== 'approved') throw invalid('The verification assessment must be an approved revision');
+      if (r.client_id !== act.client_id || (act.group_id && r.group_id !== act.group_id)) throw invalid('The verification assessment must cover the same client and exposure group as the action');
       if (r.approved_at < act.implemented_at) throw invalid('The verification assessment pre-dates implementation');
     }
     if (d.outcome === 'effective' && act.requires_exposure_reassessment && !d.verification_assessment_revision_id)
@@ -185,7 +195,8 @@ export async function closeVerified(a: Actor, id: string, input: unknown) {
     if (!act) throw notFound('Action');
     if (act.status !== 'effectiveness_reviewed' || act.effectiveness_outcome !== 'effective') throw invalid('Only actions reviewed as effective can be closed as verified');
     await tx.query(`update actions set status='verified_closed', closed_by=$2, closed_at=now() where id=$1`, [id, a.userId]);
-    if (act.control_id) await tx.query(`update controls set status='in_service' where id=$1 and status in ('proposed','defective')`, [act.control_id]);
+    if (act.control_id) await tx.query(`update controls set status='in_service' where id=$1 and status in ('proposed','defective')
+      and not exists (select 1 from actions x where x.control_id=$1 and x.id<>$2 and x.source_type='control_inspection' and x.status not in ('verified_closed','cancelled'))`, [act.control_id, id]);
     await event(tx, a, act, 'verified_closed', d.notes);
   });
 }
@@ -196,6 +207,10 @@ export async function cancelAction(a: Actor, id: string, input: unknown) {
   return withActor(a, async (tx) => {
     const act = await one(tx, 'select * from actions where id=$1 for update', [id]);
     if (!act || ['verified_closed', 'cancelled'].includes(act.status)) throw invalid('Action cannot be cancelled');
+    if (act.source_type === 'control_inspection' || act.priority === 'urgent') {
+      if (!can(a, 'actions.review')) throw forbidden('Defect and urgent actions can only be cancelled by a technical reviewer');
+      if (act.created_by === a.userId) throw forbidden('Defect and urgent actions must be cancelled by someone other than their creator');
+    }
     await tx.query(`update actions set status='cancelled' where id=$1`, [id]);
     await event(tx, a, act, 'cancelled', d.reason);
   });

@@ -62,8 +62,13 @@ export async function addTarget(a: Actor, planId: string, input: unknown) {
   requirePerm(a, 'plans.write');
   const d = parse(targetSchema, input);
   return withActor(a, async (tx) => {
-    const p = await one(tx, 'select status from monitoring_plans where id=$1', [planId]);
+    const p = await one(tx, 'select status, client_id from monitoring_plans where id=$1', [planId]);
     if (!p) throw notFound('Plan');
+    if (d.group_id) {
+      const g = await one(tx, 'select client_id from exposure_groups where id=$1', [d.group_id]);
+      if (!g) throw notFound('Exposure group');
+      if (g.client_id !== p.client_id) throw invalid('The exposure group belongs to a different client from this plan');
+    }
     if (p.status !== 'draft') throw invalid('Targets can only be changed while the plan is in draft');
     const r = await one(tx, 'insert into plan_targets (tenant_id,plan_id,group_id,substance_id,method_version_id,planned_samples,notes) values ($1,$2,$3,$4,$5,$6,$7) returning *',
       [a.tenantId, planId, d.group_id, d.substance_id, d.method_version_id, d.planned_samples, d.notes]);

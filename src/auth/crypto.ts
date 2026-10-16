@@ -49,13 +49,16 @@ export function totpAt(secret: string, timeMs: number, step = 30) {
   const code = ((h.readUInt32BE(o) & 0x7fffffff) % 1_000_000).toString().padStart(6, '0');
   return code;
 }
-export function verifyTotp(secret: string, code: string, now = Date.now()) {
-  if (!/^\d{6}$/.test(code)) return false;
+/** Returns the matched 30-second time-step (for replay protection), or null. */
+export function verifyTotpStep(secret: string, code: string, now = Date.now()): number | null {
+  if (!/^\d{6}$/.test(code)) return null;
   for (const w of [-1, 0, 1]) {
-    const c = totpAt(secret, now + w * 30_000);
-    if (timingSafeEqual(Buffer.from(c), Buffer.from(code))) return true;
+    const t = now + w * 30_000;
+    const c = totpAt(secret, t);
+    if (timingSafeEqual(Buffer.from(c), Buffer.from(code))) return Math.floor(t / 30_000);
   }
-  return false;
+  return null;
 }
+export const verifyTotp = (secret: string, code: string, now = Date.now()) => verifyTotpStep(secret, code, now) !== null;
 export const otpauthUri = (secret: string, account: string, issuer: string) =>
   `otpauth://totp/${encodeURIComponent(issuer)}:${encodeURIComponent(account)}?secret=${secret}&issuer=${encodeURIComponent(issuer)}`;

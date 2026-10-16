@@ -129,6 +129,30 @@ export function api(app: FastifyInstance, method: 'GET' | 'POST', path: string, 
 export const back = (c: Ctx, fallback = '/') => safeBack(c.req.headers.referer) ?? fallback;
 function safeBack(ref: string | undefined) {
   if (!ref) return null;
-  try { const u = new URL(ref); return u.pathname + u.search; } catch { return null; }
+  try {
+    const u = new URL(ref);
+    const path = u.pathname + u.search;
+    return path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/\\') ? path : null;
+  } catch { return null; }
+}
+export const safePath = safeBack;
+
+/** Authenticated GET handler for non-HTML responses (files, reports, exports). Applies MFA and password-change rules. */
+export const authed = (req: FastifyRequest, reply: FastifyReply) => requireAuth(req, reply, false);
+
+/** Authenticated multipart POST: CSRF token is read from the form body (never the URL). */
+export async function authedMultipart(req: FastifyRequest, reply: FastifyReply) {
+  const si = await requireAuth(req, reply, false);
+  if (!si) return null;
+  const fields: Record<string, string> = {};
+  let file: { filename: string; data: Buffer } | null = null;
+  for await (const p of req.parts()) {
+    if (p.type === 'file') {
+      if (!csrfOk(si, fields._csrf)) { await p.toBuffer().catch(() => null); continue; }
+      file = { filename: p.filename, data: await p.toBuffer() };
+    } else fields[p.fieldname] = String(p.value);
+  }
+  if (!csrfOk(si, fields._csrf)) { reply.code(403).send('Invalid or missing form token. Reload the page and try again.'); return null; }
+  return { si, fields, file, back: safeBack(req.headers.referer) ?? '/' };
 }
 const escapeHtml = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));

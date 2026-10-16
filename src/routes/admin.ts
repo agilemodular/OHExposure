@@ -10,6 +10,7 @@ import { lookups, substanceLabel } from '../services/lookups.js';
 import { fmtDate, fmtDateTime, html, label } from '../ui/html.js';
 import { csrfField, empty, options } from '../ui/layout.js';
 import { action, api, page } from './kit.js';
+import { authed } from './kit.js';
 
 export function adminRoutes(app: FastifyInstance) {
   page(app, '/admin', async (c) => {
@@ -65,9 +66,8 @@ export function adminRoutes(app: FastifyInstance) {
   action(app, '/disposals', async (c) => { await adm.requestDisposal(c.actor, c.body); return { to: '/admin', ok: 'Disposal requested; a second person must approve it' }; });
 
   app.get('/export', async (req, reply) => {
-    const { resolveSession } = await import('../auth/session.js');
-    const si = await resolveSession(req.cookies.ohea_sid, req.ip);
-    if (!si || !si.mfaPassed) return reply.redirect('/login');
+    const si = await authed(req, reply);
+    if (!si) return reply;
     try {
       const data = await adm.exportData(si.actor);
       return reply.type('application/json').header('Content-Disposition', `attachment; filename="export-${new Date().toISOString().slice(0, 10)}.json"`).send(JSON.stringify(data, null, 1));

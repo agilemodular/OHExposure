@@ -14,7 +14,9 @@
  *  - Failed QC checks without an authorised disposition exclude the sample and remain listed.
  */
 
-export const ENGINE_VERSION = '1.0.0';
+// 1.1.0: voided samples excluded; overlapping interruptions merged; shifts clustered across midnight;
+// exposure period checked against the register; high excluded/indicative results block a favourable roll-up.
+export const ENGINE_VERSION = '1.1.0';
 
 export type Qualifier = '=' | '<LOD' | '<LOQ' | '>' | 'estimated';
 export type MassUnit = 'ug' | 'mg';
@@ -25,6 +27,7 @@ export interface SampleInput {
   sampleCode: string;
   sampleType: 'personal' | 'static' | 'field_blank' | 'other';
   subjectRef: string | null; // worker ref (personal) or location (static)
+  voided?: boolean;
   startAt: string | null;
   endAt: string | null;
   timezone: string | null;
@@ -60,6 +63,8 @@ export interface SampleOutput {
   sampleType: SampleInput['sampleType'];
   subjectRef: string | null;
   shiftDate: string | null;
+  startMs: number | null;
+  endMs: number | null;
   sampledMinutes: number | null;
   volumeL: number | null;
   concentration: Interval | null; // null when not calculable
@@ -86,9 +91,13 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
   const out: SampleOutput = {
     sampleId: s.sampleId, sampleCode: s.sampleCode, sampleType: s.sampleType, subjectRef: s.subjectRef,
     shiftDate: s.startAt ? localDate(s.startAt, s.timezone) : null,
+    startMs: s.startAt ? Date.parse(s.startAt) : null, endMs: s.endAt ? Date.parse(s.endAt) : null,
     sampledMinutes: null, volumeL: null, concentration: null, isPointValue: false, indicative: false, included: true, flags,
   };
 
+  if (s.voided) {
+    flags.push({ code: 'SAMPLE_VOID', severity: 'exclude', message: 'Sample has been voided and cannot be used as evidence.' });
+  }
   if (s.sampleType === 'field_blank') {
     flags.push({ code: 'FIELD_BLANK', severity: 'exclude', message: 'Field blank — used for quality control, not as an exposure result.' });
     out.included = false;
@@ -132,15 +141,23 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
     const start = Date.parse(s.startAt), end = Date.parse(s.endAt);
     if (!(end > start)) flags.push({ code: 'DURATION_INVALID', severity: 'incomplete', message: 'Sampling end is not after start.' });
     else {
-      let paused = 0;
+      // Clip interruptions to the sampling window and merge overlaps so no time is subtracted twice.
+      const spans: [number, number][] = [];
       for (const i of s.interruptions) {
-        const a = Math.max(start, Date.parse(i.start)), b = Math.min(end, Date.parse(i.end));
         if (!(Date.parse(i.end) > Date.parse(i.start))) {
           flags.push({ code: 'INTERRUPTION_INVALID', severity: 'incomplete', message: 'An interruption has an end before its start.' });
           continue;
         }
-        if (b > a) paused += b - a;
+        const a = Math.max(start, Date.parse(i.start)), b = Math.min(end, Date.parse(i.end));
+        if (b > a) spans.push([a, b]);
       }
+      spans.sort((x, y) => x[0] - y[0]);
+      let paused = 0, curA = -Infinity, curB = -Infinity;
+      for (const [a, b] of spans) {
+        if (a > curB) { if (curB > curA) paused += curB - curA; curA = a; curB = b; }
+        else curB = Math.max(curB, b);
+      }
+      if (curB > curA) paused += curB - curA;
       out.sampledMinutes = round((end - start - paused) / MIN, 3);
       if (paused > 0) flags.push({ code: 'INTERRUPTED', severity: 'info', message: `Sampling interrupted for ${round(paused / MIN, 1)} min; excluded from sampled duration.` });
       if (out.sampledMinutes <= 0) flags.push({ code: 'DURATION_INVALID', severity: 'incomplete', message: 'No sampled time after interruptions.' });
@@ -227,6 +244,8 @@ export interface TwaParameters {
   exposureMinutesPerShift: number | null;
   unsampledAssumption: UnsampledAssumption;
   unsampledJustification?: string;
+  /** Longest exposure duration recorded in the register (task/hazard) for this group and substance; set by the service, not the user. */
+  recordedExposureMinutes?: number | null;
 }
 
 export interface ShiftTwa {
@@ -242,18 +261,35 @@ export interface ShiftTwa {
 }
 
 export const REFERENCE_PERIOD_MIN = 480;
+export const SHIFT_GAP_MIN = 240;
 
 /** twa_8h v1.0.0 — EH40 8-hour TWA: Σ(Cᵢ·Tᵢ)/480 min, by worker and shift date (personal samples only). */
 export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
-  const groups = new Map<string, SampleOutput[]>();
+  // A shift is a run of a worker's samples separated by gaps of less than SHIFT_GAP_MIN, so night shifts
+  // that cross midnight are not split by calendar date. The shift is labelled by its first sample's local date.
+  const bySubject = new Map<string, SampleOutput[]>();
   for (const s of samples) {
     if (!s.included || s.sampleType !== 'personal') continue;
-    const k = `${s.subjectRef ?? '?'}|${s.shiftDate ?? '?'}`;
-    groups.set(k, [...(groups.get(k) ?? []), s]);
+    const k = s.subjectRef ?? '?';
+    bySubject.set(k, [...(bySubject.get(k) ?? []), s]);
+  }
+  const groups = new Map<string, SampleOutput[]>();
+  for (const [subject, list] of bySubject) {
+    const sorted = [...list].sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0));
+    let cur: SampleOutput[] = [];
+    let lastEnd = -Infinity;
+    const flush = () => { if (cur.length) groups.set(`${subject}|${cur[0].shiftDate ?? '?'}|${groups.size}`, cur); cur = []; };
+    for (const s of sorted) {
+      if (s.startMs === null || s.startMs - lastEnd > SHIFT_GAP_MIN * MIN) flush();
+      cur.push(s);
+      lastEnd = Math.max(lastEnd, s.endMs ?? s.startMs ?? lastEnd);
+    }
+    flush();
   }
   const res: ShiftTwa[] = [];
   for (const [k, ss] of groups) {
     const [subjectRef, shiftDate] = k.split('|');
+    const overlaps = ss.some((s, i) => i > 0 && s.startMs !== null && ss[i - 1].endMs !== null && s.startMs < ss[i - 1].endMs!);
     const flags: Flag[] = [];
     const sampled = ss.reduce((a, s) => a + (s.sampledMinutes ?? 0), 0);
     const out: ShiftTwa = {
@@ -276,6 +312,11 @@ export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
       continue;
     }
     const E = p.exposureMinutesPerShift;
+    if (overlaps) { flags.push({ code: 'SAMPLES_OVERLAP', severity: 'incomplete', message: 'Samples for this worker overlap in time and would be double counted.' }); continue; }
+    if (p.recordedExposureMinutes != null && E < p.recordedExposureMinutes - 0.5) {
+      flags.push({ code: 'EXPOSURE_BELOW_RECORDED', severity: 'incomplete', message: `The exposure period entered (${E} min) is shorter than the duration recorded in the exposure register (${p.recordedExposureMinutes} min). Correct the entry or update the register; unsampled time must not be dropped silently.` });
+      continue;
+    }
     out.coveragePct = round(Math.min(100, (sampled / E) * 100), 1);
     if (sampled > E + 0.5) flags.push({ code: 'SAMPLED_EXCEEDS_EXPOSURE', severity: 'qualify', message: `Sampled time (${round(sampled, 1)} min) exceeds the recorded exposure period (${E} min); the recorded exposure period may be wrong.` });
     if (E > REFERENCE_PERIOD_MIN) flags.push({ code: 'EXTENDED_SHIFT', severity: 'info', message: `Exposure period ${E} min exceeds 8 h; total exposure is still referenced to 480 min.` });
@@ -352,7 +393,7 @@ export interface AssessmentOutput {
 }
 
 export const CALCULATIONS = {
-  twa_8h: { code: 'twa_8h', version: '1.0.0' },
+  twa_8h: { code: 'twa_8h', version: '1.1.0' },
 };
 
 export function runAssessment(input: AssessmentInput): AssessmentOutput {
@@ -389,6 +430,13 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
       if (incompleteShifts && benchmarkState === 'below_benchmark') benchmarkState = 'indeterminate';
       benchmarkNote = `${formal.length} formal worker-shift result(s) compared with ${b.type} ${b.value} ${b.unit} (${b.source}).`;
       if (incompleteShifts) benchmarkNote += ` ${incompleteShifts} worker-shift(s) could not be calculated.`;
+    }
+    // Evidence that was excluded or is only indicative must not be outweighed silently: if any such personal
+    // result is itself at or above the benchmark, a favourable roll-up becomes indeterminate.
+    const highSet = samples.filter((s) => s.sampleType === 'personal' && (!s.included || s.indicative) && s.concentration && s.concentration.unit === b.unit && s.concentration.lower >= b.value);
+    if (highSet.length && (benchmarkState === 'below_benchmark' || benchmarkState === 'not_comparable')) {
+      benchmarkState = 'indeterminate';
+      benchmarkNote += ` ${highSet.length} excluded or indicative result(s) (${highSet.map((s) => s.sampleCode).join(', ')}) are at or above the benchmark value; they must be explained before any favourable conclusion.`;
     }
     if (b.isSynthetic && !/synthetic/i.test(b.source)) benchmarkNote += ' SYNTHETIC DEMONSTRATION BENCHMARK — not a real exposure limit.';
   }

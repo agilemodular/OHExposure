@@ -7,12 +7,12 @@ import { lookups, substanceLabel, workerLabel } from '../services/lookups.js';
 import { utcToZonedInput } from '../services/util.js';
 import { fmtDate, fmtDateTime, html, label } from '../ui/html.js';
 import { csrfField, empty, options, type PageCtx } from '../ui/layout.js';
-import { action, api, back, page, setFlash } from './kit.js';
+import { action, api, authed, authedMultipart, back, page, setFlash } from './kit.js';
 
 export function attachmentsBlock(c: PageCtx, entityType: string, entityId: string, files: any[], canAdd: boolean) {
   return html`<h3>Attachments</h3>
     ${files.length ? html`<ul>${files.map((f) => html`<li><a href="/attachments/${f.id}">${f.filename}</a> <span class="small muted">${Math.ceil(f.size_bytes / 1024)} KB · ${fmtDateTime(f.uploaded_at)}${f.contains_pii ? ' · identifiable' : ''}</span></li>`)}</ul>` : html`<p class="muted small">None.</p>`}
-    ${canAdd ? html`<form method="post" action="/attachments?_csrf=${c.csrf}" enctype="multipart/form-data" class="stack panel">
+    ${canAdd ? html`<form method="post" action="/attachments" enctype="multipart/form-data" class="stack panel">${csrfField(c)}
       <input type="hidden" name="entity_type" value="${entityType}"><input type="hidden" name="entity_id" value="${entityId}">
       <label>File <span class="hint">PDF, PNG, JPEG, CSV or TXT</span><input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.csv,.txt"></label>
       <label class="check"><input type="checkbox" name="contains_pii" value="on"> Contains identifiable worker information</label><div><button class="secondary">Upload</button></div></form>` : ''}`;
@@ -165,31 +165,21 @@ export function fieldRoutes(app: FastifyInstance) {
 
   // ── Attachments (multipart upload, authorised download)
   app.post('/attachments', async (req, reply) => {
-    const { resolveSession } = await import('../auth/session.js');
-    const si = await resolveSession(req.cookies.ohea_sid, req.ip);
-    if (!si || !si.mfaPassed) return reply.redirect('/login', 303);
-    if ((req.query as any)._csrf !== si.csrf) return reply.code(403).send('Invalid form token');
-    const parts = req.parts();
-    const fields: Record<string, string> = {}; let file: { filename: string; data: Buffer } | null = null;
-    for await (const p of parts) {
-      if (p.type === 'file') file = { filename: p.filename, data: await p.toBuffer() };
-      else fields[p.fieldname] = String(p.value);
-    }
-    const to = (req.headers.referer && new URL(req.headers.referer).pathname) || '/';
+    const m = await authedMultipart(req, reply);
+    if (!m) return reply;
     try {
-      if (!file) throw invalid('Choose a file');
-      await att.saveAttachment(si.actor, { entity_type: fields.entity_type, entity_id: fields.entity_id, filename: file.filename, data: file.data, contains_pii: fields.contains_pii === 'on' });
+      if (!m.file) throw invalid('Choose a file');
+      await att.saveAttachment(m.si.actor, { entity_type: m.fields.entity_type, entity_id: m.fields.entity_id, filename: m.file.filename, data: m.file.data, contains_pii: m.fields.contains_pii === 'on' });
       setFlash(reply, 'ok', 'File uploaded');
     } catch (e: any) {
       if (!e.status) throw e;
       setFlash(reply, 'err', e.message);
     }
-    return reply.redirect(to, 303);
+    return reply.redirect(m.back, 303);
   });
   app.get('/attachments/:id', async (req, reply) => {
-    const { resolveSession } = await import('../auth/session.js');
-    const si = await resolveSession(req.cookies.ohea_sid, req.ip);
-    if (!si || !si.mfaPassed) return reply.redirect('/login');
+    const si = await authed(req, reply);
+    if (!si) return reply;
     try {
       const { meta, data } = await att.readAttachment(si.actor, (req.params as any).id);
       const inline = ['application/pdf', 'image/png', 'image/jpeg'].includes(meta.mime_type);

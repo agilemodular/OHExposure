@@ -65,6 +65,11 @@ async function prepare(tx: Tx, a: Actor, d: SamplingInput) {
 
   if (d.sample_type === 'personal' && !d.worker_id && (start_at || end_at)) throw invalid('Personal samples require a worker reference');
   let group = d.group_id;
+  if (group) {
+    const g = await one(tx, 'select client_id from exposure_groups where id=$1', [group]);
+    if (!g) throw notFound('Exposure group');
+    if (g.client_id !== clientId) throw invalid('The exposure group belongs to a different client from this sample');
+  }
   if (d.worker_id) {
     const w = await one(tx, 'select client_id from workers where id=$1', [d.worker_id]);
     if (!w) throw notFound('Worker');

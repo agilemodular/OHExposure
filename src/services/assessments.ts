@@ -33,6 +33,7 @@ export async function verifyBenchmarkVersion(a: Actor, id: string, input: unknow
   return withActor(a, async (tx) => {
     const v = await one(tx, 'select * from benchmark_versions where id=$1 and tenant_id=$2 for update', [id, a.tenantId]);
     if (!v) throw notFound('Tenant benchmark version');
+    if (v.verification_status === 'withdrawn' || v.verification_status === d.status) throw invalid(`This benchmark version is already ${v.verification_status}`);
     const creator = await one(tx, `select user_id from audit_events where action='benchmark.version_create' and entity_id=$1`, [id]);
     if (creator?.user_id === a.userId) throw forbidden('A benchmark must be verified by someone other than the person who entered it');
     const r = await one(tx, 'update benchmark_versions set verification_status=$2, verified_by=$3, verified_at=now() where id=$1 returning *', [id, d.status, `${a.name} <${a.email}>`]);
@@ -48,7 +49,7 @@ export async function listBenchmarks(a: Actor, substanceId?: string) {
 }
 
 // ───── Inputs
-type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any };
+type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any; recordedExposureMinutes: number | null };
 
 async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Snapshot> {
   const samples: SampleInput[] = [];
@@ -62,7 +63,7 @@ async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Sna
     const qc = await many(tx, 'select id, check_type, outcome, disposition from sample_qc_checks where sampling_event_id=$1 order by recorded_at, id', [sid]);
     const res = await one(tx, `select v.* from lab_results r join lab_result_revisions v on v.result_id=r.id and v.revision=r.current_revision where r.sampling_event_id=$1 and r.substance_id=$2`, [sid, substanceId]);
     samples.push({
-      sampleId: e.id, sampleCode: e.sample_code, sampleType: e.sample_type, subjectRef: e.sample_type === 'personal' ? e.ref_code : e.location_desc,
+      sampleId: e.id, sampleCode: e.sample_code, sampleType: e.sample_type, subjectRef: e.sample_type === 'personal' ? e.ref_code : e.location_desc, voided: e.status === 'void',
       startAt: e.start_at?.toISOString() ?? null, endAt: e.end_at?.toISOString() ?? null, timezone: e.timezone,
       interruptions: e.interruptions ?? [], flowPreLpm: e.flow_pre_lpm, flowPostLpm: e.flow_post_lpm,
       method: mv ? { code: mv.code, version: mv.version, resultBasis: mv.result_basis, flowDriftTolerancePct: mv.flow_drift_tolerance_pct, minVolumeL: mv.min_volume_l, suitableForFormalAssessment: mv.suitable_for_formal_assessment } : null,
@@ -77,9 +78,13 @@ async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Sna
     const b = await one(tx, `select v.*, b.benchmark_type, b.averaging_minutes, b.jurisdiction from benchmark_versions v join benchmarks b on b.id=v.benchmark_id where v.id=$1`, [rev.benchmark_version_id]);
     if (b) benchmark = { versionId: b.id, type: `${b.jurisdiction} ${b.benchmark_type}`, averagingMinutes: b.averaging_minutes, value: b.value, unit: b.unit, verificationStatus: b.verification_status, isSynthetic: b.is_synthetic, source: `${b.source_title}, ${b.source_version}` };
   }
-  return { samples, refs, benchmark, parameters: rev.parameters };
+  // Longest exposure duration recorded in the register for this group and substance (hazard or task level).
+  const rec = await one(tx, `select greatest(max(h.exposure_duration_min), max(t.duration_min_per_shift)) m
+    from exposure_group_hazards gh join hazards h on h.id=gh.hazard_id left join tasks t on t.id=h.task_id
+    where gh.group_id=$1 and h.substance_id=$2`, [rev.group_id, substanceId]);
+  return { samples, refs, benchmark, parameters: rev.parameters, recordedExposureMinutes: rec?.m ?? null };
 }
-const hashOf = (s: Snapshot) => sha256(JSON.stringify({ samples: s.samples, refs: s.refs, benchmark: s.benchmark, parameters: s.parameters, calc: CALCULATIONS.twa_8h }));
+const hashOf = (s: Snapshot) => sha256(JSON.stringify({ samples: s.samples, refs: s.refs, benchmark: s.benchmark, parameters: s.parameters, recorded: s.recordedExposureMinutes, calc: CALCULATIONS.twa_8h }));
 
 // ───── Lifecycle
 export async function createAssessment(a: Actor, input: unknown) {
@@ -90,7 +95,7 @@ export async function createAssessment(a: Actor, input: unknown) {
     if (!g) throw notFound('Exposure group');
     const as = await one(tx, 'insert into assessments (tenant_id,client_id,group_id,substance_id,plan_id,title,assessment_question,created_by) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *',
       [a.tenantId, g.client_id, d.group_id, d.substance_id, d.plan_id, d.title, d.assessment_question, a.userId]);
-    const samples = await many(tx, `select id from sampling_events where group_id_at_sampling=$1 and substance_id=$2 and status='analysed' and ($3::uuid is null or plan_id=$3)`, [d.group_id, d.substance_id, d.plan_id]);
+    const samples = await many(tx, `select id from sampling_events where group_id_at_sampling=$1 and substance_id=$2 and status='analysed' and client_id=$4 and ($3::uuid is null or plan_id=$3)`, [d.group_id, d.substance_id, d.plan_id, g.client_id]);
     const rev = await one(tx, `insert into assessment_revisions (tenant_id,client_id,assessment_id,revision,sample_ids,calc_code,calc_version,parameters,created_by)
       values ($1,$2,$3,1,$4,'twa_8h',$5,$6,$7) returning *`,
       [a.tenantId, g.client_id, as.id, samples.map((s) => s.id), CALCULATIONS.twa_8h.version, { exposureMinutesPerShift: null, unsampledAssumption: 'none' }, a.userId]);
@@ -147,7 +152,7 @@ export async function calculate(a: Actor, revId: string) {
     const r = await loadRev(tx, revId, true);
     if (r.status !== 'draft') throw invalid('Only draft revisions can be recalculated');
     const snap = await buildSnapshot(tx, r, r.substance_id);
-    const output = runAssessment({ calc: 'twa_8h', samples: snap.samples, parameters: snap.parameters, benchmark: snap.benchmark });
+    const output = runAssessment({ calc: 'twa_8h', samples: snap.samples, parameters: { ...snap.parameters, recordedExposureMinutes: snap.recordedExposureMinutes }, benchmark: snap.benchmark });
     const hash = hashOf(snap);
     const out = await one(tx, `update assessment_revisions set calc_output=$2, data_quality_state=$3, benchmark_state=$4, inputs_snapshot=$5, inputs_hash=$6, calc_code='twa_8h', calc_version=$7 where id=$1 returning *`,
       [revId, JSON.stringify(output, (_, v) => (v === Infinity ? 'Infinity' : v)), output.dataQualityState, output.benchmarkState, snap, hash, CALCULATIONS.twa_8h.version]);
@@ -168,7 +173,7 @@ function checkConclusion(r: any) {
   if (!r.limitations || r.limitations.trim().length < 10) throw invalid('State the limitations and uncertainty of this assessment');
   if (r.conclusion_category === 'exposure_adequately_controlled') {
     if (['failed', 'incomplete'].includes(r.data_quality_state)) throw invalid(`"Exposure adequately controlled" cannot be concluded when data quality is ${r.data_quality_state}`);
-    if (r.benchmark_state === 'at_or_above_benchmark') throw invalid('"Exposure adequately controlled" cannot be concluded when results are at or above the benchmark');
+    if (r.benchmark_state !== 'below_benchmark') throw invalid(`"Exposure adequately controlled" can only be concluded when every formal result is below a verified benchmark (current comparison: ${String(r.benchmark_state).replace(/_/g, ' ')}). Use another conclusion category and explain in the interpretation.`);
   }
 }
 
@@ -206,6 +211,8 @@ export async function approve(a: Actor, revId: string, input: unknown) {
     if (r.submitted_by === a.userId || r.created_by === a.userId) throw forbidden('An assessment must be approved by someone other than its author or submitter');
     await assertCurrent(tx, r);
     checkConclusion(r);
+    const ownDisposition = await one(tx, `select 1 from sample_qc_checks where sampling_event_id = any($1) and disposition_by=$2 limit 1`, [r.sample_ids, a.userId]);
+    if (ownDisposition) throw forbidden('You recorded a QC disposition for a sample in this assessment, so another reviewer must approve it');
     if (r.calc_output?.issues?.some((f: any) => f.code === 'CALCULATION_PENDING')) throw invalid('Calculation incomplete');
     const snapshotHash = sha256(JSON.stringify({ inputs_hash: r.inputs_hash, calc_output: r.calc_output, interpretation: r.interpretation, conclusion: r.conclusion_category, limitations: r.limitations, scope: d.approval_scope, approval_limitations: d.approval_limitations, reviewer: a.userId }));
     const prev = await many(tx, `select id from assessment_revisions where assessment_id=$1 and status='approved' and id<>$2`, [r.assessment_id, revId]);
@@ -250,7 +257,9 @@ export async function newRevision(a: Actor, assessmentId: string, input: unknown
 /** Detects evidence or reference changes since a revision was calculated/approved. Never mutates the revision. */
 export async function staleness(tx: Tx, r: any) {
   const reasons: string[] = [];
-  if (r.inputs_hash) {
+  if (r.inputs_hash && r.calc_version && r.calc_version !== CALCULATIONS.twa_8h.version) {
+    reasons.push(`The calculation method has been updated (v${r.calc_version} → v${CALCULATIONS.twa_8h.version}) since this revision was calculated; reassessment may be required. This revision's results are unchanged.`);
+  } else if (r.inputs_hash) {
     const snap = await buildSnapshot(tx, r, r.substance_id);
     if (hashOf(snap) !== r.inputs_hash) reasons.push('Underlying sample, QC or laboratory evidence has changed since this revision was calculated.');
   }
@@ -276,8 +285,8 @@ export async function assessmentDetail(a: Actor, id: string) {
     const candidates = await many(tx, `select e.id, e.sample_code, e.sample_type, e.status, e.start_at, w.ref_code from sampling_events e left join workers w on w.id=e.worker_id
       where e.client_id=$1 and (e.substance_id=$2 or exists (select 1 from lab_results r where r.sampling_event_id=e.id and r.substance_id=$2)) and e.status <> 'void' order by e.start_at desc nulls last`, [as.client_id, as.substance_id]);
     const benchmarks = await many(tx, `select v.*, b.jurisdiction, b.benchmark_type, b.averaging_minutes from benchmark_versions v join benchmarks b on b.id=v.benchmark_id where b.substance_id=$1 order by v.verification_status='verified' desc, v.effective_from desc`, [as.substance_id]);
-    const staleCurrent = current ? await staleness(tx, { ...current, substance_id: as.substance_id }) : [];
-    const staleApproved = approved && approved.id !== current?.id ? await staleness(tx, { ...approved, substance_id: as.substance_id }) : staleCurrent;
+    const staleCurrent = current ? await staleness(tx, { ...current, substance_id: as.substance_id, group_id: as.group_id }) : [];
+    const staleApproved = approved && approved.id !== current?.id ? await staleness(tx, { ...approved, substance_id: as.substance_id, group_id: as.group_id }) : staleCurrent;
     const actions = await many(tx, `select * from actions where source_type='assessment' and source_id=$1 order by created_at`, [id]);
     const reports = await many(tx, 'select id, version, status, generated_at, assessment_revision_id from reports where assessment_id=$1 order by version desc', [id]);
     return { assessment: as, revisions, current, approved, candidates, benchmarks, staleCurrent, staleApproved, actions, reports };

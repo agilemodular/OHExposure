@@ -1,7 +1,7 @@
 import { config } from '../config.js';
 import { actorFrom, audit, one, withActor, withAnon, type Actor } from '../db.js';
 import { AppError } from '../errors.js';
-import { hashPassword, randomToken, sha256, verifyPassword, verifyTotp } from './crypto.js';
+import { hashPassword, randomToken, sha256, verifyPassword, verifyTotpStep } from './crypto.js';
 
 // A dummy hash so unknown-email logins take the same time as known ones.
 const DUMMY = hashPassword('dummy-password-for-timing');
@@ -53,16 +53,25 @@ export async function resolveSession(token: string | undefined, ip?: string): Pr
 }
 
 export async function completeMfa(si: SessionInfo, code: string) {
-  await withActor(si.actor, async (tx) => {
-    const u = await one(tx, 'select totp_secret, mfa_enabled from users where id=$1', [si.actor.userId]);
-    if (!u?.totp_secret || !verifyTotp(u.totp_secret, code.trim())) {
-      await audit(tx, si.actor, 'auth.mfa_failed', 'user', si.actor.userId);
-      throw new AppError(401, 'mfa_failed', 'Code not accepted');
+  // The failure counter must persist, so the outcome is decided inside the transaction and thrown after commit.
+  const outcome = await withActor(si.actor, async (tx) => {
+    const u = await one(tx, 'select totp_secret from users where id=$1', [si.actor.userId]);
+    const step = u?.totp_secret ? verifyTotpStep(u.totp_secret, code.trim()) : null;
+    // Replay protection: each time-step is accepted once.
+    const accepted = step !== null && (await one(tx, 'select self_accept_totp_step($1) ok', [step]))?.ok;
+    if (accepted) {
+      await tx.query('update sessions set mfa_passed=true where id=$1', [si.sessionId]);
+      await audit(tx, si.actor, si.mfaEnabled ? 'auth.mfa_passed' : 'auth.mfa_enrolled', 'user', si.actor.userId);
+      return 'ok' as const;
     }
-    if (!u.mfa_enabled) await tx.query('update users set mfa_enabled=true where id=$1', [si.actor.userId]);
-    await tx.query('update sessions set mfa_passed=true where id=$1', [si.sessionId]);
-    await audit(tx, si.actor, u.mfa_enabled ? 'auth.mfa_passed' : 'auth.mfa_enrolled', 'user', si.actor.userId);
+    const s = await one(tx, `update sessions set mfa_failures = mfa_failures + 1,
+      revoked_at = case when mfa_failures + 1 >= 5 then now() else revoked_at end where id=$1 returning mfa_failures`, [si.sessionId]);
+    const locked = (s?.mfa_failures ?? 0) >= 5;
+    await audit(tx, si.actor, locked ? 'auth.mfa_session_revoked' : 'auth.mfa_failed', 'user', si.actor.userId);
+    return locked ? ('locked' as const) : ('failed' as const);
   });
+  if (outcome === 'locked') throw new AppError(401, 'mfa_locked', 'Too many incorrect codes. Sign in again.');
+  if (outcome === 'failed') throw new AppError(401, 'mfa_failed', 'Code not accepted');
 }
 
 export async function logout(si: SessionInfo) {

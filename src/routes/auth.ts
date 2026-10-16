@@ -50,9 +50,8 @@ export function authRoutes(app: FastifyInstance) {
       secret = await withActor(si.actor, async (tx) => {
         const u = await one(tx, 'select totp_secret from users where id=$1', [si.actor.userId]);
         if (u.totp_secret) return u.totp_secret;
-        const s = newTotpSecret();
-        await tx.query('update users set totp_secret=$2 where id=$1 and totp_secret is null', [si.actor.userId, s]);
-        return s;
+        await tx.query('select self_set_totp_secret($1)', [newTotpSecret()]);
+        return (await one(tx, 'select totp_secret from users where id=$1', [si.actor.userId])).totp_secret;
       });
     }
     const err = (req.query as any).e;
@@ -101,7 +100,7 @@ export function authRoutes(app: FastifyInstance) {
       if (!verifyPassword(String(c.body.current ?? ''), u.password_hash)) throw new AppError(422, 'invalid', 'Current password is incorrect');
       let h: string;
       try { h = hashPassword(String(c.body.next ?? '')); } catch (e: any) { throw new AppError(422, 'invalid', e.message); }
-      await tx.query('update users set password_hash=$2, must_change_password=false where id=$1', [c.actor.userId, h]);
+      await tx.query('select self_set_password($1)', [h]);
       await tx.query('update sessions set revoked_at=now() where user_id=$1 and id<>$2 and revoked_at is null', [c.actor.userId, c.si.sessionId]);
       await audit(tx, c.actor, 'auth.password_changed', 'user', c.actor.userId);
     });

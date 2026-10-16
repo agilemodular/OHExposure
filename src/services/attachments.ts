@@ -44,7 +44,7 @@ export async function saveAttachment(a: Actor, input: { entity_type: string; ent
   if (!mime) throw invalid('Unsupported file type. Accepted: PDF, PNG, JPEG, CSV, TXT');
   const safeName = input.filename.replace(/[^\w.\- ]+/g, '_').slice(0, 150) || 'file';
   return withActor(a, async (tx) => {
-    const parent = await one(tx, `select ${input.entity_type === 'calibration' || input.entity_type === 'import_batch' ? 'null::uuid' : 'client_id'} as client_id from ${ent.table} where id=$1`, [input.entity_id]);
+    const parent = await one(tx, `select ${input.entity_type === 'calibration' ? 'null::uuid' : 'client_id'} as client_id from ${ent.table} where id=$1`, [input.entity_id]);
     if (!parent) throw notFound('Record');
     const key = `${a.tenantId}/${randomUUID()}`;
     const dir = join(config.storageDir, a.tenantId);
