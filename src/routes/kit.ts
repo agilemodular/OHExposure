@@ -50,6 +50,10 @@ async function requireAuth(req: FastifyRequest, reply: FastifyReply, json: boole
     if (json) reply.code(401).send({ error: 'mfa_required' }); else reply.redirect('/mfa');
     return null;
   }
+  if (si.mustChangePassword && !req.url.startsWith('/account')) {
+    if (json) reply.code(403).send({ error: 'password_change_required' }); else reply.redirect('/account?force=1');
+    return null;
+  }
   req.si = si;
   return si;
 }

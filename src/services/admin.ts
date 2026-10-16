@@ -15,7 +15,7 @@ export async function createUser(a: Actor, input: unknown) {
   const temp = randomToken(12);
   return withActor(a, async (tx) => {
     if (await one(tx, 'select 1 from users where lower(email)=$1', [d.email])) throw invalid('A user with that email already exists in this organisation');
-    const u = await one(tx, 'insert into users (tenant_id,client_id,email,name,role,password_hash) values ($1,$2,$3,$4,$5,$6) returning id,email,name,role,client_id',
+    const u = await one(tx, 'insert into users (tenant_id,client_id,email,name,role,password_hash,must_change_password) values ($1,$2,$3,$4,$5,$6,true) returning id,email,name,role,client_id',
       [a.tenantId, d.client_id, d.email, d.name, d.role, hashPassword(temp)]).catch((e) => {
       if (e.code === '23505') throw invalid('That email is already registered');
       throw e;

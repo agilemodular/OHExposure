@@ -143,7 +143,12 @@ export function registerRoutes(app: FastifyInstance) {
           ${lk.clients.length > 1 && !c.actor.clientId ? html`<label>Client<select name="client_id" required>${options(lk.clients, 'id', (x) => x.name)}</select></label>` : ''}
           <label>Reference code<input name="ref_code" required placeholder="e.g. W-014"></label>
           ${can(c.actor, 'worker.identity.write') ? html`<div class="row"><label>Full name <span class="hint">Optional, restricted</span><input name="full_name" autocomplete="off"></label><label>Employee number<input name="employee_number" autocomplete="off"></label></div>` : ''}
-          <div><button>Add worker</button></div></form>` : ''}`,
+          <div><button>Add worker</button></div></form>` : ''}
+        ${can(c.actor, 'disposal.request') && showId ? html`<details class="panel"><summary>Request disposal of a worker's identifiable details</summary>
+          <p class="small">The name and employee number are removed after a second person approves. The pseudonymous reference and all exposure history remain.</p>
+          <form method="post" action="/disposals" class="stack">${csrfField(c)}<input type="hidden" name="record_class" value="worker_identity">
+          <label>Worker<select name="entity_id" required>${options(lk.workers.filter((w) => w.full_name), 'id', workerLabel)}</select></label>
+          <label>Reason and retention basis<textarea name="reason" required minlength="20"></textarea></label><div><button class="secondary">Request disposal</button></div></form></details>` : ''}`,
     };
   });
   action(app, '/workers', async (c) => { await reg.createWorker(c.actor, c.body); return { to: '/workers', ok: 'Worker added' }; });

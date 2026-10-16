@@ -28,7 +28,7 @@ export function authRoutes(app: FastifyInstance) {
   const hits = new Map<string, { n: number; reset: number }>();
   app.post('/login', async (req, reply) => {
     const now = Date.now(); const h = hits.get(req.ip);
-    if (h && h.reset > now && h.n >= 20) return reply.redirect(`/login?e=${encodeURIComponent('Too many sign-in attempts from this network. Try again in 15 minutes.')}`, 303);
+    if (h && h.reset > now && h.n >= config.loginIpLimit) return reply.redirect(`/login?e=${encodeURIComponent('Too many sign-in attempts from this network. Try again in 15 minutes.')}`, 303);
     hits.set(req.ip, h && h.reset > now ? { n: h.n + 1, reset: h.reset } : { n: 1, reset: now + 15 * 60_000 });
     const b = req.body as any;
     try {
@@ -88,7 +88,7 @@ export function authRoutes(app: FastifyInstance) {
 
   page(app, '/account', async (c) => ({
     title: 'Your account',
-    body: html`<dl class="kv"><dt>Name</dt><dd>${c.actor.name}</dd><dt>Email</dt><dd>${c.actor.email}</dd><dt>Role</dt><dd>${c.actor.role}</dd>
+    body: html`${c.si.mustChangePassword ? html`<div class="flash warn" role="alert">You signed in with a temporary password. Choose a new password to continue.</div>` : ''}<dl class="kv"><dt>Name</dt><dd>${c.actor.name}</dd><dt>Email</dt><dd>${c.actor.email}</dd><dt>Role</dt><dd>${c.actor.role}</dd>
       <dt>Two-step verification</dt><dd>${c.si.mfaEnabled ? 'Enabled' : 'Not enabled'}</dd></dl>
       <form method="post" action="/account/password" class="stack panel"><h2>Change password</h2><input type="hidden" name="_csrf" value="${c.csrf}">
       <label>Current password<input type="password" name="current" autocomplete="current-password" required></label>
@@ -101,7 +101,7 @@ export function authRoutes(app: FastifyInstance) {
       if (!verifyPassword(String(c.body.current ?? ''), u.password_hash)) throw new AppError(422, 'invalid', 'Current password is incorrect');
       let h: string;
       try { h = hashPassword(String(c.body.next ?? '')); } catch (e: any) { throw new AppError(422, 'invalid', e.message); }
-      await tx.query('update users set password_hash=$2 where id=$1', [c.actor.userId, h]);
+      await tx.query('update users set password_hash=$2, must_change_password=false where id=$1', [c.actor.userId, h]);
       await tx.query('update sessions set revoked_at=now() where user_id=$1 and id<>$2 and revoked_at is null', [c.actor.userId, c.si.sessionId]);
       await audit(tx, c.actor, 'auth.password_changed', 'user', c.actor.userId);
     });

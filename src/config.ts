@@ -6,6 +6,7 @@ export const config = {
   storageDir: process.env.STORAGE_DIR ?? new URL('../storage/', import.meta.url).pathname,
   cookieSecure: process.env.COOKIE_SECURE === 'true',
   sessionHours: Number(process.env.SESSION_HOURS ?? 10),
+  loginIpLimit: Number(process.env.LOGIN_IP_LIMIT ?? 20),
   maxUploadBytes: Number(process.env.MAX_UPLOAD_BYTES ?? 15 * 1024 * 1024),
   aiProvider: (process.env.AI_PROVIDER ?? 'none') as 'none',
   branding: {

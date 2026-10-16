@@ -84,7 +84,7 @@ export function controlRoutes(app: FastifyInstance) {
     const f = (path: string, inner: unknown, btn: string) => html`<form method="post" action="/actions/${x.id}/${path}" class="stack panel">${csrfField(c)}${inner}<div><button>${btn}</button></div></form>`;
     return {
       title: x.title, crumbs: [['Corrective actions', '/actions'], ['Action']],
-      sub: html`${x.control_name ? html`Control: <a href="/controls/${x.control_id}">${x.control_name}</a> · ` : ''}${x.group_name ?? ''} · owner ${x.owner_name ?? 'unassigned'} · due ${fmtDate(x.due_date)}`,
+      sub: html`${x.control_name ? html`Control: <a href="/controls/${x.control_id}">${x.control_name}</a> · ` : ''}${x.group_name ? `${x.group_name} · ` : ''}owner ${x.owner_name ?? 'unassigned'} · due ${fmtDate(x.due_date)}`,
       body: html`
       ${x.status === 'cancelled' ? html`<div class="steps"><span class="now">Cancelled</span></div>` : html`<div class="steps" aria-label="Action stage">${STAGES.map((s, i) => html`<span class="${i === idx ? 'now' : i < idx ? 'done' : ''}">${STAGE_TEXT[s]}</span>`)}</div>`}
       <div class="cols"><div>

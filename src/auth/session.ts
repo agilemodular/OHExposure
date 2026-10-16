@@ -35,7 +35,7 @@ export async function login(email: string, password: string, ua?: string, ip?: s
   return { token, mfaPending: full.mfa_enabled, enrolMfa: !full.mfa_enabled && full.mfa_required };
 }
 
-export type SessionInfo = { actor: Actor; csrf: string; mfaPassed: boolean; sessionId: string; mfaEnabled: boolean; mfaRequired: boolean; tenant: any };
+export type SessionInfo = { actor: Actor; csrf: string; mfaPassed: boolean; sessionId: string; mfaEnabled: boolean; mfaRequired: boolean; mustChangePassword: boolean; tenant: any };
 
 export async function resolveSession(token: string | undefined, ip?: string): Promise<SessionInfo | null> {
   if (!token) return null;
@@ -44,12 +44,12 @@ export async function resolveSession(token: string | undefined, ip?: string): Pr
   if (!s) return null;
   const boot: Actor = { userId: s.user_id, tenantId: s.tenant_id, clientId: null, role: 'client_readonly', name: '', email: '', perms: new Set() };
   const { u, t } = await withActor(boot, async (tx) => ({
-    u: await one(tx, 'select id,tenant_id,client_id,role,name,email,mfa_enabled from users where id=$1', [s.user_id]),
+    u: await one(tx, 'select id,tenant_id,client_id,role,name,email,mfa_enabled,must_change_password from users where id=$1', [s.user_id]),
     t: await one(tx, 'select id,name,kind,is_demo,mfa_required from tenants where id=$1', [s.tenant_id]),
   }));
   if (!u) return null;
   await withAnon((tx) => tx.query('select auth_touch_session($1)', [sid]));
-  return { actor: actorFrom(u, ip), csrf: s.csrf_token, mfaPassed: s.mfa_passed, sessionId: sid, mfaEnabled: u.mfa_enabled, mfaRequired: t.mfa_required, tenant: t };
+  return { actor: actorFrom(u, ip), csrf: s.csrf_token, mfaPassed: s.mfa_passed, sessionId: sid, mfaEnabled: u.mfa_enabled, mfaRequired: t.mfa_required, mustChangePassword: u.must_change_password, tenant: t };
 }
 
 export async function completeMfa(si: SessionInfo, code: string) {

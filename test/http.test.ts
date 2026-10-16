@@ -76,6 +76,17 @@ describe('authentication', () => {
     expect((await app.inject({ url: '/', headers: { cookie } })).statusCode).toBe(302);
   });
 
+  it('forces a password change after sign-in with an administrator-issued temporary password', async () => {
+    const { createUser } = await import('../src/services/admin.js');
+    const r = await createUser(w.a.admin, { email: `temp${Date.now()}@t.test`, name: 'Temp User', role: 'field_technician' });
+    const { cookie } = await signIn(r.user.email, r.temporaryPassword);
+    const home = await app.inject({ url: '/', headers: { cookie } });
+    expect(home.headers.location).toBe('/account?force=1');
+    const acct = await app.inject({ url: '/account', headers: { cookie } });
+    await app.inject({ method: 'POST', url: '/account/password', headers: { cookie }, payload: { _csrf: csrfFrom(acct.body), current: r.temporaryPassword, next: 'a brand new long password' } });
+    expect((await app.inject({ url: '/', headers: { cookie } })).statusCode).toBe(200);
+  });
+
   it('sets security headers', async () => {
     const r = await app.inject({ url: '/login' });
     expect(r.headers['content-security-policy']).toContain("script-src 'self'");
