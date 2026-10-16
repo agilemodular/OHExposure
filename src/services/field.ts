@@ -114,7 +114,7 @@ async function insertEvent(tx: Tx, a: Actor, d: SamplingInput, offline: boolean)
   try {
     const r = await one(tx, `insert into sampling_events (${cols.join(',')}) values (${cols.map((_, i) => `$${i + 1}`).join(',')}) returning *`, vals);
     if (status === 'collected') await custody(tx, a, r, 'collected', values.end_at as string, null, 'Captured at end of sampling');
-    if (values.handover_to) await custody(tx, a, r, 'handed_over', (values.handover_at as string) ?? new Date().toISOString(), values.handover_to as string, null);
+    if (values.handover_to) await custody(tx, a, r, 'handed_over', (values.handover_at as string) ?? (values.end_at as string) ?? new Date().toISOString(), values.handover_to as string, values.handover_at ? null : 'Handover time not recorded; end of sampling used');
     await audit(tx, a, offline ? 'sample.create_offline' : 'sample.create', 'sampling_event', r.id, { sample_code: d.sample_code, warnings });
     return { event: r, warnings };
   } catch (e: any) {
@@ -143,7 +143,7 @@ async function applyUpdate(tx: Tx, a: Actor, current: any, d: SamplingInput, off
   const r = await one(tx, `update sampling_events set ${sets}, status=$${FIELD_COLUMNS.length + 2}, version=version+1, updated_at=now() where id=$1 returning *`,
     [current.id, ...FIELD_COLUMNS.map((c) => values[c]), status]);
   if (status === 'collected' && current.status !== 'collected') await custody(tx, a, r, 'collected', values.end_at as string, null, null);
-  if (values.handover_to && values.handover_to !== current.handover_to) await custody(tx, a, r, 'handed_over', (values.handover_at as string) ?? new Date().toISOString(), values.handover_to as string, null);
+  if (values.handover_to && values.handover_to !== current.handover_to) await custody(tx, a, r, 'handed_over', (values.handover_at as string) ?? (values.end_at as string) ?? new Date().toISOString(), values.handover_to as string, values.handover_at ? null : 'Handover time not recorded; end of sampling used');
   await audit(tx, a, offline ? 'sample.update_offline' : 'sample.update', 'sampling_event', current.id, { before_version: current.version, warnings });
   return { event: r, warnings };
 }

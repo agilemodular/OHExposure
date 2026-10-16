@@ -390,7 +390,7 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
       benchmarkNote = `${formal.length} formal worker-shift result(s) compared with ${b.type} ${b.value} ${b.unit} (${b.source}).`;
       if (incompleteShifts) benchmarkNote += ` ${incompleteShifts} worker-shift(s) could not be calculated.`;
     }
-    if (b.isSynthetic) benchmarkNote += ' SYNTHETIC DEMONSTRATION BENCHMARK — not a real exposure limit.';
+    if (b.isSynthetic && !/synthetic/i.test(b.source)) benchmarkNote += ' SYNTHETIC DEMONSTRATION BENCHMARK — not a real exposure limit.';
   }
 
   for (const s of samples) for (const f of s.flags) if (f.severity !== 'info') issues.push({ ...f, message: `${s.sampleCode}: ${f.message}` });

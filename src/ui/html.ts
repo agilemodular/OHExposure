@@ -43,4 +43,9 @@ const PS: Record<string, string> = { draft: 'neutral', in_review: 'warn', approv
 export const dqBadge = (s: string | null) => s ? html`<span class="badge b-${DQ[s] ?? 'neutral'}" title="Data quality">Data: ${label(s)}</span>` : html`<span class="badge b-neutral">Data: not calculated</span>`;
 export const bmBadge = (s: string | null) => s ? html`<span class="badge b-${BM[s] ?? 'neutral'}" title="Benchmark comparison (not a compliance conclusion)">Benchmark: ${label(s)}</span>` : html`<span class="badge b-neutral">Benchmark: —</span>`;
 export const psBadge = (s: string | null) => html`<span class="badge b-${PS[s ?? ''] ?? 'neutral'}" title="Professional assessment">Review: ${label(s ?? 'none')}</span>`;
+/** The three independent assessment states, shown side by side — never merged into one verdict. */
+export function evidenceStrip(dq: string | null, bm: string | null, ps: string | null) {
+  const seg = (title: string, v: string | null, tone: string) => html`<span class="ev-${tone}"><small>${title}</small><b>${v ? label(v) : 'not yet'}</b></span>`;
+  return html`<span class="evidence" role="group" aria-label="Assessment states">${seg('Data quality', dq, dq ? DQ[dq] : 'neutral')}${seg('Benchmark comparison', bm, bm ? BM[bm] : 'neutral')}${seg('Professional review', ps, ps ? PS[ps] : 'neutral')}</span>`;
+}
 export const statusBadge = (s: string, tone = 'neutral') => html`<span class="badge b-${tone}">${label(s)}</span>`;

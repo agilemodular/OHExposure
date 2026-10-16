@@ -1,0 +1,8 @@
+{
+  "name": "Occupational Hygiene & Exposure Assurance",
+  "short_name": "Exposure Assurance",
+  "start_url": "/field",
+  "display": "standalone",
+  "background_color": "#f6f8f7",
+  "theme_color": "#1c2a2e"
+}
