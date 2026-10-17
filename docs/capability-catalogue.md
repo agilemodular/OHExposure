@@ -105,7 +105,7 @@ Classification used throughout:
 | Controlled tenant/client-scoped JSON export | Verified | isolation test |
 | Backup and restore | Unverified (rehearsal only) | `operations.md` |
 | Monitoring | Verified (in-app) | `/readyz`, admin System health panel; external alerting not provided (hosting) |
-| CI pipeline with dependency audit | Unverified (not yet run on GitHub) | `.github/workflows/ci.yml`; same commands pass locally |
+| CI pipeline with dependency audit | Verified | GitHub Actions run 39062015665 passed (17 Oct 2026) |
 | Multi-instance login throttle | Verified | http test |
 | Demonstration tenant with labelled synthetic data | Verified | seed + screenshots |
 | Deployment package (Dockerfile, compose) | Unverified (compose validated; image not built — registry unreachable) | `operations.md` |

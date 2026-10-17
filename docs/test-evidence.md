@@ -26,6 +26,7 @@ Reviewer B independently hand-checked six calculation cases (full and partial 8-
 
 | Evidence | Result |
 |---|---|
+| GitHub Actions CI (PostgreSQL 16 service, clean runner) | Run 39062015665 passed: typecheck, `npm audit --audit-level=high`, full test suite |
 | Headless Chromium 141 run of the offline field client | Shell loaded from cache offline; record saved offline; synchronised on reconnect; re-sent record returned *duplicate*; sync without CSRF header refused |
 | Page screenshots (overview, assessment, sample, register, action, reference, issued report) | Reviewed for layout, synthetic-data labelling and separate assessment states |
 | RLS coverage query | All application tables have row-level security enabled and forced |
