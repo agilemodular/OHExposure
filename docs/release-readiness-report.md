@@ -10,7 +10,7 @@ A controlled pilot becomes appropriate once the *before pilot* items below are c
 
 ## What exists and is verified
 
-All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **104 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
+All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **105 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
 
 Strongest areas:
 
@@ -35,7 +35,7 @@ Every finding is fixed and covered by a regression test (102 tests in total). Re
 | No real benchmark content; tenants must enter and verify limits themselves | High | D2 — decide platform reference-data policy and licensing |
 | Offline client tested only in desktop Chromium; data unencrypted on device; revocation waits for reconnection | Medium | D10; managed devices; documented in `offline-field-capture.md` |
 | No penetration test or DPIA; no certifications | High for production | D8 |
-| Single-process login throttle; no alerting; backups rehearsed only in development | Medium | D7 — hosting and monitoring |
+| No external alerting; backups rehearsed only in development | Medium | D7 — hosting owner to provide alerting and managed backups |
 | STEL and unit conversion conventions implemented but not professionally validated; statistical compliance testing not implemented | Medium | D1 review; reviewer addresses representativeness |
 | Overlapping samples now flagged, but sampling strategy representativeness is not assessed by software | Medium | Professional interpretation; pilot test P5 |
 | AI assistance and live integrations absent | — | Blocked by design until D5/D6; core workflows do not need them |

@@ -104,7 +104,9 @@ Classification used throughout:
 | Retention configuration; two-person disposal of identities and files | Verified | workflow test |
 | Controlled tenant/client-scoped JSON export | Verified | isolation test |
 | Backup and restore | Unverified (rehearsal only) | `operations.md` |
-| Monitoring and alerting | Incomplete | Logs and health check only |
+| Monitoring | Verified (in-app) | `/readyz`, admin System health panel; external alerting not provided (hosting) |
+| CI pipeline with dependency audit | Unverified (not yet run on GitHub) | `.github/workflows/ci.yml`; same commands pass locally |
+| Multi-instance login throttle | Verified | http test |
 | Demonstration tenant with labelled synthetic data | Verified | seed + screenshots |
 | Deployment package (Dockerfile, compose) | Unverified (compose validated; image not built — registry unreachable) | `operations.md` |
 | Production entrypoint with config guards and app-role password rotation | Verified | manual run on empty database |

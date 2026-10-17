@@ -1,7 +1,7 @@
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { buildApp } from '../src/app.js';
-import { closePool } from '../src/db.js';
+import { closePool, getPool } from '../src/db.js';
 import { totpAt } from '../src/auth/crypto.js';
 import { createTenant, createUserDirect } from '../scripts/bootstrap.js';
 import * as reg from '../src/services/register.js';
@@ -94,6 +94,18 @@ describe('authentication', () => {
     const ip = (await admin.query(`select ip from audit_events where user_id=$1 and action='auth.login' order by id desc limit 1`, [u.id])).rows[0].ip;
     expect(ip).toBe('203.0.113.9');
     await admin.end();
+  });
+
+  it('reports readiness and throttles sign-in attempts through the shared database store', async () => {
+    expect((await app.inject({ url: '/readyz' })).json()).toEqual({ ok: true });
+    const c = await getPool().connect();
+    try {
+      const key = `test-${Date.now()}`;
+      const results = [];
+      for (let i = 0; i < 4; i++) results.push((await c.query('select auth_throttle_hit($1,3,900) ok', [key])).rows[0].ok);
+      expect(results).toEqual([true, true, true, false]);
+      await expect(c.query('select * from login_throttle')).rejects.toThrow(/permission denied/);
+    } finally { c.release(); }
   });
 
   it('sets security headers', async () => {

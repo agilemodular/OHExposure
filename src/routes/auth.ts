@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { completeMfa, login, logout, resolveSession } from '../auth/session.js';
-import { deriveFromParams, newTotpSecret, otpauthUri, hashPassword } from '../auth/crypto.js';
+import { deriveFromParams, newTotpSecret, otpauthUri, hashPassword, sha256 } from '../auth/crypto.js';
 import { config } from '../config.js';
-import { audit, one, withActor } from '../db.js';
+import { audit, one, withActor, withAnon } from '../db.js';
 import { AppError } from '../errors.js';
 import { html } from '../ui/html.js';
 import { action, page, SESSION_COOKIE, setFlash } from './kit.js';
@@ -25,11 +25,10 @@ export function authRoutes(app: FastifyInstance) {
   });
 
   // Per-IP throttle (in-memory, per process) in addition to per-account lockout.
-  const hits = new Map<string, { n: number; reset: number }>();
+  // Per-IP throttle shared across all instances (stored in the database, keyed by a hash of the IP).
   app.post('/login', async (req, reply) => {
-    const now = Date.now(); const h = hits.get(req.ip);
-    if (h && h.reset > now && h.n >= config.loginIpLimit) return reply.redirect(`/login?e=${encodeURIComponent('Too many sign-in attempts from this network. Try again in 15 minutes.')}`, 303);
-    hits.set(req.ip, h && h.reset > now ? { n: h.n + 1, reset: h.reset } : { n: 1, reset: now + 15 * 60_000 });
+    const allowed = await withAnon(async (tx) => (await one(tx, 'select auth_throttle_hit($1,$2,900) ok', [sha256(`ip:${req.ip}`), config.loginIpLimit]))?.ok);
+    if (!allowed) return reply.redirect(`/login?e=${encodeURIComponent('Too many sign-in attempts from this network. Try again in 15 minutes.')}`, 303);
     const b = req.body as any;
     try {
       const r = await login(String(b.email ?? ''), String(b.password ?? ''), req.headers['user-agent'], req.ip);

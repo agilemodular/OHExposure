@@ -21,9 +21,9 @@ Targets to agree before production: RPO ≤ 24 h (≤ 5 min with PITR), RTO ≤ 
 
 ## Monitoring
 
-Implemented: structured JSON request logs (cookies and authorisation headers redacted); `GET /healthz`; audit events for sign-in, MFA, every change, approval, download, export and disposal.
+Implemented: structured JSON request logs (cookies and authorisation headers redacted); `GET /healthz` (process up); `GET /readyz` (database reachable and migrations applied — use for load-balancer checks); an administrator **System health** panel (locked accounts, users without two-step verification, failed sign-ins, two-step failures in 24 h, failed or dead-lettered integration messages, open sync conflicts, pending disposals); audit events for sign-in, MFA, every change, approval, download, export and disposal; CI (`.github/workflows/ci.yml`) running typecheck, `npm audit --audit-level=high` and the full test suite against PostgreSQL 16. `npm audit` reported 0 vulnerabilities on 17 Oct 2026.
 
-Not implemented (needed for production): uptime and error-rate alerting; log shipping and retention; database metrics; alert on integration dead letters and on repeated failed sign-ins; dependency vulnerability scanning in CI.
+Not implemented (hosting owner to provide): external uptime and error-rate alerting that notifies people; log shipping and retention; database metrics. The CI workflow has not been run on GitHub yet because the code is not in a repository there.
 
 ## Deployment
 
@@ -38,5 +38,5 @@ Packaging (verified 17 Oct 2026, except where noted):
 
 - Run behind TLS with `COOKIE_SECURE=true` (adds HSTS). Set `TRUST_PROXY` to the number of proxy hops (or proxy addresses); leave it empty when there is no proxy, so `X-Forwarded-For` is ignored.
 - `APP_DB_PASSWORD` replaces the development password created by migration 002; keep the owner credentials for migrations only.
-- The login IP throttle is in-memory per process; use a shared store or the edge (WAF) when running more than one instance.
+- The per-IP login throttle is stored in the database, so it holds across multiple instances. An edge WAF is still recommended.
 - No security testing or certification has been carried out.

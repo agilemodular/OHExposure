@@ -2,13 +2,13 @@
 
 Run: 17 October 2026, Node 22.22, PostgreSQL 16, engine 1.3.0. Command: `npm test` (Vitest 5). The test database is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security is active throughout.
 
-**Result: 104 passed, 0 failed, across 4 suites.**
+**Result: 105 passed, 0 failed, across 4 suites.**
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `calc.test.ts` | 37 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values |
 | `workflow.test.ts` | 22 | End-to-end workflow, tenant/client isolation, attachments, append-only evidence, governance, integrations |
-| `http.test.ts` | 12 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, sign-out, proxy trust, headers, every page for every role, pilot tenant provisioning |
+| `http.test.ts` | 13 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, sign-out, proxy trust, headers, every page for every role, pilot tenant provisioning, readiness and shared throttle |
 | `review-regressions.test.ts` | 33 | Regression tests for every defect found in three independent review rounds, plus STEL service flow |
 
 ## Independent verification
@@ -45,6 +45,7 @@ Physical mobile devices; Safari/Firefox; load and concurrency; penetration testi
 - ✓ `http.test.ts` › authentication › revokes the session on sign-out
 - ✓ `http.test.ts` › authentication › forces a password change after sign-in with an administrator-issued temporary password
 - ✓ `http.test.ts` › authentication › ignores X-Forwarded-For unless a trusted proxy is configured
+- ✓ `http.test.ts` › authentication › reports readiness and throttles sign-in attempts through the shared database store
 - ✓ `http.test.ts` › authentication › sets security headers
 - ✓ `http.test.ts` › authorisation over HTTP › blocks pages and actions outside a role, and other tenants’ records
 - ✓ `http.test.ts` › authorisation over HTTP › every main page renders for each role without server errors

@@ -63,6 +63,18 @@ export async function listUsers(a: Actor) {
   }));
 }
 
+// ───── Operational health (tenant-scoped)
+export async function systemHealth(a: Actor) {
+  requirePerm(a, 'org.manage');
+  return withActor(a, async (tx) => ({
+    security: await one(tx, 'select * from tenant_security_health()'),
+    mfaFailures24h: (await one(tx, `select count(*)::int n from audit_events where action in ('auth.mfa_failed','auth.mfa_session_revoked','auth.mfa_refused_locked') and at > now() - interval '24 hours'`))?.n ?? 0,
+    integrationProblems: (await one(tx, `select count(*)::int n from integration_outbox where status in ('failed','dead')`))?.n ?? 0,
+    openConflicts: (await one(tx, `select count(*)::int n from sync_conflicts where status='open'`))?.n ?? 0,
+    pendingDisposals: (await one(tx, `select count(*)::int n from disposal_requests where status='pending'`))?.n ?? 0,
+  }));
+}
+
 // ───── Audit
 export async function auditLog(a: Actor, filter: { entity_id?: string; limit?: number } = {}) {
   requirePerm(a, 'audit.read');

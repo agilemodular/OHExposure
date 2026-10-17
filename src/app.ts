@@ -6,6 +6,7 @@ import fstatic from '@fastify/static';
 import { join } from 'node:path';
 import { config } from './config.js';
 import { AppError } from './errors.js';
+import { one, withAnon } from './db.js';
 import { authRoutes } from './routes/auth.js';
 import { overviewRoutes } from './routes/overview.js';
 import { registerRoutes } from './routes/register.js';
@@ -40,6 +41,15 @@ export async function buildApp() {
   app.get('/sw.js', async (_req, reply) => reply.type('application/javascript').header('Service-Worker-Allowed', '/').sendFile('sw.js'));
   app.get('/favicon.ico', async (_req, reply) => reply.code(204).send());
   app.get('/healthz', async () => ({ ok: true }));
+  // Readiness: the database is reachable and migrations are applied. Use for load-balancer health checks.
+  app.get('/readyz', async (_req, reply) => {
+    try {
+      const r = await withAnon((tx) => one(tx, `select count(*)::int n from pg_proc where proname = 'auth_throttle_hit'`));
+      return r?.n ? { ok: true } : reply.code(503).send({ ok: false, reason: 'migrations not applied' });
+    } catch {
+      return reply.code(503).send({ ok: false, reason: 'database unavailable' });
+    }
+  });
 
   authRoutes(app);
   overviewRoutes(app);

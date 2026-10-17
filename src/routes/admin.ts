@@ -15,13 +15,24 @@ import { authed } from './kit.js';
 export function adminRoutes(app: FastifyInstance) {
   page(app, '/admin', async (c) => {
     requirePerm(c.actor, 'users.manage');
-    const [u, gov, integrations] = await Promise.all([adm.listUsers(c.actor), adm.governance(c.actor), integ.integrationsOverview(c.actor)]);
+    const [u, gov, integrations, health] = await Promise.all([adm.listUsers(c.actor), adm.governance(c.actor), integ.integrationsOverview(c.actor), adm.systemHealth(c.actor)]);
     const temp = c.query.temp ? String(c.query.temp) : null;
     return {
       title: 'Organisation', sub: c.tenant.kind === 'consultancy' ? 'Consultancy account: client users see only their own client’s records.' : undefined,
       head: can(c.actor, 'export.data') ? html`<a class="btn secondary" href="/export">Export data (JSON)</a>` : '',
       body: html`
       ${temp ? html`<div class="flash warn">Temporary password: <code>${temp}</code><br>Share it with the user through a separate channel. It is not shown again. They will be asked to set up two-step verification at first sign-in.</div>` : ''}
+      <h2>System health</h2>
+      <div class="ledger"><section><dl>
+        <dt>Accounts currently locked</dt><dd class="${health.security.locked_accounts ? 'attn' : 'zero'}">${health.security.locked_accounts}</dd>
+        <dt>Active users without two-step verification</dt><dd class="${health.security.mfa_not_enrolled ? 'attn' : 'zero'}">${health.security.mfa_not_enrolled}</dd>
+        <dt>Recent failed sign-in attempts (not yet cleared)</dt><dd class="${health.security.failed_logins_now ? 'attn' : 'zero'}">${health.security.failed_logins_now}</dd>
+        <dt>Two-step failures in the last 24 hours</dt><dd class="${health.mfaFailures24h ? 'attn' : 'zero'}">${health.mfaFailures24h}</dd>
+      </dl></section><section><dl>
+        <dt>Integration messages failed or dead-lettered</dt><dd class="${health.integrationProblems ? 'attn' : 'zero'}">${health.integrationProblems}</dd>
+        <dt>Open offline sync conflicts</dt><dd class="${health.openConflicts ? 'attn' : 'zero'}">${health.openConflicts}</dd>
+        <dt>Disposal requests awaiting a decision</dt><dd class="${health.pendingDisposals ? 'attn' : 'zero'}">${health.pendingDisposals}</dd>
+      </dl></section></div>
       <h2>Users</h2>
       <div class="tablewrap"><table><thead><tr><th>Name</th><th>Email</th><th>Role</th><th>Client</th><th>Two-step</th><th>Status</th><th></th></tr></thead><tbody>
         ${u.users.map((x) => html`<tr><td>${x.name}</td><td>${x.email}</td><td>${label(x.role)}</td><td>${x.client_name ?? 'all'}</td><td>${x.mfa_enabled ? 'enabled' : html`<span class="badge b-warn">not set up</span>`}</td><td>${x.status}</td>
