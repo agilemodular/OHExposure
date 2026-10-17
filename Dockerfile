@@ -1,5 +1,5 @@
 # Occupational Hygiene & Exposure Assurance — application image
-FROM node:22-bookworm-slim
+FROM node:25-bookworm-slim
 ENV NODE_ENV=production
 WORKDIR /app
 COPY package.json package-lock.json ./
