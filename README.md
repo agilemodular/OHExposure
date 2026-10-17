@@ -20,9 +20,20 @@ npm start                # http://localhost:3000
 npm test                 # unit, workflow, isolation and HTTP tests (uses database ohea_test)
 ```
 
+### Deploying a pilot or production environment
+
+```bash
+cp .env.example .env            # set strong, different DB_OWNER_PASSWORD and APP_DB_PASSWORD
+docker compose up -d --build    # applies migrations, rotates the app role password, starts on :3000
+docker compose exec app npx tsx scripts/provision-tenant.ts \
+  --name "Pilot Organisation Ltd" --admin-email admin@pilot.example --admin-name "Pilot Admin"
+```
+
+Put a TLS-terminating proxy in front and set `TRUST_PROXY=1`. The production entrypoint (`scripts/start.ts`) refuses to start without `COOKIE_SECURE=true`, an `APP_DB_PASSWORD`, or if the development password is still in use. The provisioning tool refuses to create a real organisation in a database that contains the demo tenant. See `docs/operations.md`.
+
 Demo users after `npm run seed` (password `demo-password-2026`; demo tenant does not enforce MFA): `admin@`, `practitioner@`, `technician@`, `reviewer@`, `sitemanager@`, `client@demo.test`.
 
-Configuration is by environment variable (`src/config.ts`): `PORT`, `COOKIE_SECURE=true` (required behind HTTPS), `SESSION_HOURS`, `STORAGE_DIR`, `MAX_UPLOAD_BYTES`, `LOGIN_IP_LIMIT`, and branding — `BRAND_PRODUCT_NAME`, `BRAND_ENDORSEMENT`, `BRAND_OWNER`, `BRAND_DOMAIN` — so a permanent name and domain can be introduced without code changes.
+Configuration is by environment variable (`src/config.ts`): `PORT`, `COOKIE_SECURE=true` (required behind HTTPS), `SESSION_HOURS`, `STORAGE_DIR`, `MAX_UPLOAD_BYTES`, `LOGIN_IP_LIMIT`, `TRUST_PROXY`, `APP_DB_PASSWORD` (production), and branding — `BRAND_PRODUCT_NAME`, `BRAND_ENDORSEMENT`, `BRAND_OWNER`, `BRAND_DOMAIN` — so a permanent name and domain can be introduced without code changes.
 
 ## Layout
 
@@ -51,3 +62,5 @@ Configuration is by environment variable (`src/config.ts`): `PORT`, `COOKIE_SECU
 10. [Operations: backup, recovery, monitoring](docs/operations.md)
 11. [Pilot acceptance checklist](docs/pilot-acceptance-checklist.md)
 12. [Release readiness report](docs/release-readiness-report.md)
+13. [Hygienist review pack](docs/hygienist-review-pack.md)
+14. [Field device test script](docs/field-device-test-script.md)

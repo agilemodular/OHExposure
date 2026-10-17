@@ -25,9 +25,18 @@ Implemented: structured JSON request logs (cookies and authorisation headers red
 
 Not implemented (needed for production): uptime and error-rate alerting; log shipping and retention; database metrics; alert on integration dead letters and on repeated failed sign-ins; dependency vulnerability scanning in CI.
 
+## Deployment
+
+Packaging (verified 17 Oct 2026, except where noted):
+
+- `Dockerfile` and `docker-compose.yml` (app + PostgreSQL 16, named volumes for data and attachments, health checks). The compose file validates; **the image could not be built in the development workspace because Docker Hub was not reachable** — build it once in the hosting environment.
+- `scripts/start.ts` applies migrations with the owner connection, sets the `ohea_app` password from `APP_DB_PASSWORD`, then starts the server. Tested on an empty database: all 13 migrations applied, the development password stopped working, HTTPS headers were sent.
+- In production mode it refuses to start without `COOKIE_SECURE=true` and `APP_DB_PASSWORD`, or with the development password in `DATABASE_URL`.
+- `scripts/provision-tenant.ts` creates a real organisation with MFA enforced and a first administrator who must change a one-time password; it refuses to run against a database holding the demo tenant.
+
 ## Deployment notes
 
-- Run behind TLS with `COOKIE_SECURE=true` (adds HSTS). Set `trustProxy` appropriately for the load balancer.
-- Change the `ohea_app` password created by migration 002 and supply it via `DATABASE_URL`; keep the owner credentials for migrations only.
+- Run behind TLS with `COOKIE_SECURE=true` (adds HSTS). Set `TRUST_PROXY` to the number of proxy hops (or proxy addresses); leave it empty when there is no proxy, so `X-Forwarded-For` is ignored.
+- `APP_DB_PASSWORD` replaces the development password created by migration 002; keep the owner credentials for migrations only.
 - The login IP throttle is in-memory per process; use a shared store or the edge (WAF) when running more than one instance.
 - No security testing or certification has been carried out.

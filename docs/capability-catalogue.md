@@ -106,3 +106,6 @@ Classification used throughout:
 | Backup and restore | Unverified (rehearsal only) | `operations.md` |
 | Monitoring and alerting | Incomplete | Logs and health check only |
 | Demonstration tenant with labelled synthetic data | Verified | seed + screenshots |
+| Deployment package (Dockerfile, compose) | Unverified (compose validated; image not built — registry unreachable) | `operations.md` |
+| Production entrypoint with config guards and app-role password rotation | Verified | manual run on empty database |
+| Pilot tenant provisioning (MFA enforced, forced password change, demo-database guard) | Verified | http tests |

@@ -10,7 +10,7 @@ A controlled pilot becomes appropriate once the *before pilot* items below are c
 
 ## What exists and is verified
 
-All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **102 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
+All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **104 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
 
 Strongest areas:
 
@@ -55,11 +55,11 @@ Every finding is fixed and covered by a regression test (102 tests in total). Re
 
 ## Before pilot (from `pilot-acceptance-checklist.md`)
 
-1. Competent hygienist review and sign-off (D1).
+1. Competent hygienist review and sign-off (D1) — the review pack is ready for them.
 2. Verified benchmarks and method parameters for pilot substances (D2, D3).
-3. Hosting with TLS, changed credentials, backups and one restore test (D7).
+3. Hosting with TLS, changed credentials, backups and one restore test (D7) — the deployment package and provisioning tool are ready.
 4. DPIA and agreed retention periods (D8, D9).
-5. Field device testing on pilot hardware (D10).
+5. Field device testing on pilot hardware (D10) — the test script is ready.
 
 ## Next decision
 

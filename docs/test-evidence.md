@@ -2,13 +2,13 @@
 
 Run: 17 October 2026, Node 22.22, PostgreSQL 16, engine 1.3.0. Command: `npm test` (Vitest 5). The test database is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security is active throughout.
 
-**Result: 102 passed, 0 failed, across 4 suites.**
+**Result: 104 passed, 0 failed, across 4 suites.**
 
 | Suite | Tests | Covers |
 |---|---|---|
 | `calc.test.ts` | 37 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values |
 | `workflow.test.ts` | 22 | End-to-end workflow, tenant/client isolation, attachments, append-only evidence, governance, integrations |
-| `http.test.ts` | 10 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, sign-out, proxy trust, headers, every page for every role |
+| `http.test.ts` | 12 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, sign-out, proxy trust, headers, every page for every role, pilot tenant provisioning |
 | `review-regressions.test.ts` | 33 | Regression tests for every defect found in three independent review rounds, plus STEL service flow |
 
 ## Independent verification
@@ -48,6 +48,8 @@ Physical mobile devices; Safari/Firefox; load and concurrency; penetration testi
 - ✓ `http.test.ts` › authentication › sets security headers
 - ✓ `http.test.ts` › authorisation over HTTP › blocks pages and actions outside a role, and other tenants’ records
 - ✓ `http.test.ts` › authorisation over HTTP › every main page renders for each role without server errors
+- ✓ `http.test.ts` › pilot tenant provisioning › creates an MFA-enforced organisation whose first admin must change the one-time password
+- ✓ `http.test.ts` › pilot tenant provisioning › refuses to provision into a database that holds a demonstration tenant
 - ✓ `review-regressions.test.ts` › C1 cross-client evidence mixing › rejects tagging a sample with another client’s exposure group
 - ✓ `review-regressions.test.ts` › C1 cross-client evidence mixing › rejects a plan target pointing at another client’s group
 - ✓ `review-regressions.test.ts` › C1 cross-client evidence mixing › database refuses a mismatched group even if the service is bypassed
