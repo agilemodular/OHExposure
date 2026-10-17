@@ -133,3 +133,22 @@ describe('authorisation over HTTP', () => {
     }
   });
 });
+
+describe('pilot tenant provisioning', () => {
+  it('creates an MFA-enforced organisation whose first admin must change the one-time password', async () => {
+    const { provisionTenant } = await import('../scripts/provision-tenant.js');
+    const email = `pilot${Date.now()}@pilot.test`;
+    const r = await provisionTenant(process.env.DATABASE_ADMIN_URL!, { name: `Pilot Org ${Date.now()}`, kind: 'consultancy', clients: ['Site Client'], adminEmail: email, adminName: 'Pilot Admin', allowWithDemo: true });
+    const { res, cookie } = await signIn(email, r.temporaryPassword);
+    expect(res.headers.location).toBe('/mfa');
+    expect((await app.inject({ url: '/', headers: { cookie } })).headers.location).toBe('/mfa');
+    await expect(provisionTenant(process.env.DATABASE_ADMIN_URL!, { name: `Other ${Date.now()}`, kind: 'direct', clients: [], adminEmail: email, adminName: 'Other Admin', allowWithDemo: true })).rejects.toThrow(/already registered/);
+  });
+  it('refuses to provision into a database that holds a demonstration tenant', async () => {
+    const admin = new pg.Client({ connectionString: process.env.DATABASE_ADMIN_URL }); await admin.connect();
+    await createTenant(admin, { name: `Demo ${Date.now()}`, isDemo: true });
+    await admin.end();
+    const { provisionTenant } = await import('../scripts/provision-tenant.js');
+    await expect(provisionTenant(process.env.DATABASE_ADMIN_URL!, { name: 'Real Org', kind: 'direct', clients: [], adminEmail: `real${Date.now()}@x.test`, adminName: 'Real Admin' })).rejects.toThrow(/demonstration tenant/);
+  });
+});

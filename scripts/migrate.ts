@@ -26,6 +26,19 @@ export async function migrate(adminUrl: string) {
   }
 }
 
+/** Sets the application role's password from a secret, replacing the development default created by migration 002. */
+export async function setAppRolePassword(adminUrl: string, password: string) {
+  if (password.length < 16) throw new Error('APP_DB_PASSWORD must be at least 16 characters');
+  const c = new pg.Client({ connectionString: adminUrl });
+  await c.connect();
+  try {
+    const { rows } = await c.query('select format($$alter role ohea_app password %L$$, $1::text) sql', [password]);
+    await c.query(rows[0].sql);
+  } finally {
+    await c.end();
+  }
+}
+
 if (process.argv[1]?.endsWith('migrate.ts')) {
   migrate(process.env.DATABASE_ADMIN_URL ?? 'postgres://postgres:postgres_dev@localhost:5432/ohea').then(
     () => process.exit(0),

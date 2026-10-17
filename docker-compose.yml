@@ -1,0 +1,30 @@
+# Local or single-host deployment. For production put a TLS-terminating proxy in front,
+# set COOKIE_SECURE=true and TRUST_PROXY=1, and use managed PostgreSQL with point-in-time recovery.
+services:
+  db:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ohea
+      POSTGRES_USER: ohea_owner
+      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD}
+    volumes: [dbdata:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ohea_owner -d ohea"]
+      interval: 5s
+      retries: 10
+  app:
+    build: .
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      NODE_ENV: ${NODE_ENV:-production}
+      DATABASE_ADMIN_URL: postgres://ohea_owner:${DB_OWNER_PASSWORD}@db:5432/ohea
+      DATABASE_URL: postgres://ohea_app:${APP_DB_PASSWORD:?set APP_DB_PASSWORD}@db:5432/ohea
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
+      COOKIE_SECURE: ${COOKIE_SECURE:-true}
+      TRUST_PROXY: ${TRUST_PROXY:-}
+    ports: ["3000:3000"]
+    volumes: [attachments:/data/attachments]
+volumes:
+  dbdata:
+  attachments:
