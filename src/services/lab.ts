@@ -69,6 +69,7 @@ export async function createSubmission(a: Actor, input: unknown) {
   requirePerm(a, 'lab.write');
   const d = parse(z.object({ laboratory_id: uuid, reference: reqStr(2, 100), sample_ids: strArray.pipe(z.array(uuid).min(1)), dispatched_at: z.string(), timezone: z.string().default('Europe/London'), courier_ref: optStr, notes: optStr }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'lab_import');
     const samples = await many(tx, 'select * from sampling_events where id = any($1) for update', [d.sample_ids]);
     if (samples.length !== d.sample_ids.length) throw notFound('One or more samples');
     const clients = new Set(samples.map((s) => s.client_id));
@@ -92,6 +93,7 @@ export async function receiveSubmission(a: Actor, id: string, input: unknown) {
   requirePerm(a, 'lab.write');
   const d = parse(z.object({ received_at: z.string(), timezone: z.string().default('Europe/London'), received_condition: reqStr(2) }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'lab_import');
     const sub = await one(tx, 'select * from lab_submissions where id=$1 for update', [id]);
     if (!sub) throw notFound('Submission');
     if (sub.received_at) throw invalid('Receipt already recorded');

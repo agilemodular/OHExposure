@@ -1,8 +1,8 @@
 # Test evidence
 
-Latest run: **18 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**, commit range `0d8dab4..` (Phase H1). Command: `npm test` (Vitest). The test database schema is dropped and migrated from scratch (16 migrations), and tests run as the least-privilege application role, so row-level security is active throughout. Environment: development workspace (Linux container), not the hosting environment.
+Latest run: **18 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**, commit range `0d8dab4..` (Phase H1). Command: `npm test` (Vitest). The test database schema is dropped and migrated from scratch (17 migrations), and tests run as the least-privilege application role, so row-level security is active throughout. Environment: development workspace (Linux container), not the hosting environment.
 
-**Result: 123 passed, 0 failed, across 5 suites** (baseline before Phase H1: 105 on commit 0d8dab4, re-verified 18 Oct 2026 and green in CI).
+**Result: 127 passed, 0 failed, across 5 suites** (baseline before Phase H1: 105 on commit 0d8dab4, re-verified 18 Oct 2026 and green in CI).
 
 | Suite | Tests | Covers |
 |---|---|---|
@@ -10,13 +10,13 @@ Latest run: **18 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**,
 | `workflow.test.ts` | 22 | End-to-end workflow, tenant/client isolation, attachments, append-only evidence, governance, integrations |
 | `http.test.ts` | 13 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, sign-out, proxy trust, headers, every page for every role, provisioning, readiness, shared throttle |
 | `review-regressions.test.ts` | 33 | Regression tests for every defect found in the independent review rounds; STEL service flow; tenant controls not writable by the application role |
-| `assurance.test.ts` | 15 | **Phase H1:** pilot method gating; reference provenance (synthetic, organisation-entered, professional); method review recording rules; frozen status after approval; workflow suspension of all five workflows with alerts and resumption; MFA on pre-existing sessions; idle timeout; future capture times and device clock offset; reference import validation, immutability and DB constraint; recovery files (permission, cross-organisation, forged and tampered envelopes, idempotency, attribution, alert) |
+| `assurance.test.ts` | 19 | **Phase H1:** report issue gate (pilot-approved only; method later rejected; evaluation-approved revision); benchmark averaging gate; deferred sync and newly gated paths under suspension; recovery attestation, importer permissions and unknown user; pilot method gating; reference provenance (synthetic, organisation-entered, professional); method review recording rules; frozen status after approval; workflow suspension of all five workflows with alerts and resumption; MFA on pre-existing sessions; idle timeout; future capture times and device clock offset; reference import validation, immutability and DB constraint; recovery files (permission, cross-organisation, forged and tampered envelopes, idempotency, attribution, alert) |
 
 ## Phase H1 targeted evidence
 
 | Evidence | Environment | Result |
 |---|---|---|
-| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, 420 × 900, development server, demo data | 17/17 checks (see `offline-field-capture.md`). **Not mobile-device evidence** |
+| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, 420 × 900, development server, demo data | 20/20 checks (after independent review fixes) (see `offline-field-capture.md`). **Not mobile-device evidence** |
 | `scripts/backup.ts` + `scripts/restore-verify.ts` | Development PostgreSQL 16.15 | 18/18 checks, restore 0.7 s; tampered archive refused. **Not hosting evidence** (`docs/examples/restore-verification.development.json`) |
 | Reference import dry run of `docs/examples/reference-data.synthetic.json` | Development | 2 rows valid, 1 substance; nothing written |
 | Engine-generated worked examples E1–E14 (validation pack) | Development | Values in `hygienist-review-pack.md` produced by the engine |

@@ -11,6 +11,8 @@ import * as plans from '../src/services/plans.js';
 import * as field from '../src/services/field.js';
 import * as lab from '../src/services/lab.js';
 import * as asmt from '../src/services/assessments.js';
+import * as rep from '../src/services/reports.js';
+import * as ctl from '../src/services/controls.js';
 import { assertWorkflowActive, methodCapabilities, type Workflow } from '../src/services/assurance.js';
 import { CALCULATIONS } from '../src/calc/engine.js';
 import { sentAlerts, resetAlertDedupe } from '../src/alerts.js';
@@ -141,11 +143,53 @@ describe('pilot gating of calculation methods and reference data', () => {
     expect(ap.benchmark_provenance).toBe('professional_reference');
   });
 
+  it('a pilot report can be issued for a pilot-approved revision and states the approval-time status', async () => {
+    S.asmtId = (await withActor(w.a.prac, (tx) => tx.query('select assessment_id from assessment_revisions where id=$1', [S.rev]))).rows[0].assessment_id;
+    const r = await rep.generateReport(w.a.prac, S.asmtId, S.rev);
+    expect(r.status).toBe('issued');
+    expect((await rep.getReport(w.a.prac, r.id)).content_html).toMatch(/Method review status at approval:<\/strong> approved/);
+    expect((await rep.getReport(w.a.prac, r.id)).content_html).not.toMatch(/NOT APPROVED UNDER AN AUTHORISED PILOT/);
+  });
+
+  it('a pilot benchmark must match the calculation averaging period', async () => {
+    const { assertConclusionAllowed } = await import('../src/services/assurance.js');
+    await expect(withActor(w.a.prac, (tx) => assertConclusionAllowed(tx, 'stel_15', CALCULATIONS.stel_15.version, S.refBv))).rejects.toThrow(/not reviewed|averaging period/);
+    await recordMethodReview(URL_, { method: 'stel_15', version: CALCULATIONS.stel_15.version, status: 'approved', reviewer: 'Test Reviewer', competence: 'Test', reviewedOn: yesterday, evidence: 'T', recordedBy: 'Test Operator' });
+    try {
+      await expect(withActor(w.a.prac, (tx) => assertConclusionAllowed(tx, 'stel_15', CALCULATIONS.stel_15.version, S.refBv))).rejects.toThrow(/averaging period/);
+    } finally {
+      await recordMethodReview(URL_, { method: 'stel_15', version: CALCULATIONS.stel_15.version, status: 'not_reviewed', recordedBy: 'Test Operator' });
+    }
+  });
+
   it('a later withdrawal of the method approval does not alter the approved revision', async () => {
     await recordMethodReview(URL_, { method: 'twa_8h', version: TWA, status: 'not_reviewed', recordedBy: 'Test Operator' });
     const d = await asmt.assessmentDetail(w.a.prac, (await withActor(w.a.prac, (tx) => tx.query('select assessment_id from assessment_revisions where id=$1', [S.rev]))).rows[0].assessment_id);
     expect(d.approved.method_review_status).toBe('approved');
     expect(d.method!.status).toBe('not_reviewed');
+  });
+});
+
+describe('pilot report issue gate', () => {
+  it('refuses to issue when the method has since been rejected', async () => {
+    await recordMethodReview(URL_, { method: 'twa_8h', version: TWA, status: 'rejected', reviewer: 'Test Reviewer', competence: 'Test', reviewedOn: yesterday, evidence: 'T-REJ', recordedBy: 'Test Operator' });
+    await expect(rep.generateReport(w.a.prac, S.asmtId, S.rev)).rejects.toThrow(/since been rejected/);
+    await recordMethodReview(URL_, { method: 'twa_8h', version: TWA, status: 'not_reviewed', recordedBy: 'Test Operator' });
+  });
+  it('refuses to issue, in a pilot organisation, a revision approved while at evaluation level', async () => {
+    const admin = new pg.Client({ connectionString: URL_ }); await admin.connect();
+    await admin.query(`update tenants set assurance_level='evaluation' where id=$1`, [w.A.tenant.id]);
+    const id = (await asmt.newRevision(w.a.prac, S.asmtId, { change_reason: 'Evaluation-level reassessment for test' })).id;
+    await asmt.updateDraft(w.a.prac, id, S.draft);
+    await asmt.calculate(w.a.prac, id);
+    await asmt.submitForReview(w.a.prac, id);
+    const ap = await asmt.approve(w.a.rev, id, { approval_scope: 'Evaluation approval for test', approval_limitations: 'Automated test only', confirm_reviewed: 'on' });
+    expect(ap.assurance_level_at_approval).toBe('evaluation');
+    const evalReport = await rep.generateReport(w.a.prac, S.asmtId, id);
+    expect((await rep.getReport(w.a.prac, evalReport.id)).content_html).toMatch(/NOT APPROVED UNDER AN AUTHORISED PILOT/);
+    await admin.query(`update tenants set assurance_level='pilot' where id=$1`, [w.A.tenant.id]);
+    await admin.end();
+    await expect(rep.generateReport(w.a.prac, S.asmtId, id)).rejects.toThrow(/not approved under the pilot controls/);
   });
 });
 
@@ -161,8 +205,13 @@ describe('workflow suspension under stop conditions', () => {
     // Other tenants are unaffected.
     await withActor(w.a.prac, (tx) => assertWorkflowActive(tx, 'field_sync'));
     const [r] = await field.syncBatch(w.b.prac, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: {} }]);
-    expect(r.outcome).toBe('rejected');
+    expect(r.outcome).toBe('deferred'); // devices keep the record pending and retry after resumption
     expect(r.message).toMatch(/suspended/);
+    const fake = randomUUID();
+    await expect(field.voidSamplingEvent(w.b.prac, fake, { reason: 'Suspension gate check reason' })).rejects.toThrow(/suspended/);
+    await expect(field.recordCustody(w.b.prac, fake, { event: 'handed_over', at: '2026-03-02T10:00' })).rejects.toThrow(/suspended/);
+    await expect(ctl.cancelAction(w.b.admin, fake, { reason: 'Suspension gate check reason' })).rejects.toThrow(/suspended/);
+    await expect(lab.receiveSubmission(w.b.prac, fake, { received_at: '2026-03-05T10:00', received_condition: 'Intact' })).rejects.toThrow(/suspended/);
     await expect(resumeWorkflows(URL_, t, ['field_sync'], 'Op', '')).rejects.toThrow(/evidence/);
     const left = await resumeWorkflows(URL_, t, ['field_sync'], 'Test Operator', 'REVALIDATION-TEST');
     expect(left).not.toContain('field_sync');
@@ -230,7 +279,7 @@ describe('controlled reference-data import', () => {
 
 describe('field recovery files', () => {
   const webcrypto = globalThis.crypto;
-  async function sealFor(spki: string, obj: object) {
+  async function sealFor(spki: string, obj: object, attest?: string) {
     const subtle = webcrypto.subtle;
     const pub = await subtle.importKey('spki', Buffer.from(spki, 'base64'), { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
     const rk = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
@@ -238,7 +287,10 @@ describe('field recovery files', () => {
     const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, rk, new TextEncoder().encode(JSON.stringify(obj)));
     const wk = await subtle.encrypt({ name: 'RSA-OAEP' }, pub, await subtle.exportKey('raw', rk));
     const b = (x: ArrayBuffer | Uint8Array) => Buffer.from(x as ArrayBuffer).toString('base64');
-    return { v: 1 as const, wk: b(wk), iv: b(iv), ct: b(ct) };
+    const e = { v: 1 as const, wk: b(wk), iv: b(iv), ct: b(ct) };
+    const { createHmac } = await import('node:crypto');
+    const k = attest ?? (await import('../src/services/recovery.js')).recoveryAttestKey(w.A.tenant.id, w.a.tech.userId);
+    return { ...e, mac: createHmac('sha256', Buffer.from(k, 'base64')).update(`${e.wk}.${e.iv}.${e.ct}`).digest('base64') };
   }
   it('opens sealed records server-side, rejects other organisations and tampering, and is idempotent', async () => {
     const { recoveryPublicKey, importRecoveryFile } = await import('../src/services/recovery.js');
@@ -250,8 +302,15 @@ describe('field recovery files', () => {
     const forged = await sealFor(spki, { ...rec, tenant_id: w.B.tenant.id });
     const tampered = { ...good, ct: Buffer.from(Buffer.from(good.ct, 'base64').map((x, i) => (i === 3 ? x ^ 1 : x))).toString('base64') };
     const file = (records: any[], tenant = w.A.tenant.id) => JSON.stringify({ format: 'ohea-field-recovery', version: 1, tenant_id: tenant, user_id: w.a.tech.userId, exported_at: '2026-10-18T09:00:00.000Z', records });
-    // Field technicians cannot import; reviewers/practitioners can.
+    // Importing needs both conflict-resolution and field-capture rights: neither technicians nor reviewers (approvers) alone.
     await expect(importRecoveryFile(w.a.tech, file([good]))).rejects.toThrow(/permission/);
+    await expect(importRecoveryFile(w.a.rev, file([good]))).rejects.toThrow(/permission/);
+    // Someone holding only the public key cannot attribute records to another user (no valid attestation MAC).
+    const { recoveryAttestKey } = await import('../src/services/recovery.js');
+    const spoofed = await sealFor(spki, { ...rec, client_uuid: randomUUID() }, recoveryAttestKey(w.A.tenant.id, w.a.prac2.userId));
+    const sp = await importRecoveryFile(w.a.prac, file([spoofed]));
+    expect(sp.undecryptable).toEqual([1]);
+    await expect(importRecoveryFile(w.a.prac, file([good]).replace(w.a.tech.userId, randomUUID()).replace(w.a.tech.userId, randomUUID()))).rejects.toThrow(/not a user of this organisation/);
     await expect(importRecoveryFile(w.b.prac, file([good]))).rejects.toThrow(/different organisation/);
     await expect(importRecoveryFile(w.b.prac, file([good], w.B.tenant.id))).rejects.toThrow(/No recovery key|could not/);
     const r = await importRecoveryFile(w.a.prac, file([good, forged, tampered]));

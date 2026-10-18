@@ -128,9 +128,33 @@ with sync_playwright() as p:
     try:
         ctx3 = b.new_context(); pg3 = ctx3.new_page()
         login(pg3, 'practitioner@demo.test')
+        # A device that used an earlier version holds an unencrypted 'ohea-field' store with an unsynchronised record.
+        pg3.goto(BASE + '/samples')
+        legacy_code = 'NF-LEG-' + os.urandom(2).hex().upper()
+        pg3.evaluate('''async (code) => {
+          const b = await (await fetch('/api/field/bootstrap')).json();
+          const db = await new Promise(r => { const q = indexedDB.open('ohea-field', 1); q.onupgradeneeded = () => { q.result.createObjectStore('records', { keyPath: 'client_uuid' }); q.result.createObjectStore('meta'); }; q.onsuccess = () => r(q.result); });
+          await new Promise(r => { const t = db.transaction(['records', 'meta'], 'readwrite');
+            t.objectStore('meta').put(b.userId, 'owner');
+            t.objectStore('records').put({ client_uuid: crypto.randomUUID(), state: 'pending', server_id: null, base_version: null, payload: { plan_id: b.plans[0].id, sample_code: code, sample_type: 'static', timezone: 'Europe/London', start_local: '2026-10-14T08:00', end_local: '2026-10-14T12:00', flow_pre_lpm: 2, flow_post_lpm: 2, interruptions: [] } });
+            t.oncomplete = r; });
+          db.close();
+        }''', legacy_code)
         pg3.goto(BASE + '/field'); pg3.wait_for_selector('text=Online-only capture')
+        pg3.wait_for_selector('.badge.b-ok', timeout=15000)
         names = pg3.evaluate("async () => (await indexedDB.databases()).map(d => d.name)")
+        check('online-only mode sends the earlier version\'s unencrypted records, then deletes that store', legacy_code in pg3.content() and 'ohea-field' not in names, str(names))
         check('online-only mode creates no browser database', not [n for n in names if n.startswith('ohea-field')], str(names))
+        # Unsent record in online-only mode: warning shown while the page holds it.
+        pg3.route('**/api/sync', lambda route: route.fulfill(status=503, body='down'))
+        pg3.click('text=New sample'); pg3.fill('input[name=sample_code]', 'NF-UNSENT-' + os.urandom(2).hex())
+        pg3.select_option('select[name=plan_id]', index=1); pg3.select_option('select[name=sample_type]', 'static'); pg3.fill('input[name=start_local]', '2026-10-15T08:00')
+        pg3.click('text=Save and send'); pg3.wait_for_selector('text=held only in this open page')
+        check('online-only mode warns that an unsent record is held only in the open page', True)
+        pg3.unroute('**/api/sync'); pg3.click('text=Sync now')
+        try: pg3.wait_for_selector('text=held only in this open page', state='detached', timeout=15000)
+        except Exception: pass
+        check('the unsent record is sent when the server is reachable again', 'held only in this open page' not in pg3.content(), pg3.inner_text('table')[:300].replace('\n', ' | '))
         ctx3.set_offline(True)
         pg3.evaluate("window.dispatchEvent(new Event('offline'))")
         pg3.wait_for_selector('text=new records cannot be saved')

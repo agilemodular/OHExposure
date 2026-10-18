@@ -249,6 +249,7 @@ export async function closeVerified(a: Actor, id: string, input: unknown) {
 export async function cancelAction(a: Actor, id: string, input: unknown) {
   const d = parse(z.object({ reason: reqStr(10) }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'action_closure');
     const act = await one(tx, 'select * from actions where id=$1 for update', [id]);
     if (!act || ['verified_closed', 'cancelled'].includes(act.status)) throw invalid('Action cannot be cancelled');
     if (act.source_type === 'control_inspection' || act.priority === 'urgent') {

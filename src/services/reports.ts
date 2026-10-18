@@ -1,8 +1,8 @@
 import { config } from '../config.js';
 import { sha256 } from '../auth/crypto.js';
 import { audit, can, many, one, requirePerm, withActor, type Actor } from '../db.js';
-import { forbidden, invalid, notFound } from '../errors.js';
-import { assertWorkflowActive, methodReview, tenantControls } from './assurance.js';
+import { AppError, forbidden, invalid, notFound } from '../errors.js';
+import { assertWorkflowActive, METHOD_APPROVED, methodReview, tenantControls } from './assurance.js';
 import { bmBadge, dqBadge, fmtDate, fmtDateTime, fmtNum, html, interval, label, psBadge, raw } from '../ui/html.js';
 
 /**
@@ -23,8 +23,21 @@ export async function generateReport(a: Actor, assessmentId: string, revisionId:
     const issued = rev.status === 'approved';
     if (issued) await assertWorkflowActive(tx, 'report_issue');
     // Issued reports state the method review status frozen at approval; drafts state the current status.
-    const methodStatus: string = issued ? (rev.method_review_status ?? 'not recorded (approved before method review tracking)') : (await methodReview(tx, rev.calc_code ?? 'twa_8h', rev.calc_version)).status;
+    const current = await methodReview(tx, rev.calc_code ?? 'twa_8h', rev.calc_version);
+    const methodStatus: string = issued ? (rev.method_review_status ?? 'not_recorded') : current.status;
+    const methodOk = METHOD_APPROVED.has(methodStatus);
+    // Conditions in force when the method status was fixed (at approval for issued reports).
+    const review = await one(tx, `select status, conditions, reviewer_name, reviewed_on from method_reviews where calc_code=$1 and calc_version=$2 ${issued ? 'and recorded_at <= $3' : ''} order by recorded_at desc limit 1`,
+      issued ? [rev.calc_code ?? 'twa_8h', rev.calc_version, rev.approved_at] : [rev.calc_code ?? 'twa_8h', rev.calc_version]);
     const controls = await tenantControls(tx);
+    const levelAtApproval: string | null = issued ? (rev.assurance_level_at_approval ?? null) : null;
+    if (issued && controls.assuranceLevel === 'pilot') {
+      // A pilot organisation can only issue reports for conclusions approved under the pilot gate.
+      if (levelAtApproval !== 'pilot' || !methodOk || rev.benchmark_provenance !== 'professional_reference')
+        throw new AppError(422, 'not_pilot_approved', 'This revision was not approved under the pilot controls (approved method and professional reference benchmark). Create a new revision and have it approved before issuing a report.');
+      if (current.status === 'rejected')
+        throw new AppError(422, 'method_rejected', 'The calculation method used by this revision has since been rejected by professional review. Reassess before issuing a report.');
+    }
     const plan = as.plan_id ? await one(tx, 'select * from monitoring_plans where id=$1', [as.plan_id]) : null;
     const tasks = await many(tx, 'select t.name, t.description, p.name process_name from exposure_group_tasks gt join tasks t on t.id=gt.task_id join processes p on p.id=t.process_id where gt.group_id=$1', [as.group_id]);
     const bench = rev.benchmark_version_id ? await one(tx, 'select v.*, b.jurisdiction, b.benchmark_type, b.averaging_minutes from benchmark_versions v join benchmarks b on b.id=v.benchmark_id where v.id=$1', [rev.benchmark_version_id]) : null;
@@ -63,8 +76,11 @@ ${tasks.length ? html`<ul>${tasks.map((t) => html`<li>${t.process_name} — ${t.
 <h2>3. Sampling strategy and methods</h2>
 ${plan ? html`<p><strong>Approach:</strong> ${label(plan.approach)}. ${plan.strategy_rationale}</p>${plan.coverage_notes ? html`<p><strong>Coverage:</strong> ${plan.coverage_notes}</p>` : ''}` : html`<p>No monitoring plan linked.</p>`}
 <ul>${methods.map(([k, m]: any) => html`<li>${k} — result basis ${label(m.resultBasis)}; flow tolerance ${m.flowDriftTolerancePct ?? 'not defined'}%; ${m.suitableForFormalAssessment ? 'suitable for formal assessment' : 'indicative only'}</li>`)}</ul>
-<p class="${/approved/.test(methodStatus) ? '' : 'draftnote'}"><strong>Method review status:</strong> ${label(methodStatus)}${/approved/.test(methodStatus) ? '' : ' — this calculation method has not been approved by a competent occupational hygienist. Results are for discussion only and must not be relied upon for conclusions.'}</p>
-${controls.assuranceLevel === 'evaluation' ? html`<p class="draftnote">EVALUATION USE — this organisation is not operating under an authorised pilot. Outputs are not for reliance.</p>` : ''}
+<p class="${methodOk ? '' : 'draftnote'}"><strong>Method review status${issued ? ' at approval' : ''}:</strong> ${methodStatus === 'not_recorded' ? 'not recorded (approved before method review tracking)' : label(methodStatus)}${methodOk && review ? html` — ${review.reviewer_name}, ${fmtDate(review.reviewed_on)}${review.conditions ? html`. <strong>Conditions:</strong> ${review.conditions}` : ''}` : ''}${methodOk ? '' : ' — this calculation method has not been approved by a competent occupational hygienist. Results are for discussion only and must not be relied upon for conclusions.'}</p>
+${issued && current.status !== methodStatus && methodStatus !== 'not_recorded' ? html`<p class="draftnote"><strong>Current method review status:</strong> ${label(current.status)} (changed since approval). Reassessment may be required.</p>` : ''}
+${issued
+  ? (levelAtApproval === 'pilot' ? '' : levelAtApproval === 'demo' ? '' : html`<p class="draftnote">NOT APPROVED UNDER AN AUTHORISED PILOT — ${levelAtApproval ? `approved while the organisation was at ${levelAtApproval} level` : 'approved before assurance levels were recorded'}. Outputs are not for reliance.</p>`)
+  : (controls.assuranceLevel === 'evaluation' ? html`<p class="draftnote">EVALUATION USE — this organisation is not operating under an authorised pilot. Outputs are not for reliance.</p>` : '')}
 <p><strong>Calculation:</strong> ${out.calcCode} v${out.calcVersion} (engine ${out.engineVersion}). ${out.calcCode === 'stel_15' ? html`Short-sample assumption: ${label(rev.parameters?.shortSampleAssumption ?? 'none')}${rev.parameters?.shortSampleJustification ? html` — ${rev.parameters.shortSampleJustification}` : ''}.` : html`Parameters: exposure per shift ${rev.parameters?.exposureMinutesPerShift ?? 'not recorded'} min; unsampled period assumption: ${label(rev.parameters?.unsampledAssumption ?? 'none')}${rev.parameters?.unsampledJustification ? html` — ${rev.parameters.unsampledJustification}` : ''}.`}</p>
 
 <h2>4. Instruments and quality checks</h2>

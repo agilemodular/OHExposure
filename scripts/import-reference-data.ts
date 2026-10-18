@@ -63,6 +63,8 @@ export async function importReferenceData(url: string, json: unknown, opts: { dr
   if (!opts.importedBy?.trim()) throw new Error('--imported-by is required');
   const { rows, errors } = validateFile(json);
   if (errors.length) throw new Error(`Validation failed; nothing imported:\n  ${errors.join('\n  ')}`);
+  const self = rows.filter((r) => r.provenance === 'professional_reference' && r.reviewer_name.trim().toLowerCase() === opts.importedBy.trim().toLowerCase());
+  if (self.length) throw new Error('The operator importing professional reference rows cannot be their reviewer; nothing imported');
   const c = new pg.Client({ connectionString: url });
   await c.connect();
   const result = { created: 0, skippedExisting: 0, substancesCreated: 0 };

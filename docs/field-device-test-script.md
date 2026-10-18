@@ -20,7 +20,7 @@ Device make and model · operating system and version · browser and version · 
 
 | # | Area | Step | Expected result |
 |---|---|---|---|
-| F1 | Setup | Open Field sampling online for the first time | Asked to set a device PIN (≥ 6 characters); status "Online — all records … synchronised" |
+| F1 | Setup | Open Field sampling online for the first time | Asked to set a device PIN (≥ 8 characters including a letter or symbol; an all-digit PIN is refused); status "Online — all records … synchronised" |
 | F2 | Offline access | Airplane mode on, reload | Page opens; PIN required; after unlock, status "Offline" with the reference-data date |
 | F3 | Capture | Create a personal sample offline with start, finish, flows and tasks | Saved; "Waiting to sync" |
 | F4 | Capture | Create a sample with an interruption | Saved; interruption kept |
@@ -62,4 +62,4 @@ Device make and model · operating system and version · browser and version · 
 
 | Environment | Build | Coverage | Result | Date |
 |---|---|---|---|---|
-| Desktop Chromium 141, headless Playwright, 420 × 900 viewport, development server | Phase H1 working tree (see `test-evidence.md`) | Automated equivalents of F1–F3, F6 (reload), F8 (one wrong PIN), F11, F17, F18, F21, plus a scan of IndexedDB for plaintext | 17/17 checks passed | 18 Oct 2026 |
+| Desktop Chromium 141, headless Playwright, 420 × 900 viewport, development server | Phase H1 working tree (see `test-evidence.md`) | Automated equivalents of F1–F3, F6 (reload), F8 (one wrong PIN), F11, F17, F18, F21, online-only legacy-store migration and unsent-record warning, plus a scan of IndexedDB for plaintext | 20/20 checks passed | 18 Oct 2026 |

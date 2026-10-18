@@ -30,6 +30,9 @@ export async function tenantControls(tx: Tx): Promise<TenantControls> {
   const t = await one(tx, 'select assurance_level, offline_capture_enabled, suspended_workflows, suspension_reason from tenants where id = app_tenant()');
   return { assuranceLevel: t.assurance_level, offlineCaptureEnabled: t.offline_capture_enabled, suspendedWorkflows: t.suspended_workflows ?? [], suspensionReason: t.suspension_reason };
 }
+/** Statuses that permit use of a method in conclusions. Compared exactly, never by pattern. */
+export const METHOD_APPROVED = new Set(['approved', 'approved_with_conditions']);
+
 export const controlsFor = (a: Actor) => withActor(a, tenantControls);
 
 /** Refuses an action whose workflow has been suspended under a pilot stop condition. Records are not touched. */
@@ -70,13 +73,15 @@ export async function methodCapabilities(a: Actor) {
 export async function assertConclusionAllowed(tx: Tx, calcCode: CalcCode, calcVersion: string, benchmarkVersionId: string | null) {
   const c = await tenantControls(tx);
   const m = await methodReview(tx, calcCode, calcVersion);
-  const b = benchmarkVersionId ? await one(tx, 'select provenance, verification_status from benchmark_versions where id=$1', [benchmarkVersionId]) : null;
+  const b = benchmarkVersionId ? await one(tx, 'select v.provenance, v.verification_status, bm.averaging_minutes from benchmark_versions v join benchmarks bm on bm.id=v.benchmark_id where v.id=$1', [benchmarkVersionId]) : null;
   if (c.assuranceLevel === 'pilot') {
     if (m.status !== 'approved' && m.status !== 'approved_with_conditions')
       throw new AppError(422, 'method_not_approved', `The ${CALCULATIONS[calcCode].label} method (v${calcVersion}) is ${m.status.replace(/_/g, ' ')} by a competent occupational hygienist and cannot be used for pilot conclusions.`);
     if (!b) throw new AppError(422, 'benchmark_required', 'Pilot conclusions require a professionally verified reference benchmark.');
     if (b.provenance !== 'professional_reference' || b.verification_status !== 'verified')
       throw new AppError(422, 'benchmark_not_reference', 'Pilot conclusions require a professionally verified reference benchmark. Organisation-entered and synthetic benchmarks can be used for calculation and discussion only.');
+    if (b.averaging_minutes !== CALCULATIONS[calcCode].averagingMinutes)
+      throw new AppError(422, 'benchmark_not_comparable', `The benchmark's averaging period (${b.averaging_minutes} min) does not match the ${CALCULATIONS[calcCode].label} (${CALCULATIONS[calcCode].averagingMinutes} min).`);
   }
   return { methodStatus: m.status, benchmarkProvenance: b?.provenance ?? null, controls: c };
 }

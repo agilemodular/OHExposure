@@ -1,3 +1,4 @@
+import { METHOD_APPROVED } from '../services/assurance.js';
 import type { FastifyInstance } from 'fastify';
 import { can } from '../db.js';
 import * as asmt from '../services/assessments.js';
@@ -111,7 +112,7 @@ export function assessmentRoutes(app: FastifyInstance) {
         <dt>Scope</dt><dd>${r.approval_scope}</dd><dt>Limitations</dt><dd>${r.approval_limitations}</dd><dt>Record hash</dt><dd><code>${r.snapshot_hash}</code></dd></dl></section>` : ''}
 
       <h2>Calculation</h2>
-      ${d.method ? html`<p>${/approved/.test(d.method.status)
+      ${d.method ? html`<p>${METHOD_APPROVED.has(d.method.status)
         ? html`<span class="badge b-ok">Method approved${d.method.status === 'approved_with_conditions' ? ' with conditions' : ''}</span> <span class="small muted">${d.method.reviewer}, ${fmtDate(d.method.reviewedOn)}${d.method.conditions ? ` — ${d.method.conditions}` : ''}</span>`
         : d.method.status === 'rejected' ? html`<span class="badge b-bad">Method rejected by professional review — unavailable for conclusions</span>`
         : html`<span class="badge b-warn">Method not reviewed</span> <span class="small">${d.controls.assuranceLevel === 'pilot' ? 'Results are shown for reconciliation only; this revision cannot be submitted or approved until the method is approved.' : 'Results are for discussion only and are labelled as unreviewed in reports.'}</span>`}</p>` : ''}

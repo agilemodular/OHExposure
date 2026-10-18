@@ -36,6 +36,7 @@ export async function sendAlert(event: AlertEvent, detail: Record<string, unknow
   const now = Date.now();
   if ((recent.get(k) ?? 0) > now - WINDOW_MS) return false;
   recent.set(k, now);
+  if (recent.size > 5000) for (const [rk, t] of recent) if (t <= now - WINDOW_MS) recent.delete(rk);
   const body = { event, severity: SEVERITY[event], at: new Date(now).toISOString(), service: 'ohea', detail };
   sentAlerts.push({ event, detail });
   if (sentAlerts.length > 200) sentAlerts.shift();

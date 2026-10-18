@@ -234,8 +234,8 @@ export async function approve(a: Actor, revId: string, input: unknown) {
     const prev = await many(tx, `select id from assessment_revisions where assessment_id=$1 and status='approved' and id<>$2`, [r.assessment_id, revId]);
     for (const p of prev) await tx.query(`update assessment_revisions set status='superseded' where id=$1`, [p.id]);
     const out = await one(tx, `update assessment_revisions set status='approved', reviewer_id=$2, approved_at=now(), approval_scope=$3, approval_limitations=$4, snapshot_hash=$5,
-        method_review_status=$6, benchmark_provenance=$7 where id=$1 returning *`,
-      [revId, a.userId, d.approval_scope, d.approval_limitations, snapshotHash, gate.methodStatus, gate.benchmarkProvenance]);
+        method_review_status=$6, benchmark_provenance=$7, assurance_level_at_approval=$8 where id=$1 returning *`,
+      [revId, a.userId, d.approval_scope, d.approval_limitations, snapshotHash, gate.methodStatus, gate.benchmarkProvenance, gate.controls.assuranceLevel]);
     await audit(tx, a, 'assessment.approved', 'assessment_revision', revId, { scope: d.approval_scope, limitations: d.approval_limitations, snapshot_hash: snapshotHash, superseded: prev.map((p) => p.id) });
     // Optional outbound integration messages (only if the tenant enabled the link; mock by default).
     const ctx = await one(tx, `select a.id, a.title, g.name group_name, si.reference site_ref, s.name substance, s.cas_number from assessments a join exposure_groups g on g.id=a.group_id

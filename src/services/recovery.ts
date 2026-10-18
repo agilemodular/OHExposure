@@ -6,7 +6,7 @@
 // device therefore contains ciphertext only; it can be opened only by this server, for the same organisation, by a
 // user with the conflicts.resolve permission. Recovered records go through the normal idempotent sync path, so a
 // record that already reached the server is recognised as a duplicate and a stale edit becomes a reviewable conflict.
-import { createCipheriv, createDecipheriv, createHash, generateKeyPairSync, privateDecrypt, constants, randomBytes, scryptSync } from 'node:crypto';
+import { createCipheriv, createDecipheriv, createHash, createHmac, generateKeyPairSync, privateDecrypt, constants, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { sendAlert } from '../alerts.js';
 import { audit, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
@@ -40,14 +40,29 @@ export async function recoveryPublicKey(tx: Tx, tenantId: string): Promise<strin
   return r?.public_key_spki ?? (await one(tx, 'select public_key_spki from field_recovery_keys')).public_key_spki;
 }
 
-const envelope = z.object({ v: z.literal(1), wk: z.string().min(16), iv: z.string().min(8), ct: z.string().min(8) });
+/**
+ * Per-user attestation key. Sent to the device only inside the PIN-encrypted reference data; each envelope carries an
+ * HMAC under it, so a recovery file can only claim records for the user whose device (and PIN) produced it. Holding the
+ * organisation's public key alone is not enough to forge an attributable record.
+ */
+export const recoveryAttestKey = (tenantId: string, userId: string) => createHmac('sha256', kek()).update(`ohea-recovery-attest|${tenantId}|${userId}`).digest('base64');
+const macOk = (key: string, e: { wk: string; iv: string; ct: string; mac: string }) => {
+  const want = createHmac('sha256', Buffer.from(key, 'base64')).update(`${e.wk}.${e.iv}.${e.ct}`).digest();
+  const got = Buffer.from(e.mac, 'base64');
+  return got.length === want.length && timingSafeEqual(got, want);
+};
+
+const envelope = z.object({ v: z.literal(1), wk: z.string().min(16).max(2000), iv: z.string().min(8).max(64), ct: z.string().min(8).max(200_000), mac: z.string().min(16).max(200) });
 const file = z.object({
   format: z.literal('ohea-field-recovery'), version: z.literal(1), tenant_id: z.string().uuid(), user_id: z.string().uuid(),
   exported_at: z.string(), records: z.array(envelope).min(1).max(500),
 });
 
 export async function importRecoveryFile(a: Actor, raw: string) {
+  // Importing creates field evidence, so it needs both conflict-resolution and field-capture rights.
   requirePerm(a, 'conflicts.resolve');
+  requirePerm(a, 'field.capture');
+  if (raw.length > 5_000_000) throw invalid('Recovery file is too large.');
   let parsed: z.infer<typeof file>;
   try { parsed = file.parse(JSON.parse(raw)); } catch { throw invalid('This is not a valid field recovery file.'); }
   if (parsed.tenant_id !== a.tenantId) throw invalid('This recovery file belongs to a different organisation and cannot be imported here.');
@@ -57,11 +72,15 @@ export async function importRecoveryFile(a: Actor, raw: string) {
     already: await one(tx, 'select id, imported_at from field_recovery_imports where file_sha256=$1', [sha]),
   }));
   if (!pk) throw invalid('No recovery key exists for this organisation, so this file cannot have been produced here.');
+  const owner = await withActor(a, (tx) => one(tx, 'select id from users where id=$1', [parsed.user_id]));
+  if (!owner) throw invalid('The user named in this recovery file is not a user of this organisation.');
+  const attest = recoveryAttestKey(a.tenantId, parsed.user_id);
   const priv = { key: unseal(pk.private_key_enc), format: 'der' as const, type: 'pkcs8' as const, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' };
   const items: any[] = [];
   const undecryptable: number[] = [];
   parsed.records.forEach((e, i) => {
     try {
+      if (!macOk(attest, e)) { undecryptable.push(i + 1); return; }
       const key = privateDecrypt(priv, Buffer.from(e.wk, 'base64'));
       const buf = Buffer.from(e.ct, 'base64');
       const d = createDecipheriv('aes-256-gcm', key, Buffer.from(e.iv, 'base64'));

@@ -83,6 +83,9 @@ export function authRoutes(app: FastifyInstance) {
     const si = await resolveSession(req.cookies[SESSION_COOKIE], req.ip);
     if (si && (req.body as any)?._csrf === si.csrf) await logout(si);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
+    // Remove the cached page shell (it contains the user's name and form token). Never "storage": that would delete
+    // encrypted, unsynchronised field records.
+    reply.header('Clear-Site-Data', '"cache"');
     return reply.redirect('/login', 303);
   });
 

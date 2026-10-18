@@ -180,6 +180,7 @@ export async function voidSamplingEvent(a: Actor, id: string, input: unknown) {
   if (!can(a, 'assess.write') && !can(a, 'field.capture')) throw forbidden();
   const d = parse(z.object({ reason: reqStr(5) }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync');
     const cur = await one(tx, 'select status from sampling_events where id=$1', [id]);
     if (!cur) throw notFound('Sampling event');
     // Once a sample is with the laboratory or has results, voiding it changes evidence: practitioners only, with a full reason.
@@ -199,6 +200,7 @@ export async function addQcCheck(a: Actor, sampleId: string, input: unknown) {
   if (!can(a, 'field.capture') && !can(a, 'lab.write')) throw forbidden();
   const d = parse(z.object({ check_type: reqStr(2, 100), outcome: z.enum(['pass', 'fail', 'not_applicable']), detail: optStr }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync');
     const e = await one(tx, 'select tenant_id, client_id from sampling_events where id=$1', [sampleId]);
     if (!e) throw notFound('Sampling event');
     const r = await one(tx, 'insert into sample_qc_checks (tenant_id,client_id,sampling_event_id,check_type,outcome,detail,recorded_by) values ($1,$2,$3,$4,$5,$6,$7) returning *',
@@ -211,6 +213,7 @@ export async function disposeQcFailure(a: Actor, checkId: string, input: unknown
   if (!can(a, 'assess.write') && !can(a, 'assess.approve')) throw forbidden('Only a practitioner or reviewer can disposition a failed check');
   const d = parse(z.object({ disposition: z.enum(['accepted_with_justification', 'sample_invalidated']), reason: reqStr(20) }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync');
     const q = await one(tx, 'select * from sample_qc_checks where id=$1 for update', [checkId]);
     if (!q) throw notFound('QC check');
     if (q.outcome !== 'fail') throw invalid('Only failed checks need a disposition');
@@ -225,6 +228,7 @@ export async function recordCustody(a: Actor, sampleId: string, input: unknown) 
   if (!can(a, 'field.capture') && !can(a, 'lab.write')) throw forbidden();
   const d = parse(z.object({ event: z.enum(['handed_over', 'dispatched', 'received_by_lab', 'returned', 'discarded']), at: z.string(), timezone: z.string().default('Europe/London'), party: optStr, condition: optStr, notes: optStr }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync');
     const e = await one(tx, 'select * from sampling_events where id=$1 for update', [sampleId]);
     if (!e) throw notFound('Sampling event');
     if (e.status === 'void') throw invalid('Sample is void');
@@ -243,7 +247,7 @@ export const syncItem = z.object({
   base_version: z.number().int().nullable(),
   payload: z.record(z.string(), z.unknown()),
 });
-export type SyncResult = { client_uuid: string; outcome: 'created' | 'updated' | 'duplicate' | 'conflict' | 'rejected'; server_id?: string; version?: number; conflict_id?: string; message?: string; warnings?: string[] };
+export type SyncResult = { client_uuid: string; outcome: 'created' | 'updated' | 'duplicate' | 'conflict' | 'rejected' | 'deferred'; server_id?: string; version?: number; conflict_id?: string; message?: string; warnings?: string[] };
 
 /** Canonical form of a field record for duplicate detection (independent of DB vs input representation). */
 function comparable(row: any) {
@@ -268,7 +272,9 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
   if (opts.requirePerm !== false) requirePerm(a, 'field.capture');
   // A suspended workflow refuses every item; nothing is lost because the device keeps its copy.
   try { await withActor(a, (tx) => assertWorkflowActive(tx, 'field_sync')); } catch (e: any) {
-    return (items as any[]).map((x) => ({ client_uuid: x?.client_uuid ?? '?', outcome: 'rejected' as const, message: e.message }));
+    if (!(e instanceof AppError) || e.code !== 'workflow_suspended') throw e;
+    // Deferred, not rejected: devices keep the records pending and retry after the workflow is resumed.
+    return (items as any[]).map((x) => ({ client_uuid: x?.client_uuid ?? '?', outcome: 'deferred' as const, message: e.message }));
   }
   const clockOffsetS = typeof opts.deviceNow === 'number' && Number.isFinite(opts.deviceNow) ? Math.round((Date.now() - opts.deviceNow) / 1000) : null;
   const out: SyncResult[] = [];
@@ -293,6 +299,11 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
           const { event, warnings } = await applyUpdate(tx, a, cur, d, true);
           return { client_uuid: it.client_uuid, outcome: 'updated', server_id: event.id, version: event.version, warnings };
         }
+        // The same device copy re-sent (retry, recovery re-import) is not recorded as a new conflict.
+        const prior = await one(tx, `select id, status from sync_conflicts where entity_id=$1 and client_uuid=$2 and coalesce(base_version,-1)=coalesce($3::int,-1) and client_payload=$4::jsonb order by submitted_at desc limit 1`,
+          [cur.id, it.client_uuid, it.base_version, JSON.stringify(it.payload)]);
+        if (prior) return { client_uuid: it.client_uuid, outcome: 'conflict', server_id: cur.id, version: cur.version, conflict_id: prior.id,
+          message: prior.status === 'open' ? 'Already recorded as a conflict awaiting review.' : 'This device copy was already reviewed as a conflict; no new conflict was recorded.' };
         const c = await one(tx, `insert into sync_conflicts (tenant_id,client_id,entity_type,entity_id,client_uuid,base_version,server_version,client_payload,server_payload,submitted_by)
           values ($1,$2,'sampling_event',$3,$4,$5,$6,$7,$8,$9) returning id`,
           [a.tenantId, cur.client_id, cur.id, it.client_uuid, it.base_version, cur.version, it.payload, cur, a.userId]);
@@ -320,6 +331,7 @@ export async function resolveConflict(a: Actor, id: string, input: unknown) {
     if (!c) throw notFound('Conflict');
     if (c.status !== 'open') throw invalid('Conflict already resolved');
     if (d.resolution === 'resolved_apply_client') {
+      await assertWorkflowActive(tx, 'field_sync');
       const cur = await one(tx, 'select * from sampling_events where id=$1 for update', [c.entity_id]);
       const p = parse(samplingInput, { ...c.client_payload, client_uuid: cur.client_uuid });
       await applyUpdate(tx, a, cur, p, true);

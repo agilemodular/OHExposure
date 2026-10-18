@@ -18,6 +18,7 @@ import { sendAlert } from '../src/alerts.js';
 const WORKFLOWS = ['field_sync', 'lab_import', 'assessment_approval', 'report_issue', 'action_closure'];
 
 export async function setTenantLevel(url: string, tenantId: string, level: 'evaluation' | 'pilot', authorisedBy: string, evidence: string) {
+  if (!['evaluation', 'pilot'].includes(level)) throw new Error('--level must be evaluation or pilot');
   if (!authorisedBy?.trim() || !evidence?.trim()) throw new Error('--authorised-by and --evidence are required');
   return withAdmin(url, async (c) => {
     const t = (await c.query('select is_demo, assurance_level from tenants where id=$1', [tenantId])).rows[0];
