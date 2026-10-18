@@ -4,6 +4,8 @@ import { invalid } from '../errors.js';
 import * as field from '../services/field.js';
 import * as att from '../services/attachments.js';
 import { lookups, substanceLabel, workerLabel } from '../services/lookups.js';
+import { controlsFor } from '../services/assurance.js';
+import { importRecoveryFile, recoveryPublicKey } from '../services/recovery.js';
 import { utcToZonedInput } from '../services/util.js';
 import { fmtDate, fmtDateTime, html, label } from '../ui/html.js';
 import { csrfField, empty, options, type PageCtx } from '../ui/layout.js';
@@ -34,15 +36,54 @@ export function fieldRoutes(app: FastifyInstance) {
     requirePerm(c.actor, 'field.capture');
     const lk = await lookups(c.actor);
     const plans = await withActor(c.actor, (tx) => many(tx, `select p.id, p.title, s.name site_name from monitoring_plans p join sites s on s.id=p.site_id where p.status in ('scheduled','in_progress') order by p.planned_start nulls last`));
+    const ctl = await controlsFor(c.actor);
+    const recoveryKey = ctl.offlineCaptureEnabled ? await withActor(c.actor, (tx) => recoveryPublicKey(tx, c.actor.tenantId)) : null;
     return {
-      userId: c.actor.userId, csrf: c.csrf, fetchedAt: new Date().toISOString(), cacheDays: 7,
+      userId: c.actor.userId, tenantId: c.actor.tenantId, csrf: c.csrf, fetchedAt: new Date().toISOString(),
+      // Offline policy (see docs/offline-field-capture.md). Offline storage is only offered when a platform operator has
+      // enabled it for the organisation after the offline data-protection gate is accepted (demo tenants: synthetic data).
+      offline: { enabled: ctl.offlineCaptureEnabled, cacheDays: 7, lockMinutes: 15, syncedRetentionHours: 24, recoveryKey, demo: ctl.assuranceLevel === 'demo' },
       plans,
-      workers: lk.workers.map((w) => ({ id: w.id, label: workerLabel(w) })),
+      // Minimum dataset: pseudonymous worker reference codes only. Names and employee numbers are never sent to the device;
+      // the mapping from reference code to person stays on the server under role-restricted access.
+      workers: lk.workers.map((w) => ({ id: w.id, label: w.ref_code })),
       groups: lk.groups.map((g) => ({ id: g.id, label: `${g.name} (${g.site_name})` })),
       instruments: lk.instruments.filter((i) => i.status === 'in_service').map((i) => ({ id: i.id, label: `${i.asset_tag}${i.screening_only ? ' (screening only)' : ''}` })),
       methods: lk.methods.map((m) => ({ id: m.id, label: `${m.code} v${m.version}` })),
       substances: lk.substances.map((s) => ({ id: s.id, label: substanceLabel(s) })),
     };
+  });
+  // ── Recovery of unsynchronised records exported from a device (ciphertext only; opened server-side)
+  page(app, '/field/recovery', async (c) => {
+    requirePerm(c.actor, 'conflicts.resolve');
+    const rows = await withActor(c.actor, (tx) => many(tx, `select i.*, u.name imported_by_name, o.name original_name from field_recovery_imports i
+      left join users u on u.id=i.imported_by left join users o on o.id=i.original_user_id order by imported_at desc limit 50`));
+    return {
+      title: 'Recover field records', crumbs: [['Conflicts', '/conflicts'], ['Recovery']],
+      sub: 'Import a recovery file exported from a field device whose records could not be synchronised (for example a forgotten PIN, a revoked account or a damaged session).',
+      body: html`<div class="panel stack"><p>Recovery files contain encrypted records only. They can be opened by this server for this organisation and are processed through the normal synchronisation checks: records that already arrived are recognised as duplicates and edits to changed records become conflicts for review. Each recovered record keeps a reference to the person who captured it.</p>
+        <form method="post" action="/field/recovery" enctype="multipart/form-data" class="stack">${csrfField(c)}
+        <label>Recovery file <span class="hint">.json file exported from the field page</span><input type="file" name="file" accept=".json,application/json" required></label><div><button>Import</button></div></form></div>
+        <h2>Previous imports</h2>
+        ${rows.length ? html`<div class="tablewrap"><table><thead><tr><th>Imported</th><th>By</th><th>Captured by</th><th>Records</th><th>Outcomes</th></tr></thead><tbody>
+          ${rows.map((r) => html`<tr><td>${fmtDateTime(r.imported_at)}</td><td>${r.imported_by_name ?? '—'}</td><td>${r.original_name ?? r.original_user_id ?? '—'}</td><td>${r.items}</td>
+            <td class="small">${Object.entries((r.outcomes.results as any[]).reduce((m: any, x: any) => ({ ...m, [x.outcome]: (m[x.outcome] ?? 0) + 1 }), {})).map(([k, v]) => `${v} ${k}`).join(', ')}${r.outcomes.undecryptable?.length ? html` · <b>${r.outcomes.undecryptable.length} could not be opened</b>` : ''}</td></tr>`)}</tbody></table></div>` : empty('No recovery imports.')}`,
+    };
+  });
+  app.post('/field/recovery', async (req, reply) => {
+    const m = await authedMultipart(req, reply);
+    if (!m) return reply;
+    try {
+      if (!m.file) throw invalid('Choose a recovery file');
+      const r = await importRecoveryFile(m.si.actor, m.file.data.toString('utf8'));
+      const count = (o: string) => r.results.filter((x) => x.outcome === o).length;
+      setFlash(reply, r.undecryptable.length || count('rejected') ? 'warn' : 'ok',
+        `Recovery import: ${count('created')} created, ${count('updated')} updated, ${count('duplicate')} already present, ${count('conflict')} conflicts for review, ${count('rejected')} rejected${r.undecryptable.length ? `, ${r.undecryptable.length} could not be opened` : ''}.${r.previouslyImportedAt ? ' This file was imported before.' : ''}`);
+    } catch (e: any) {
+      if (!e.status) throw e;
+      setFlash(reply, 'err', e.message);
+    }
+    return reply.redirect('/field/recovery', 303);
   });
   api(app, 'POST', '/api/sync', async (c) => {
     const items = Array.isArray(c.body?.items) ? c.body.items : null;

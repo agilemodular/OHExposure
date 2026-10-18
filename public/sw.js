@@ -1,6 +1,6 @@
 // Service worker: keeps the field client shell available offline. It never caches API responses
 // other than through the client's own IndexedDB store, and never intercepts non-GET requests.
-const CACHE = 'ohea-field-v1';
+const CACHE = 'ohea-field-v2';
 const SHELL = ['/field', '/static/app.css', '/static/field.js', '/static/fonts/atkinson-hyperlegible-latin-400-normal.woff2', '/static/fonts/atkinson-hyperlegible-latin-700-normal.woff2'];
 
 self.addEventListener('install', (e) => {

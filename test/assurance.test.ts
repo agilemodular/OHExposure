@@ -215,3 +215,43 @@ describe('controlled reference-data import', () => {
     await admin.end();
   });
 });
+
+describe('field recovery files', () => {
+  const webcrypto = globalThis.crypto;
+  async function sealFor(spki: string, obj: object) {
+    const subtle = webcrypto.subtle;
+    const pub = await subtle.importKey('spki', Buffer.from(spki, 'base64'), { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    const rk = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+    const iv = webcrypto.getRandomValues(new Uint8Array(12));
+    const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, rk, new TextEncoder().encode(JSON.stringify(obj)));
+    const wk = await subtle.encrypt({ name: 'RSA-OAEP' }, pub, await subtle.exportKey('raw', rk));
+    const b = (x: ArrayBuffer | Uint8Array) => Buffer.from(x as ArrayBuffer).toString('base64');
+    return { v: 1 as const, wk: b(wk), iv: b(iv), ct: b(ct) };
+  }
+  it('opens sealed records server-side, rejects other organisations and tampering, and is idempotent', async () => {
+    const { recoveryPublicKey, importRecoveryFile } = await import('../src/services/recovery.js');
+    const spki = await withActor(w.a.tech, (tx) => recoveryPublicKey(tx, w.A.tenant.id));
+    const cu = randomUUID();
+    const rec = { tenant_id: w.A.tenant.id, user_id: w.a.tech.userId, client_uuid: cu, server_id: null, base_version: null,
+      payload: { ...S.payload, sample_code: `REC-${w.tag}`, start_local: '2026-03-03T08:00', end_local: '2026-03-03T12:00' } };
+    const good = await sealFor(spki, rec);
+    const forged = await sealFor(spki, { ...rec, tenant_id: w.B.tenant.id });
+    const tampered = { ...good, ct: Buffer.from(Buffer.from(good.ct, 'base64').map((x, i) => (i === 3 ? x ^ 1 : x))).toString('base64') };
+    const file = (records: any[], tenant = w.A.tenant.id) => JSON.stringify({ format: 'ohea-field-recovery', version: 1, tenant_id: tenant, user_id: w.a.tech.userId, exported_at: '2026-10-18T09:00:00.000Z', records });
+    // Field technicians cannot import; reviewers/practitioners can.
+    await expect(importRecoveryFile(w.a.tech, file([good]))).rejects.toThrow(/permission/);
+    await expect(importRecoveryFile(w.b.prac, file([good]))).rejects.toThrow(/different organisation/);
+    await expect(importRecoveryFile(w.b.prac, file([good], w.B.tenant.id))).rejects.toThrow(/No recovery key|could not/);
+    const r = await importRecoveryFile(w.a.prac, file([good, forged, tampered]));
+    expect(r.results.map((x) => x.outcome)).toEqual(['created']);
+    expect(r.undecryptable).toEqual([2, 3]);
+    const row = (await withActor(w.a.prac, (tx) => tx.query('select recovered_from_user, created_by from sampling_events where client_uuid=$1', [cu]))).rows[0];
+    expect(row.recovered_from_user).toBe(w.a.tech.userId);
+    expect(row.created_by).toBe(w.a.prac.userId);
+    const again = await importRecoveryFile(w.a.prac, file([good, forged, tampered]));
+    expect(again.results[0].outcome).toBe('duplicate');
+    expect(again.previouslyImportedAt).not.toBeNull();
+    expect(sentAlerts.some((a) => a.event === 'field.recovery_imported')).toBe(true);
+    await expect(importRecoveryFile(w.a.prac, '{"not":"a file"}')).rejects.toThrow(/not a valid/);
+  });
+});
