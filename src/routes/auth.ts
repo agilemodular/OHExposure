@@ -12,7 +12,7 @@ const authPage = (title: string, body: unknown, flash?: string | null) => html`<
 <title>${title} — ${config.branding.productName}</title><link rel="stylesheet" href="/static/app.css"></head><body><div class="auth">
 <div class="brandline"><b>${config.branding.productName}</b><span class="muted">${config.branding.endorsement}</span></div>
 <h1>${title}</h1>${flash ? html`<div class="flash err" role="alert">${flash}</div>` : ''}${body}
-<p class="muted small">${config.branding.promise}</p></div></body></html>`.value;
+<p class="muted small">${config.branding.promise}</p></div><script src="/static/signed-out.js"></script></body></html>`.value;
 
 const cookieOpts = { path: '/', httpOnly: true, sameSite: 'lax' as const, secure: config.cookieSecure };
 
@@ -83,8 +83,8 @@ export function authRoutes(app: FastifyInstance) {
     const si = await resolveSession(req.cookies[SESSION_COOKIE], req.ip);
     if (si && (req.body as any)?._csrf === si.csrf) await logout(si);
     reply.clearCookie(SESSION_COOKIE, { path: '/' });
-    // Remove the cached page shell (it contains the user's name and form token). Never "storage": that would delete
-    // encrypted, unsynchronised field records.
+    // Clears the HTTP cache. The service worker's cached page shell is removed by /static/signed-out.js on the sign-in page.
+    // Never "storage": that would delete encrypted, unsynchronised field records.
     reply.header('Clear-Site-Data', '"cache"');
     return reply.redirect('/login', 303);
   });

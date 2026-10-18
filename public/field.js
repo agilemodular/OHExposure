@@ -54,6 +54,7 @@
     const wk = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, await crypto.subtle.exportKey('raw', rk));
     const env = { v: 1, wk: b64(wk), iv: b64(iv), ct: b64(ct) };
     // Attestation: HMAC under this user's key (held only inside the PIN-encrypted cache) binds the envelope to the user.
+    if (!attestKey) throw new Error('This device needs to connect once to refresh its offline keys before records can be saved on it. Reconnect and unlock again.');
     const hk = await crypto.subtle.importKey('raw', unb64(attestKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
     env.mac = b64(await crypto.subtle.sign('HMAC', hk, te.encode(`${env.wk}.${env.iv}.${env.ct}`)));
     return env;
@@ -315,7 +316,8 @@
       const rec = existing
         ? { ...existing, payload, state: 'pending', base_version: existing.version ?? existing.base_version ?? null, message: null, updatedAt: now }
         : { client_uuid: uuid(), payload, state: 'pending', server_id: null, version: null, base_version: null, createdAt: now, updatedAt: now };
-      await saveRecord(rec);
+      try { await saveRecord(rec); }
+      catch (e) { f.prepend(el('div', { class: 'flash err', role: 'alert' }, `Not saved: ${e.message || e}`)); return; }
       render();
       sync();
     });
@@ -326,10 +328,20 @@
   async function syncNow() {
     const pending = records.filter((r) => r.state === 'pending' || r.state === 'error');
     if (!pending.length) return;
-    const res = await fetch('/api/sync', {
+    const send = () => fetch('/api/sync', {
       method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json', 'x-csrf-token': csrf },
       body: JSON.stringify({ device_now: Date.now(), items: pending.map((r) => ({ client_uuid: r.client_uuid, server_id: r.server_id, base_version: r.base_version, payload: r.payload })) }),
     });
+    let res = await send();
+    if (res.status === 401 || res.status === 403) {
+      // The user may have signed in again in another tab: pick up the new form token, but only for the same user.
+      try {
+        const b = await fetchBootstrap();
+        if (b.userId !== USER) throw new Error('This browser is now signed in as a different user. Sign in as the owner of these records to send them.');
+        csrf = b.csrf;
+        res = await send();
+      } catch (e) { if (!e.auth) throw e; }
+    }
     if (res.status === 401 || res.status === 403) throw new Error(encrypted()
       ? 'Your session has ended or your access has been withdrawn. Records stay encrypted on this device; sign in again, or ask a reviewer to recover them from an exported recovery file.'
       : 'Your session has ended. Unsent records are held only in this open page: sign in again in another tab, then press “Sync now” here. Closing or reloading this page loses them.');

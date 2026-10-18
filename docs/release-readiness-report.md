@@ -20,7 +20,7 @@ The evidence does not yet support a controlled pilot or a production release. Pi
   - session idle timeout, MFA on pre-existing sessions, signed security alerts
   - backup and restore-verification scripts
   - controlled reference-data import
-- **Automated evidence:** 127 tests, all passing (`test-evidence.md`); desktop browser check 20/20; development restore 18/18.
+- **Automated evidence:** 127 tests, all passing (`test-evidence.md`); desktop browser check 21/21; development restore 18/18.
 - **Independent software review:**
   - Three rounds during the build: no open critical or high findings.
   - One round on the Phase H1 controls: 3 high, 9 medium and 7 low findings. All high and medium findings are fixed with tests, except one documented gap: attachment upload is not gated by suspension. Four low findings remain documented.

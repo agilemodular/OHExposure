@@ -62,4 +62,4 @@ Device make and model · operating system and version · browser and version · 
 
 | Environment | Build | Coverage | Result | Date |
 |---|---|---|---|---|
-| Desktop Chromium 141, headless Playwright, 420 × 900 viewport, development server | Phase H1 working tree (see `test-evidence.md`) | Automated equivalents of F1–F3, F6 (reload), F8 (one wrong PIN), F11, F17, F18, F21, online-only legacy-store migration and unsent-record warning, plus a scan of IndexedDB for plaintext | 20/20 checks passed | 18 Oct 2026 |
+| Desktop Chromium 141, headless Playwright, 420 × 900 viewport, development server | Phase H1 working tree (see `test-evidence.md`) | Automated equivalents of F1–F3, F6 (reload), F8 (one wrong PIN), F11, F17, F18, F21, online-only legacy-store migration and unsent-record warning, plus a scan of IndexedDB for plaintext | 21/21 checks passed | 18 Oct 2026 |

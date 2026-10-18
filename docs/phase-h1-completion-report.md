@@ -47,7 +47,7 @@ Existing documents were updated rather than duplicated. The checklist now points
 |---|---|---|
 | `npm test` | Development, PostgreSQL 16.15, as the least-privilege role | **127 passed / 127** across 5 suites (105 at baseline; +22) |
 | Targeted: `test/assurance.test.ts` | Same | 19 tests: method gating, provenance, report issue gate, suspension of every workflow, MFA, idle timeout, clock, reference import, recovery |
-| Browser: `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless | 20/20. **Not mobile-device evidence** |
+| Browser: `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless | 21/21. **Not mobile-device evidence** |
 | Backup → restore verification | Development PostgreSQL | 18/18 checks, restore 0.7 s; a tampered backup was refused. **Not hosting evidence** |
 | CI and CodeQL (GitHub) | GitHub-hosted runners | Green on `2bc9a36`, `553dea5`, `47ed3d6`; see the repository Actions tab for later commits |
 
@@ -68,7 +68,7 @@ Existing documents were updated rather than duplicated. The checklist now points
 | R-M7 | Independent review (M) | Medium | Re-sent conflicts created duplicate conflict rows | Fixed: de-duplicated |
 | R-M8 | Independent review (M) | Medium | 6-digit PINs allowed; the docs overstated protection | Fixed: at least 8 characters with a non-digit; docs restated |
 | R-M9 | Independent review (M) | Medium | The pilot gate did not check that the benchmark's averaging period matched the calculation | Fixed; test |
-| R-L1…L7 | Independent review (L) | Low | Cached page held personal data; no database-level issue gate; no KEK rotation; dedupe map unbounded; CLI accepted the demo level; reviewer could be the importer; some times not future-checked | Fixed: L1 (cleared on sign-out; residual documented), L4, L6. **Open and documented:** L2, L3, L5, L7 |
+| R-L1…L7 | Independent review (L) | Low | Cached page held personal data; no database-level issue gate; no KEK rotation; dedupe map unbounded; CLI accepted the demo level; reviewer could be the importer; some times not future-checked | Fixed: L1 (after re-check: cache deleted by the sign-in page; browser-tested), L4, L6. **Open and documented:** L2, L3, L5, L7 |
 
 Independent re-check of the fixes: see §9.
 
@@ -107,7 +107,22 @@ The software controls needed for a controlled pilot now exist and are enforced, 
 
 ## 9. Independent re-check of fixes
 
-*(recorded below once complete)*
+The same reviewer re-checked commit `40693c4` (read-only, including a browser test of L1):
+
+- **Fixed:** H1, H2, M1, M2, M3 (attachments documented), M4, M5, M6, M7, M9, L4, L6.
+- **Partially fixed or regressed, then corrected in the final commit:**
+  - **H3** — after a session ended, the page kept a stale form token, so the instruction to sign in again could not work. The page now refreshes the token (same user only) and retries.
+  - **M1 upgrade path** — offline saves failed silently without an attestation key. They now fail with a visible message asking for one online unlock.
+  - **L1** — `Clear-Site-Data: "cache"` does not clear the service-worker cache. The sign-in page now deletes it, and the browser check confirms this (21/21).
+  - **M4 wording** — the docs now say deferred records are sent at the next sync attempt. The recovery import message now counts deferred items.
+  - **M2 UI** — the recovery page and link are hidden from users without field-capture rights.
+- **Residual and documented:**
+  - M8: PINs set before the fix (demo only) are unchanged, and there is no change-PIN function yet.
+  - Legacy store records rejected by the server are re-sent on each visit until corrected.
+  - Pre-attestation recovery files are refused (demo only).
+  - Name-only reviewer ≠ operator checks.
+
+The final fixes were verified by the full suite (127/127) and the browser check (21/21). They were not re-reviewed by the reviewer a second time.
 
 ## 10. Pilot decision (recorded separately from this report)
 

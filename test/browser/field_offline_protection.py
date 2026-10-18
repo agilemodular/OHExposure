@@ -115,6 +115,10 @@ with sync_playwright() as p:
 
     # Shared device: a second user on the same browser profile gets a separate store and cannot read the first.
     ctx.clear_cookies()
+    had = pg.evaluate("async () => (await caches.keys()).filter(k => k.startsWith('ohea-field-')).length")
+    pg.goto(BASE + '/login'); pg.wait_for_timeout(500)
+    left = pg.evaluate("async () => (await caches.keys()).filter(k => k.startsWith('ohea-field-')).length")
+    check('reaching the sign-in page removes the cached field page shell (keeps IndexedDB)', had > 0 and left == 0, f'caches before {had}, after {left}')
     login(pg, 'practitioner@demo.test')
     pg.goto(BASE + '/field'); pg.wait_for_selector('text=Protect field records on this device')
     check('second user on a shared device starts with a separate, empty store', CODE not in pg.content())

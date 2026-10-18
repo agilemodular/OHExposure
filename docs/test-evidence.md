@@ -16,7 +16,7 @@ Latest run: **18 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**,
 
 | Evidence | Environment | Result |
 |---|---|---|
-| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, 420 × 900, development server, demo data | 20/20 checks (after independent review fixes) (see `offline-field-capture.md`). **Not mobile-device evidence** |
+| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, 420 × 900, development server, demo data | 21/21 checks (after independent review fixes and re-check) (see `offline-field-capture.md`). **Not mobile-device evidence** |
 | `scripts/backup.ts` + `scripts/restore-verify.ts` | Development PostgreSQL 16.15 | 18/18 checks, restore 0.7 s; tampered archive refused. **Not hosting evidence** (`docs/examples/restore-verification.development.json`) |
 | Reference import dry run of `docs/examples/reference-data.synthetic.json` | Development | 2 rows valid, 1 substance; nothing written |
 | Engine-generated worked examples E1–E14 (validation pack) | Development | Values in `hygienist-review-pack.md` produced by the engine |

@@ -58,6 +58,7 @@ export function fieldRoutes(app: FastifyInstance) {
   // ── Recovery of unsynchronised records exported from a device (ciphertext only; opened server-side)
   page(app, '/field/recovery', async (c) => {
     requirePerm(c.actor, 'conflicts.resolve');
+    requirePerm(c.actor, 'field.capture');
     const rows = await withActor(c.actor, (tx) => many(tx, `select i.*, u.name imported_by_name, o.name original_name from field_recovery_imports i
       left join users u on u.id=i.imported_by left join users o on o.id=i.original_user_id order by imported_at desc limit 50`));
     return {
@@ -80,7 +81,7 @@ export function fieldRoutes(app: FastifyInstance) {
       const r = await importRecoveryFile(m.si.actor, m.file.data.toString('utf8'));
       const count = (o: string) => r.results.filter((x) => x.outcome === o).length;
       setFlash(reply, r.undecryptable.length || count('rejected') ? 'warn' : 'ok',
-        `Recovery import: ${count('created')} created, ${count('updated')} updated, ${count('duplicate')} already present, ${count('conflict')} conflicts for review, ${count('rejected')} rejected${r.undecryptable.length ? `, ${r.undecryptable.length} could not be opened` : ''}.${r.previouslyImportedAt ? ' This file was imported before.' : ''}`);
+        `Recovery import: ${count('created')} created, ${count('updated')} updated, ${count('duplicate')} already present, ${count('conflict')} conflicts for review, ${count('rejected')} rejected${count('deferred') ? `, ${count('deferred')} not imported because field sync is suspended (import again after it is resumed)` : ''}${r.undecryptable.length ? `, ${r.undecryptable.length} could not be opened` : ''}.${r.previouslyImportedAt ? ' This file was imported before.' : ''}`);
     } catch (e: any) {
       if (!e.status) throw e;
       setFlash(reply, 'err', e.message);
@@ -195,7 +196,7 @@ export function fieldRoutes(app: FastifyInstance) {
     const server = (s: any, k: string) => k === 'start_local' ? fmtDateTime(s.start_at, s.timezone) : k === 'end_local' ? fmtDateTime(s.end_at, s.timezone) : s[k];
     return {
       title: 'Offline sync conflicts', sub: 'When a device synchronises edits made against an older copy, both versions are kept here. Nothing is overwritten until someone decides.',
-      head: html`<a class="button secondary" href="/field/recovery">Recover field records</a>`,
+      head: can(c.actor, 'field.capture') ? html`<a class="button secondary" href="/field/recovery">Recover field records</a>` : '',
       body: list.length ? list.map((x) => html`<section class="panel"><h2><a href="/samples/${x.entity_id}">${x.server_payload.sample_code}</a> <span class="badge ${x.status === 'open' ? 'b-warn' : 'b-neutral'}">${label(x.status)}</span></h2>
         <p class="small muted">Submitted ${fmtDateTime(x.submitted_at)} by ${x.submitted_by_name ?? '—'}; device edited version ${x.base_version ?? 'new'}, server was at version ${x.server_version}.</p>
         <div class="tablewrap"><table><thead><tr><th>Field</th><th>Server copy</th><th>Device copy</th></tr></thead><tbody>

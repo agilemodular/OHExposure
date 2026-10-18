@@ -48,7 +48,7 @@ Classification used throughout:
 |---|---|---|
 | Online sample capture with time zone, interruptions, flows, conditions, deviations | Verified | workflow + http |
 | Offline capture, idempotent sync, conflict preservation and resolution | Verified (desktop browser; **not on field devices**) | workflow test + browser run |
-| Offline data protection: online-only default; encrypted per-user store (AES-256-GCM, PBKDF2 PIN), inactivity lock, 24 h purge, 7-day reference expiry, minimum dataset (worker codes only) | Verified (desktop Chromium only) | `test/browser/field_offline_protection.py` 20/20; gate G8 open |
+| Offline data protection: online-only default; encrypted per-user store (AES-256-GCM, PBKDF2 PIN), inactivity lock, 24 h purge, 7-day reference expiry, minimum dataset (worker codes only) | Verified (desktop Chromium only) | `test/browser/field_offline_protection.py` 21/21; gate G8 open |
 | Recovery of unsynchronised field records via server-sealed envelopes; reviewer import page; idempotent, audited, alerted | Verified | assurance tests + browser run |
 | Device clock offset recorded and warned; future capture times refused | Verified | assurance tests |
 | Calibration evidence and on-date validity; expired/failed flagged | Verified | workflow + calc tests |
