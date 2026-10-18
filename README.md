@@ -4,7 +4,7 @@ Standalone platform owned by SHEQ Experts Limited that connects workplace exposu
 
 > Understand workplace exposure. Verify controls. Demonstrate protection.
 
-**Readiness:** internal prototype, suitable to take into a controlled pilot once the items in [docs/release-readiness-report.md](docs/release-readiness-report.md) marked *before pilot* are closed. It is **not** production-ready. No real exposure limits are loaded, and the product has not had competent occupational hygiene review.
+**Readiness:** **Internal prototype — pilot gates remain open.** Pilot readiness is tracked in [docs/pilot-gate-register.md](docs/pilot-gate-register.md); no gate is accepted yet. It is **not** production-ready. No real exposure limits are loaded, no calculation method has had competent occupational hygiene review, and the field client has not been tested on actual field devices.
 
 ## Run it locally
 
@@ -29,11 +29,11 @@ docker compose exec app npx tsx scripts/provision-tenant.ts \
   --name "Pilot Organisation Ltd" --admin-email admin@pilot.example --admin-name "Pilot Admin"
 ```
 
-Put a TLS-terminating proxy in front and set `TRUST_PROXY=1`. The production entrypoint (`scripts/start.ts`) refuses to start without `COOKIE_SECURE=true`, an `APP_DB_PASSWORD`, or if the development password is still in use. The provisioning tool refuses to create a real organisation in a database that contains the demo tenant. See `docs/operations.md`.
+Put a TLS-terminating proxy in front and set `TRUST_PROXY=1`. The production entrypoint (`scripts/start.ts`) refuses to start without `COOKIE_SECURE=true`, an `APP_DB_PASSWORD`, a `FIELD_RECOVERY_KEK` (32 random bytes, base64), or if the development password is still in use. New organisations start at *evaluation* level with offline capture off; platform-level controls (pilot level, offline enablement, workflow suspension, method review records, reference data import) are applied with `scripts/platform-controls.ts` and `scripts/import-reference-data.ts`. Backups: `scripts/backup.ts` and `scripts/restore-verify.ts`. The provisioning tool refuses to create a real organisation in a database that contains the demo tenant. See `docs/operations.md`.
 
 Demo users after `npm run seed` (password `demo-password-2026`; demo tenant does not enforce MFA): `admin@`, `practitioner@`, `technician@`, `reviewer@`, `sitemanager@`, `client@demo.test`.
 
-Configuration is by environment variable (`src/config.ts`): `PORT`, `COOKIE_SECURE=true` (required behind HTTPS), `SESSION_HOURS`, `STORAGE_DIR`, `MAX_UPLOAD_BYTES`, `LOGIN_IP_LIMIT`, `TRUST_PROXY`, `APP_DB_PASSWORD` (production), and branding — `BRAND_PRODUCT_NAME`, `BRAND_ENDORSEMENT`, `BRAND_OWNER`, `BRAND_DOMAIN` — so a permanent name and domain can be introduced without code changes.
+Configuration is by environment variable (`src/config.ts`): `PORT`, `COOKIE_SECURE=true` (required behind HTTPS), `SESSION_HOURS`, `SESSION_IDLE_MINUTES`, `FIELD_RECOVERY_KEK`, `ALERT_WEBHOOK_URL`, `ALERT_WEBHOOK_SECRET`, `STORAGE_DIR`, `MAX_UPLOAD_BYTES`, `LOGIN_IP_LIMIT`, `TRUST_PROXY`, `APP_DB_PASSWORD` (production), and branding — `BRAND_PRODUCT_NAME`, `BRAND_ENDORSEMENT`, `BRAND_OWNER`, `BRAND_DOMAIN` — so a permanent name and domain can be introduced without code changes.
 
 ## Layout
 
@@ -44,8 +44,8 @@ Configuration is by environment variable (`src/config.ts`): `PORT`, `COOKIE_SECU
 | `src/services/` | Business rules, validation, authorisation and audit for each workflow |
 | `src/routes/`, `src/ui/` | Server-rendered web UI and JSON APIs |
 | `public/field.js`, `public/sw.js` | Offline field-capture client and service worker |
-| `scripts/` | Migrations, tenant bootstrap, demonstration seed |
-| `test/` | Calculation, workflow, isolation and HTTP tests |
+| `scripts/` | Migrations, tenant bootstrap, demonstration seed, platform controls, reference import, backup and restore verification |
+| `test/` | Calculation, workflow, isolation, HTTP and pilot-control tests; `test/browser/` desktop browser checks |
 | `docs/` | Release evidence pack (see below) |
 
 ## Release evidence pack
@@ -59,8 +59,13 @@ Configuration is by environment variable (`src/config.ts`): `PORT`, `COOKIE_SECU
 7. [External dependency register](docs/external-dependency-register.md)
 8. [Integration contracts](docs/integration-contracts.md)
 9. [Offline field capture](docs/offline-field-capture.md)
-10. [Operations: backup, recovery, monitoring](docs/operations.md)
+10. [Operations: security controls, backup, recovery, monitoring](docs/operations.md)
 11. [Pilot acceptance checklist](docs/pilot-acceptance-checklist.md)
 12. [Release readiness report](docs/release-readiness-report.md)
-13. [Hygienist review pack](docs/hygienist-review-pack.md)
-14. [Field device test script](docs/field-device-test-script.md)
+13. [Professional validation pack](docs/hygienist-review-pack.md)
+14. [Field device acceptance tests](docs/field-device-test-script.md)
+15. [Pilot gate register](docs/pilot-gate-register.md) — single source of pilot readiness
+16. [Pilot protocol and stop conditions](docs/pilot-protocol.md)
+17. [Reference data workflow](docs/reference-data-workflow.md)
+18. [Privacy impact assessment (draft)](docs/privacy-impact-assessment.md)
+19. [Phase H1 completion report](docs/phase-h1-completion-report.md)
