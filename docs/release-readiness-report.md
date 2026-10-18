@@ -1,66 +1,81 @@
-# Release readiness report — first release
+# Release readiness report
 
-**Date:** 17 October 2026 · **Scope:** airborne contaminants, phases A–G implemented, phase H (pilot) not started · **Engine:** v1.3.0
+**Updated:** 18 October 2026 (after Phase H1) · **Scope:** airborne contaminants · **Engine:** 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1) · **Migrations:** 17
 
-## Recommendation
+## Classification
 
-**The evidence supports an internal prototype. It does not yet support a controlled pilot or a production release.**
+**Internal prototype — pilot gates remain open.**
 
-A controlled pilot becomes appropriate once the *before pilot* items below are closed — chiefly competent occupational hygiene review, verified benchmark content for the pilot substances, hosting with backups, and testing on the actual field devices. None of these can be closed by further software work alone.
+The evidence does not yet support a controlled pilot or a production release. Pilot readiness is tracked only in `pilot-gate-register.md`. **No gate is accepted.** Phase H1 details are in `phase-h1-completion-report.md`.
 
-## What exists and is verified
+## Completed and verified (software, development environment)
 
-All phases A–G were built as working vertical workflows with persistence, authorisation and validation from the start (no interface-only screens for core workflows). Automated evidence: **105 tests across 4 suites, all passing** (calculations, end-to-end workflow and isolation, HTTP/auth, and regression tests for the independent review), plus a headless-browser run of offline capture and a backup/restore rehearsal. See `test-evidence.md` and `capability-catalogue.md`.
+- **Phases A–G**: working vertical workflows, persistence, authorisation and validation from the start. Forced row-level security on all 56 application tables. Append-only evidence and immutable approvals.
+- **Phase H1 controls:**
+  - pilot assurance levels set only by a platform operator
+  - pilot conclusions and report issue limited to approved methods, professional-reference benchmarks and matching averaging periods
+  - method status, provenance and assurance level frozen at approval
+  - workflow suspension under stop conditions
+  - offline data protection with server-side recovery
+  - session idle timeout, MFA on pre-existing sessions, signed security alerts
+  - backup and restore-verification scripts
+  - controlled reference-data import
+- **Automated evidence:** 127 tests, all passing (`test-evidence.md`); desktop browser check 20/20; development restore 18/18.
+- **Independent software review:**
+  - Three rounds during the build: no open critical or high findings.
+  - One round on the Phase H1 controls: 3 high, 9 medium and 7 low findings. All high and medium findings are fixed with tests, except one documented gap: attachment upload is not gated by suspension. Four low findings remain documented.
+  - The re-check result is recorded in the completion report.
 
-Strongest areas:
+## Awaiting environment verification
 
-- **Isolation** is enforced by PostgreSQL row-level security, forced on all 52 tables, with consultancy client scoping and a separate guard for identifiable worker data; client-scoped sessions are read-only at database level.
-- **Evidence integrity:** append-only custody, lab revisions, action history, audit and reports; approved assessments immutable by trigger; approval blocked if any input changed after calculation.
-- **Safety rules** (23 rules in `safety-rule-register.md`): no automatic verdicts, non-detects as intervals, explicit unsampled-time assumptions, static/screening exclusion, separation of duties, and verification before closure.
+| Item | Gate |
+|---|---|
+| Production hosting, TLS, secrets manager, alert routing to people, uptime monitoring, log retention; penetration test or a documented decision | G5 |
+| Scheduled backups with failure alerts, and a restore verified **in the hosting environment** with agreed RPO and RTO | G6 |
+| Field capture on the actual pilot devices (22 tests); desktop Chromium results are not device evidence | G9 |
 
-## Independent verification
+## Decisions outstanding (outside software)
 
-Three review rounds by two independent reviewers who did not write the code, each actively trying to break isolation, safety rules, authentication and calculations:
+| Decision | Owner | Gate |
+|---|---|---|
+| Pilot organisation, site, tasks and substances (chosen by the organisation) | SHEQ Experts + pilot organisation | G1 |
+| Named competent occupational hygienist | SHEQ Experts | G2 |
+| Method approvals from the signed validation pack | Reviewer | G3 |
+| Professional reference data and method parameters; licensing | Reviewer + operator | G4 |
+| PIA roles, retention per record class, support-access and incident procedures | DP adviser + controller | G7 |
+| External security review of offline protection and acceptance of its limitations | Platform owner + controller | G8 |
+| Training, support and incident contacts | SHEQ Experts | G10 |
+| Final pilot authorisation | SHEQ Experts director + pilot organisation | G11 |
 
-- **Round 1** found 3 critical, 5 high, 6 medium and 2 low defects (including cross-client evidence mixing, voided samples counted as evidence, and client users able to write). Its re-check found 3 regressions introduced by the fixes and 4 partial fixes.
-- **Round 3**, by a fresh reviewer, found no critical defects but 5 high, 4 medium and 3 low (including an MFA lockout bypass from pre-opened sessions, client deletes on link tables, and expired calibration supporting a favourable conclusion). Its re-check confirmed the fixes and found one remaining hardening gap, now closed.
+## Gates
 
-Every finding is fixed and covered by a regression test (102 tests in total). Reviewer hand calculations matched the engine in every case. **No open critical or high findings remain from software review.** This is not a substitute for a penetration test (D8) or professional review (D1).
+| Status | Gates |
+|---|---|
+| Accepted | none |
+| Ready for review | G8 |
+| Awaiting external evidence | G3, G4, G5, G6, G7 |
+| Not started | G1, G2, G9, G10, G11 |
 
 ## Remaining risks
 
 | Risk | Severity | Mitigation / next step |
 |---|---|---|
-| Methods and outputs not reviewed by a competent occupational hygienist | High | D1 — mandatory before pilot |
-| No real benchmark content; tenants must enter and verify limits themselves | High | D2 — decide platform reference-data policy and licensing |
-| Offline client tested only in desktop Chromium; data unencrypted on device; revocation waits for reconnection | Medium | D10; managed devices; documented in `offline-field-capture.md` |
-| No penetration test or DPIA; no certifications | High for production | D8 |
-| No external alerting; backups rehearsed only in development | Medium | D7 — hosting owner to provide alerting and managed backups |
-| STEL and unit conversion conventions implemented but not professionally validated; statistical compliance testing not implemented | Medium | D1 review; reviewer addresses representativeness |
-| Overlapping samples now flagged, but sampling strategy representativeness is not assessed by software | Medium | Professional interpretation; pilot test P5 |
-| AI assistance and live integrations absent | — | Blocked by design until D5/D6; core workflows do not need them |
+| Methods not reviewed by a competent hygienist | High | G2/G3. Enforced: pilot conclusions are impossible until approval |
+| No real benchmark content | High | G4. Controlled import ready; pilot conclusions need professional reference rows |
+| Offline data on devices | Medium | Off by default for real organisations. When enabled, protection depends on PIN strength and managed devices, and does not resist malware. Revocation waits for reconnection |
+| No hosting, alert delivery, penetration test, or hosting restore | High for pilot | G5/G6 |
+| PIA unreviewed; retention undecided | High for pilot | G7 |
+| Representativeness and statistics (BS EN 689) not assessed by software | Medium | Reviewer interpretation; convention C18 |
+| Attachment upload not gated by suspension; no database-level issue gate; no KEK rotation | Low | Documented in the completion report; address before production |
 
-## Status by delivery phase
+## Release decision
 
-| Phase | Status |
-|---|---|
-| A. Review, architecture, evidence model | Complete |
-| B. Authentication, tenant isolation, permissions | Complete, verified |
-| C. Exposure register and monitoring plans | Complete, verified |
-| D. Fieldwork, instruments, samples, lab results | Complete, verified; live lab integration blocked (D4) |
-| E. Calculations and professional review | Complete for 8-h TWA; verified in software, **not professionally validated** |
-| F. Controls, actions, verification | Complete, verified |
-| G. Reporting, offline sync, integration contracts | Reports and offline sync verified; integrations mock-only; PDF via browser print |
-| H. Pilot validation and release assessment | Release assessment done (this report); **pilot not started** (D13) |
-
-## Before pilot (from `pilot-acceptance-checklist.md`)
-
-1. Competent hygienist review and sign-off (D1) — the review pack is ready for them.
-2. Verified benchmarks and method parameters for pilot substances (D2, D3).
-3. Hosting with TLS, changed credentials, backups and one restore test (D7) — the deployment package and provisioning tool are ready.
-4. DPIA and agreed retention periods (D8, D9).
-5. Field device testing on pilot hardware (D10) — the test script is ready.
+**Not for production.** The pilot decision is recorded separately in the completion report (§10): **no pilot authorised.**
 
 ## Next decision
 
-Choose the pilot organisation and substances, and appoint the reviewing hygienist. Those two decisions unblock D1–D3 and D13. Do **not** expand into noise, vibration or thermal exposure until the pilot has validated this scope.
+1. Choose the pilot organisation and its substances.
+2. Appoint the reviewing hygienist.
+3. Choose hosting.
+
+These unblock G1–G7. Do not expand into noise, vibration, thermal exposure, AI assistance or live integrations during this phase.
