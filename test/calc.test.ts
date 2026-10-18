@@ -223,3 +223,25 @@ describe('ppm ↔ mg/m³ conversion', () => {
     expect(o.benchmarkNote).toMatch(/converted/);
   });
 });
+
+describe('engine 1.3.1 roll-up (Phase H1 finding H1-F01)', () => {
+  const P = { exposureMinutesPerShift: 240, unsampledAssumption: 'none' as const };
+  it('overlapping samples leave the comparison indeterminate, not "not comparable"', () => {
+    const r = runAssessment({ calc: 'twa_8h', parameters: P, benchmark: bm(),
+      samples: [s({ sampleCode: 'A' }), s({ sampleCode: 'B', startAt: '2026-03-02T11:00:00Z', endAt: '2026-03-02T13:00:00Z' })] });
+    expect(r.dataQualityState).toBe('incomplete');
+    expect(r.benchmarkState).toBe('indeterminate');
+    expect(r.benchmarkNote).toMatch(/could not be calculated/);
+    expect(r.calcVersion).toBe('1.2.1');
+  });
+  it('names calibration as a reason for indicative-only results', () => {
+    const r = runAssessment({ calc: 'twa_8h', parameters: P, benchmark: bm({ value: 1 }), samples: [s({ instrument: { ...inst, calibrationValidAtSampling: false } })] });
+    expect(r.benchmarkState).toBe('not_comparable');
+    expect(r.benchmarkNote).toMatch(/calibration/);
+  });
+  it('does not blame static samples when every sample was excluded', () => {
+    const r = runAssessment({ calc: 'twa_8h', parameters: P, benchmark: bm(), samples: [s({ qc: [{ checkType: 'flow', outcome: 'fail', disposition: null }] })] });
+    expect(r.dataQualityState).toBe('failed');
+    expect(r.benchmarkNote).toMatch(/all samples excluded/);
+  });
+});

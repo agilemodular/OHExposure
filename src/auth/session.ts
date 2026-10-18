@@ -42,7 +42,7 @@ export type SessionInfo = { actor: Actor; csrf: string; mfaPassed: boolean; sess
 export async function resolveSession(token: string | undefined, ip?: string): Promise<SessionInfo | null> {
   if (!token) return null;
   const sid = sha256(token);
-  const s = await withAnon((tx) => one(tx, 'select * from auth_session($1)', [sid]));
+  const s = await withAnon((tx) => one(tx, 'select * from auth_session_active($1, $2)', [sid, config.sessionIdleMinutes]));
   if (!s) return null;
   const boot: Actor = { userId: s.user_id, tenantId: s.tenant_id, clientId: null, role: 'client_readonly', name: '', email: '', perms: new Set() };
   const { u, t } = await withActor(boot, async (tx) => ({

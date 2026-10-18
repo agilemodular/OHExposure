@@ -5,7 +5,7 @@
 //   offline        --tenant <id> --offline on|off                    --authorised-by "<name>" --evidence "<gate ref>"
 //   suspend        --tenant <id> --suspend field_sync,assessment_approval --reason "<stop condition>" --authorised-by "<name>"
 //   resume         --tenant <id> --resume field_sync                 --authorised-by "<name>" --evidence "<revalidation ref>"
-//   method-review  --method twa_8h --version 1.2.0 --status approved|approved_with_conditions|rejected|not_reviewed
+//   method-review  --method twa_8h --version 1.2.1 --status approved|approved_with_conditions|rejected|not_reviewed
 //                  --reviewer "<name>" --competence "<e.g. Chartered Member, BOHS — membership no.>" --reviewed-on 2026-11-02
 //                  --evidence "<signed review pack reference>" [--conditions "<text>"] --recorded-by "<operator name>"
 //

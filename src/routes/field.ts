@@ -193,6 +193,7 @@ export function fieldRoutes(app: FastifyInstance) {
     const server = (s: any, k: string) => k === 'start_local' ? fmtDateTime(s.start_at, s.timezone) : k === 'end_local' ? fmtDateTime(s.end_at, s.timezone) : s[k];
     return {
       title: 'Offline sync conflicts', sub: 'When a device synchronises edits made against an older copy, both versions are kept here. Nothing is overwritten until someone decides.',
+      head: html`<a class="button secondary" href="/field/recovery">Recover field records</a>`,
       body: list.length ? list.map((x) => html`<section class="panel"><h2><a href="/samples/${x.entity_id}">${x.server_payload.sample_code}</a> <span class="badge ${x.status === 'open' ? 'b-warn' : 'b-neutral'}">${label(x.status)}</span></h2>
         <p class="small muted">Submitted ${fmtDateTime(x.submitted_at)} by ${x.submitted_by_name ?? '—'}; device edited version ${x.base_version ?? 'new'}, server was at version ${x.server_version}.</p>
         <div class="tablewrap"><table><thead><tr><th>Field</th><th>Server copy</th><th>Device copy</th></tr></thead><tbody>

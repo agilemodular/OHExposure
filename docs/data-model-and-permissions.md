@@ -22,7 +22,18 @@ tenants ─ clients
    instruments ─ calibrations, instrument_maintenance · laboratories · import_batches ─ import_rows
    substances · benchmarks ─ benchmark_versions · sampling_methods ─ sampling_method_versions
    retention_policies · disposal_requests · sync_conflicts · integration_links · integration_outbox
+   method_reviews (platform; append-only) → current_method_reviews view
+   field_recovery_keys (per tenant; private key encrypted outside the DB) · field_recovery_imports (append-only)
+   login_throttle · schema_migrations
 ```
+
+### Pilot controls (migration 015)
+
+- `tenants.assurance_level` (demo · evaluation · pilot), `offline_capture_enabled`, `suspended_workflows`, `suspension_reason` — the application role may update only `name` and `branding` on tenants; these columns change only through the platform operator CLI.
+- `benchmark_versions.provenance` (tenant_entered · professional_reference · synthetic) with `reviewer_name`, `verified_on`, `permitted_use`, `licence_note`; constraints `professional_reference_complete` and `synthetic_flag_consistent`.
+- `assessment_revisions.method_review_status` and `benchmark_provenance` frozen at approval.
+- `sampling_events.device_clock_offset_s` and `recovered_from_user`.
+- Migration 016 adds `auth_session_active` (idle timeout).
 
 ### Facts, estimates and reviewed conclusions
 
@@ -37,7 +48,7 @@ tenants ─ clients
 
 ## Row-level security
 
-The application connects as `ohea_app` (`NOBYPASSRLS`). All 52 tables have RLS **enabled and forced** (verified with `pg_class.relrowsecurity / relforcerowsecurity`). Policy families:
+The application connects as `ohea_app` (`NOBYPASSRLS`). All 56 application tables have RLS **enabled and forced** (only `schema_migrations` is excluded) (verified with `pg_class.relrowsecurity / relforcerowsecurity`). Policy families:
 
 | Policy | Tables | Rule |
 |---|---|---|
@@ -45,6 +56,7 @@ The application connects as `ohea_app` (`NOBYPASSRLS`). All 52 tables have RLS *
 | tenant + optional client | instruments, attachments, import batches, AI suggestions | as above, but rows with no client are visible across the tenant |
 | tenant only | calibrations, laboratories (read), link tables, governance | `tenant_id = app.tenant_id` |
 | reference | substances, benchmarks, methods | platform rows (`tenant_id IS NULL`) readable by all, writable by none; tenant rows by owner |
+| platform registry | method_reviews | readable by all sessions; no write grant to the application role |
 | PII guard | worker_identities | additionally requires `app.pii = 'on'` (set only for roles with `worker.identity.read`) |
 | clients / users | clients, users | client-scoped users see only their own client and users; they cannot insert |
 

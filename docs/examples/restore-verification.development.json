@@ -1,0 +1,103 @@
+{
+  "format": "ohea-restore-verification",
+  "version": 1,
+  "ok": true,
+  "evidence_label": "development workspace (not hosting evidence)",
+  "verified_at": "2026-10-18T21:43:48.707Z",
+  "backup_dir": "/tmp/claude-0/-home-claude/7d2fb529-df44-5caa-9f9d-d96c3d1be304/scratchpad/backups/ohea-20261018T214347Z",
+  "recovery_point": "2026-10-18T21:43:47.049Z",
+  "restore_duration_ms": 685,
+  "source_server": "16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)",
+  "restore_server": "16.15 (Ubuntu 16.15-0ubuntu0.24.04.1)",
+  "host": "localhost",
+  "checks": [
+    {
+      "check": "database dump checksum matches manifest",
+      "ok": true
+    },
+    {
+      "check": "attachment archive checksum matches manifest",
+      "ok": true
+    },
+    {
+      "check": "row count tenants",
+      "ok": true,
+      "detail": "1 restored / 1 at backup"
+    },
+    {
+      "check": "row count users",
+      "ok": true,
+      "detail": "6 restored / 6 at backup"
+    },
+    {
+      "check": "row count sampling_events",
+      "ok": true,
+      "detail": "9 restored / 9 at backup"
+    },
+    {
+      "check": "row count lab_results",
+      "ok": true,
+      "detail": "4 restored / 4 at backup"
+    },
+    {
+      "check": "row count assessment_revisions",
+      "ok": true,
+      "detail": "1 restored / 1 at backup"
+    },
+    {
+      "check": "row count reports",
+      "ok": true,
+      "detail": "1 restored / 1 at backup"
+    },
+    {
+      "check": "row count actions",
+      "ok": true,
+      "detail": "2 restored / 2 at backup"
+    },
+    {
+      "check": "row count attachments",
+      "ok": true,
+      "detail": "1 restored / 1 at backup"
+    },
+    {
+      "check": "row count audit_events",
+      "ok": true,
+      "detail": "91 restored / 91 at backup"
+    },
+    {
+      "check": "row count method_reviews",
+      "ok": true,
+      "detail": "0 restored / 0 at backup"
+    },
+    {
+      "check": "row count benchmark_versions",
+      "ok": true,
+      "detail": "1 restored / 1 at backup"
+    },
+    {
+      "check": "RLS policies restored",
+      "ok": true,
+      "detail": "69 / 69"
+    },
+    {
+      "check": "row-level security forced on every table",
+      "ok": true,
+      "detail": "all tables"
+    },
+    {
+      "check": "applied migrations match",
+      "ok": true,
+      "detail": "15 migrations, latest 015_pilot_controls.sql"
+    },
+    {
+      "check": "audit trail append-only triggers present",
+      "ok": true,
+      "detail": "1 trigger(s)"
+    },
+    {
+      "check": "every attachment present with matching SHA-256",
+      "ok": true,
+      "detail": "1/1 verified"
+    }
+  ]
+}

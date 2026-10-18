@@ -1,42 +1,91 @@
-# Operations: backup, recovery and monitoring
+# Operations: security controls, backup, recovery, monitoring and deployment
+
+Status labels: **Implemented and tested** (automated tests in this repository) · **Verified in development** (run in the development workspace only) · **Hosting owner** (must be provided and evidenced in the hosting environment — pilot gates G5/G6 in `pilot-gate-register.md`).
+
+## Security controls
+
+| Control | Status | Detail |
+|---|---|---|
+| Login throttling | Implemented and tested | Per-IP limit (`LOGIN_IP_LIMIT`, default 20 per window) stored in the database so it holds across instances; throttled IPs raise `auth.ip_throttled` alerts |
+| Account lockout | Implemented and tested | 5 wrong passwords → 15 min lock; 10 wrong two-step codes across sessions → 30 min lock; `auth.account_locked` / `auth.mfa_lockout` alerts. Password comparison happens in the database; the application role cannot read hashes or TOTP secrets |
+| Session invalidation | Implemented and tested | Sessions revoked on sign-out, on suspension of the user, on administrator password reset, and on a user's own password change (other sessions). Absolute expiry `SESSION_HOURS` (10 h); **idle expiry `SESSION_IDLE_MINUTES` (default 120 min, added in H1)**. A locked account blocks new sign-ins; it does not end sessions already open |
+| MFA | Implemented and tested | TOTP with replay protection; required by default for new organisations; **since H1, a session created before MFA became mandatory loses full access until the user enrols** |
+| Secrets | Hosting owner | Required in production: `DATABASE_URL`, `DATABASE_ADMIN_URL` (migrations only), `APP_DB_PASSWORD`, `FIELD_RECOVERY_KEK` (32 bytes, base64), `ALERT_WEBHOOK_URL`, `ALERT_WEBHOOK_SECRET`. Store in a secrets manager; never in the image or repository. The server refuses to start in production without `COOKIE_SECURE=true`, `APP_DB_PASSWORD`, `FIELD_RECOVERY_KEK`, or with the development database password |
+| TLS and session cookies | Implemented; TLS is hosting owner | Cookies HttpOnly, SameSite=Lax, Secure when `COOKIE_SECURE=true`; HSTS sent when secure; CSP `default-src 'self'`, `frame-ancestors 'none'`; X-Frame-Options DENY; CSRF token on every state-changing request. Set `TRUST_PROXY` to the proxy hop count |
+| Security monitoring and alerting | Implemented and tested (delivery is hosting owner) | `src/alerts.ts` writes every alert to the structured log and, when `ALERT_WEBHOOK_URL` is set, POSTs JSON signed with `x-ohea-signature: sha256=<HMAC>`; 10-minute de-duplication. Events: account locked, MFA lockout, IP throttled, integration dead letter, backup failed/succeeded, restore verification failed, workflow suspended, field recovery imported. The hosting owner routes the webhook to named people and tests it (G5) |
+| Health checks | Implemented | `GET /healthz` (process up); `GET /readyz` (database reachable and the latest migration applied) for load balancers. Administrator **System health** panel |
+| Platform operator controls | Implemented and tested | `scripts/platform-controls.ts` (assurance level, offline enablement, workflow suspension/resumption, method review records) uses the owner connection; organisation administrators cannot change these. Every change writes a `platform.*` audit event |
+| Penetration test | Not done | Hosting owner / SHEQ Experts decision (G5, D8) |
 
 ## Backup
 
-Two stores must be backed up together:
+Two stores must be backed up together: PostgreSQL (all records, audit trail, report contents, RLS policies) and the attachment store (`STORAGE_DIR`).
 
-1. **PostgreSQL** — all records, audit trail, report contents and RLS policies.
-   - Development rehearsal (performed): `pg_dump -Fc ohea` → `pg_restore` into a new database. Row counts for sampling events, assessment revisions and audit events, and all 60 RLS policies, matched after restore.
-   - Production (not yet set up): managed PostgreSQL with point-in-time recovery, daily snapshots retained per the retention policy, and a monthly restore test into an isolated environment.
-2. **Attachment store** (`STORAGE_DIR`) — files are named by random id under a per-tenant folder and verified against their SHA-256 on every read. Back up with versioning (e.g. object storage with versioning and object lock). Restore must use the same keys; a missing or altered file is reported as an integrity failure rather than served.
+**Script (implemented, verified in development):** `scripts/backup.ts`
 
-## Recovery
+```
+DATABASE_ADMIN_URL=… STORAGE_DIR=/data/attachments BACKUP_DIR=/backups/ohea BACKUP_RETAIN_DAYS=35 npx tsx scripts/backup.ts
+```
 
-1. Restore the database snapshot to the chosen point in time.
-2. Restore the attachment store to the same or a later point.
-3. Run `npm run migrate` (idempotent) to confirm schema state.
-4. Re-run integration delivery: idempotency keys prevent duplicates downstream.
-5. Field devices re-sync automatically; any record created after the restore point that the server no longer knows is recreated from the device queue.
+Creates `BACKUP_DIR/ohea-<UTC>/` with `db.dump` (pg_dump custom format), `attachments.tar` and `manifest.json` (SHA-256 of both, row counts of key tables, RLS policy count, tables without forced RLS, applied migrations, server and pg_dump versions). Prunes backups older than the retention period **only after** a successful backup. Writes `BACKUP_DIR/last-backup.json` and raises `backup.succeeded` or `backup.failed` (critical).
 
-Targets to agree before production: RPO ≤ 24 h (≤ 5 min with PITR), RTO ≤ 8 h.
+**Schedule (hosting owner).** Example systemd timer (daily 01:30 UTC):
+
+```
+# /etc/systemd/system/ohea-backup.service
+[Service]
+Type=oneshot
+EnvironmentFile=/etc/ohea/backup.env
+WorkingDirectory=/opt/ohea
+ExecStart=/usr/bin/npx tsx scripts/backup.ts
+# /etc/systemd/system/ohea-backup.timer
+[Timer]
+OnCalendar=*-*-* 01:30:00 UTC
+Persistent=true
+[Install]
+WantedBy=timers.target
+```
+
+Monitoring must alert if `last-backup.json` is older than 26 hours or `ok` is false (covers the case where the job never runs). The backup location must be encrypted and copied off-site. Managed PostgreSQL point-in-time recovery, where available, is preferred for the database and complements (does not replace) these verified backups.
+
+## Restore verification
+
+**Script (implemented, verified in development):** `scripts/restore-verify.ts <backup dir> [--keep] [--evidence-label "<environment>"]`
+
+Checks manifest checksums **before** restoring; restores into a scratch database and scratch folder; compares row counts with the manifest; confirms RLS policies, forced RLS on every table, applied migrations and the audit trail's append-only trigger; verifies every attachment against its recorded SHA-256; records restore duration and recovery point; writes `restore-verification-<time>.json` next to the backup; drops the scratch database unless `--keep`; raises `restore_verify.failed` on any failure.
+
+**Development evidence (18 Oct 2026, not hosting evidence):** demo database (PostgreSQL 16.15) with one synthetic attachment — 18/18 checks passed, restore in 0.7 s (`docs/examples/restore-verification.development.json`). A deliberately altered archive was refused before restoring ("Backup files do not match their manifest").
+
+**Hosting environment (open, G6):** run monthly and after any change to the backup method, with `--evidence-label "<hosting environment>"`, and record the result against G6. Agree RPO/RTO targets (proposal: RPO ≤ 24 h, ≤ 5 min with PITR; RTO ≤ 8 h) and compare with the measured restore time.
+
+## Recovery (restoring the service)
+
+1. Declare the incident; if records may be affected, suspend workflows (`platform-controls.ts suspend`) so nobody writes to a database that will be replaced.
+2. Restore the database to the chosen point, and the attachment store to the same or a later point.
+3. Run `restore-verify.ts` against the restored backup (or the equivalent checks against the restored database).
+4. Start the application (`scripts/start.ts` applies migrations idempotently).
+5. Re-run integration delivery: idempotency keys prevent duplicates downstream.
+6. Field devices re-sync: records created after the restore point are recreated from device queues (the server treats them as new; duplicates are recognised by client UUID). Devices whose users cannot sign in can export recovery files.
+7. Resume workflows with a revalidation reference.
+
+## Rollback (defective release)
+
+1. Suspend the affected workflows.
+2. Redeploy the previous image tag.
+3. Database migrations are forward-only. If the defective release applied a migration, **do not** hand-edit the schema: restore the pre-deployment backup (taken by the deployment process immediately before migrating) into a new database, verify it, and repoint the application; or, where the migration is additive and the previous release tolerates it, run the previous release against the current schema after confirming in staging.
+4. Record what was rolled back, the data window affected, and revalidation before resuming.
+
+The deployment process must therefore take a backup immediately before `scripts/start.ts` applies migrations (hosting owner).
 
 ## Monitoring
 
-Implemented: structured JSON request logs (cookies and authorisation headers redacted); `GET /healthz` (process up); `GET /readyz` (database reachable and migrations applied — use for load-balancer checks); an administrator **System health** panel (locked accounts, users without two-step verification, failed sign-ins, two-step failures in 24 h, failed or dead-lettered integration messages, open sync conflicts, pending disposals); audit events for sign-in, MFA, every change, approval, download, export and disposal; CI (`.github/workflows/ci.yml`) running typecheck, `npm audit --audit-level=high` and the full test suite against PostgreSQL 16. `npm audit` reported 0 vulnerabilities on 17 Oct 2026.
+Implemented: structured JSON request logs (cookies and authorisation headers redacted); health and readiness endpoints; System health panel (locked accounts, users without two-step verification, failed sign-ins, two-step failures in 24 h, failed/dead-lettered integration messages, open sync conflicts, pending disposals); audit events for sign-in, MFA, every change, approval, download, export, disposal, platform control and recovery import; security alert webhook. CI (`.github/workflows/ci.yml`) runs typecheck, `npm audit --audit-level=high` and the full test suite against PostgreSQL 16; CodeQL and Dependabot are enabled.
 
-Not implemented (hosting owner to provide): external uptime and error-rate alerting that notifies people; log shipping and retention; database metrics. CI runs on GitHub (`agilemodular/OHExposure`); the first run on 17 Oct 2026 passed typecheck, dependency audit and the full test suite in 42 s. CodeQL (security-extended queries) runs on every push, pull request and weekly; Dependabot proposes npm, GitHub Actions and base-image updates, keeping the Node.js image on its LTS line. CodeQL findings appear in the repository's Security tab (not readable from the development workspace).
+Hosting owner to provide: delivery of alerts to people; uptime and error-rate alerting; log shipping and retention; database metrics; backup staleness monitoring.
 
 ## Deployment
 
-Packaging (verified 17 Oct 2026, except where noted):
-
-- `Dockerfile` and `docker-compose.yml` (app + PostgreSQL 16, named volumes for data and attachments, health checks). The compose file validates; **the image could not be built in the development workspace because Docker Hub was not reachable** — build it once in the hosting environment.
-- `scripts/start.ts` applies migrations with the owner connection, sets the `ohea_app` password from `APP_DB_PASSWORD`, then starts the server. Tested on an empty database: all 13 migrations applied, the development password stopped working, HTTPS headers were sent.
-- In production mode it refuses to start without `COOKIE_SECURE=true` and `APP_DB_PASSWORD`, or with the development password in `DATABASE_URL`.
-- `scripts/provision-tenant.ts` creates a real organisation with MFA enforced and a first administrator who must change a one-time password; it refuses to run against a database holding the demo tenant.
-
-## Deployment notes
-
-- Run behind TLS with `COOKIE_SECURE=true` (adds HSTS). Set `TRUST_PROXY` to the number of proxy hops (or proxy addresses); leave it empty when there is no proxy, so `X-Forwarded-For` is ignored.
-- `APP_DB_PASSWORD` replaces the development password created by migration 002; keep the owner credentials for migrations only.
-- The per-IP login throttle is stored in the database, so it holds across multiple instances. An edge WAF is still recommended.
-- No security testing or certification has been carried out.
+- `Dockerfile` and `docker-compose.yml` (app + PostgreSQL 16, named volumes, health checks). The image has not been built in the development workspace (Docker Hub unreachable) — build once in the hosting environment.
+- `scripts/start.ts` applies migrations with the owner connection, sets the `ohea_app` password from `APP_DB_PASSWORD`, then starts the server on the least-privilege connection.
+- `scripts/provision-tenant.ts` creates a real organisation (evaluation level, offline capture off, MFA enforced) with a first administrator who must change a one-time password; it refuses to run against a database holding the demo tenant.
+- The demo tenant must not be present in the pilot environment.

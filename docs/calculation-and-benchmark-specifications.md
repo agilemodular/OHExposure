@@ -1,10 +1,39 @@
 # Calculation and benchmark specifications
 
-Engine: `src/calc/engine.ts`, engine version **1.3.0** (calculations `twa_8h` v1.2.0 and `stel_15` v1.1.0). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
+Engine: `src/calc/engine.ts`, engine version **1.3.1** (calculations `twa_8h` v1.2.1 and `stel_15` v1.1.1). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
 
 > **Methodological sources must be confirmed by a competent occupational hygienist against the current editions before pilot use.** The references below identify the conventions the engine implements; they were not re-checked against the live publications during this build (no access was attempted), and no text from them is reproduced.
 
-## 1. `sample_concentration` (engine 1.1.0)
+## Capability matrix (Phase H1)
+
+One row per calculation capability. **Pilot-enabled** is enforced on the server: in an organisation at *pilot* assurance level, an assessment revision can be submitted or approved only if its calculation version has a recorded professional approval (`method_reviews`, written only by a platform operator from signed evidence) and its benchmark version is professionally verified reference data. The live status is shown on **Reference data → Calculation methods** and on every assessment and report. Historical versions are preserved: each approved revision freezes `calc_code`, `calc_version`, `method_review_status` and `benchmark_provenance`, and a later change of review status never alters it.
+
+| Capability | `sample_concentration` | `twa_8h` | `stel_15` | Unit conversion |
+|---|---|---|---|---|
+| Version | engine 1.3.1 | **1.2.1** | **1.1.1** | engine 1.3.1 |
+| Purpose | Airborne concentration of one sample, as an interval | Personal 8-h TWA per worker-shift vs 480-min benchmark | Personal 15-min result vs 15-min benchmark | ppm ↔ mg/m³ at comparison |
+| Formula / source | §1; mass ÷ (mean flow × sampled time) | §2; Σ(CᵢTᵢ)/480 — GB convention (HSE EH40, HSG173) *to be confirmed* | §2a; C for 14–16 min; C×T/15 with justified zero remainder | §3a; mg/m³ = ppm × MW / 24.0551 |
+| Inputs | Times, interruptions, flows, method version, instrument, calibration, QC, lab result revision | Concentrations, worker refs, exposure minutes, unsampled assumption + justification, register durations | Concentrations, short-sample assumption + justification | Interval, target unit, molecular weight + source |
+| Units / conversion | µg, mg on sample; µg/m³→mg/m³; ppm, f/ml passed through | Interval unit of inputs; mixed units → not calculated | As TWA | ppm, mg/m³ only; never f/ml |
+| Averaging | — | 480 min (longer shifts still ÷480) | 15 min (±1 min) | — |
+| Missing / unsampled data | Missing times, flows, limits → incomplete | No TWA unless justified assumption; exposure period guard | < 14 min without assumption → not calculated; > 16 min refused | No MW → not comparable |
+| Non-detects | Intervals [0, LOD], [LOD, LOQ], [v, ∞) | Bounds propagate separately | Bounds propagate | Both bounds converted |
+| Key limitations | No T/P correction, blank correction or uncertainty propagation | No BS EN 689 statistics; representativeness not assessed | Short-sample convention needs confirmation | 20 °C/101.325 kPa only |
+| Test evidence | `test/calc.test.ts`, regressions | `calc.test.ts` (incl. 1.3.1 roll-up), workflow, assurance tests | `calc.test.ts`, STEL service test | `calc.test.ts` |
+| Professional review status | Not reviewed | **Not reviewed** | **Not reviewed** | Not reviewed |
+| Pilot-enabled | No (part of `twa_8h`/`stel_15` approval) | **No** | **No** | No (part of calculation approval) |
+
+How a value is displayed when it is not a number:
+
+| Display | Meaning |
+|---|---|
+| *insufficient evidence — not calculated* | Inputs missing or rules prevent a result (coverage, overlap, unjustified assumption, missing limit) |
+| *Method not reviewed* / *Method rejected* | Calculation ran but its version has no professional approval; in pilot organisations it cannot support a conclusion |
+| *not compared* / *not comparable* | Indicative or static result, unit or averaging mismatch |
+| *No verified benchmark* | No benchmark selected, or not verified |
+| *Entered by organisation* / *Synthetic* / *Professional reference* | Benchmark provenance; only professional reference can support pilot conclusions |
+
+## 1. `sample_concentration` (engine 1.3.1)
 
 **Intended use.** Convert one laboratory result for one sample into an airborne concentration, carried as an interval so qualified results are never turned into false point values.
 
@@ -55,7 +84,7 @@ Direct-concentration results in µg/m³ are converted to mg/m³; ppm and f/ml ar
 | Field blank | exclude | not an exposure result |
 | Sample voided | exclude | listed, never used |
 
-## 2. `twa_8h` v1.1.0
+## 2. `twa_8h` v1.2.1
 
 **Intended use.** Personal 8-hour time-weighted average per worker per shift date, for comparison with a long-term (480-minute) benchmark. Convention as used for GB workplace exposure limits (HSE EH40, *Workplace exposure limits*; sampling strategy guidance in HSE HSG173) — to be confirmed by the reviewing hygienist.
 
@@ -79,7 +108,7 @@ Intervals propagate: lower and upper bounds are calculated separately. Exposure 
 
 **Limitations.** No statistical treatment of between-worker or day-to-day variability (e.g. BS EN 689 compliance testing) — the professional interpretation must address representativeness. A benchmark whose averaging period is not 480 minutes returns *not comparable* for this calculation; use `stel_15` for 15-minute benchmarks.
 
-## 2a. `stel_15` v1.1.0
+## 2a. `stel_15` v1.1.1
 
 **Intended use.** Personal short-term (15-minute reference period) results for comparison with a 15-minute benchmark. Each personal sample intended as a short-term measurement gives one result.
 
@@ -112,7 +141,7 @@ otherwise                      → indeterminate   (e.g. a non-detect whose LOD 
 units differ                   → not_comparable
 ```
 
-Roll-up for the revision: any *at or above* → at_or_above; every formal result *not comparable* → not_comparable; any indeterminate or incomplete worker-shift → indeterminate; any excluded or indicative personal result whose lower bound is at or above the benchmark, or that cannot be converted to the benchmark unit → indeterminate (named in the note); only indicative or static evidence → not_comparable; no benchmark or benchmark not *verified* → no_verified_benchmark.
+Roll-up for the revision: any *at or above* → at_or_above; every formal result *not comparable* → not_comparable; any indeterminate or incomplete worker-shift → indeterminate (since 1.3.1 also when **no** formal result could be calculated — previously reported as not comparable, finding H1-F01); any excluded or indicative personal result whose lower bound is at or above the benchmark, or that cannot be converted to the benchmark unit → indeterminate (named in the note); only indicative or static evidence → not_comparable; no benchmark or benchmark not *verified* → no_verified_benchmark.
 
 The output always carries the statement that a benchmark comparison is not a compliance conclusion. There is no "safe" or "compliant" field anywhere in the model (asserted in tests).
 
@@ -131,7 +160,8 @@ Guard: *exposure adequately controlled* can only be submitted or approved when d
 
 Each benchmark version records substance, jurisdiction, type, averaging period, value, unit, annotations, source title and edition, URL, effective dates and verification status (`unverified → verified | withdrawn`, verified by a second person).
 
-- **No real exposure limits are loaded.** The only platform benchmark is `DEMO LTEL 0.5 mg/m³` for the synthetic substance *Demo Dust X*, flagged `is_synthetic` and labelled on every screen and report.
+- **No real exposure limits are loaded.** The only platform benchmark is `DEMO LTEL 0.5 mg/m³` for the synthetic substance *Demo Dust X*, flagged `is_synthetic`, provenance *synthetic*, and labelled on every screen and report.
+- Platform reference data can only be added through the controlled import (`scripts/import-reference-data.ts`, see `reference-data-workflow.md`). Rows marked *professional reference* must name the reviewer, verification date, source URL, permitted use and licence note; the database refuses incomplete rows.
 - Unverified versions cannot be used for comparison.
 - The approved revision stores `benchmark_version_id` inside its frozen snapshot. A later verified version, or withdrawal of the used version, raises a *reassessment may be required* notice on the assessment; the approved conclusion and its report are unchanged (tested).
 - Before populating production data, verify the current authoritative source and check reproduction rights for any proprietary limit database (see external dependency register).

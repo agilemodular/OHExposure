@@ -1,0 +1,82 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Bay 2 grinders — Demo Dust X baseline — Occupational hygiene report v1</title>
+<style>
+body{font:14px/1.5 Georgia,'Times New Roman',serif;color:#1d232b;max-width:900px;margin:32px auto;padding:0 24px;position:relative}
+h1{font-size:26px;margin:4px 0 12px} h2{font-size:17px;border-bottom:1px solid #c9d0d8;padding-bottom:4px;margin-top:28px} h3{font-size:15px}
+.brand{font:600 12px system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#245b5b}.brand span{font-weight:400;color:#5c6670}
+table{border-collapse:collapse;width:100%;margin:8px 0;font:13px system-ui,sans-serif} th,td{border:1px solid #d6dbe1;padding:5px 7px;text-align:left;vertical-align:top} th{background:#f1f4f6}
+table.meta th{width:16%}
+.badge{display:inline-block;font:600 12px system-ui,sans-serif;padding:2px 8px;border-radius:10px;border:1px solid #99a3ad;margin-right:4px}
+.b-ok{background:#e3f1ea;border-color:#5c9c7c}.b-warn{background:#fbf0d9;border-color:#c49a3c}.b-bad{background:#f8e1e1;border-color:#b85c5c}.b-neutral{background:#eef1f4}
+.tag{font:11px system-ui,sans-serif;background:#eef1f4;border-radius:4px;padding:1px 5px}.muted{color:#5c6670}
+.issues li.sev-exclude,.issues li.sev-incomplete{color:#8a2d2d}
+.watermark{position:fixed;top:40%;left:0;right:0;text-align:center;font:700 72px system-ui,sans-serif;color:rgba(184,92,92,.13);transform:rotate(-24deg);pointer-events:none;z-index:9}
+.draftnote{border:2px solid #b85c5c;background:#f8e1e1;padding:8px 12px;font:600 13px system-ui,sans-serif}
+.sig{border-top:1px solid #c9d0d8;padding-top:8px} code{font-size:11px;word-break:break-all}
+footer{margin-top:36px;font:12px system-ui,sans-serif;color:#5c6670;border-top:1px solid #c9d0d8;padding-top:8px}
+@media print{.watermark{position:fixed}}</style></head><body>
+
+<p class="draftnote">DEMONSTRATION DATA — synthetic records for demonstration only. Not real measurements.</p>
+<header><div class="brand">Occupational Hygiene &amp; Exposure Assurance <span>by Assurentra</span></div>
+<h1>Bay 2 grinders — Demo Dust X baseline</h1>
+<table class="meta"><tr><th>Client</th><td>Northfield Fabrication (demo)</td><th>Site</th><td>Northfield works</td></tr>
+<tr><th>Report version</th><td>1 (issued)</td><th>Assessment revision</th><td>r1 — approved</td></tr>
+<tr><th>Generated</th><td>18 Oct 2026, 22:47</td><th>Prepared by</th><td>Priya Practitioner</td></tr></table>
+<p><span class="badge b-warn" title="Data quality">Data: qualified</span> <span class="badge b-neutral" title="Benchmark comparison (not a compliance conclusion)">Benchmark: below benchmark</span> <span class="badge b-ok" title="Professional assessment">Review: approved</span></p></header>
+
+<h2>1. Purpose and scope</h2>
+<p><strong>Assessment question:</strong> Is exposure of Bay 2 grinders to Demo Dust X adequately controlled under current controls?</p>
+<p><strong>Monitoring purpose:</strong> Characterise grinder exposure before the planned downdraught bench upgrade.</p>
+<p><strong>Scope of approval:</strong> Bay 2 grinders at Northfield works, March 2026 baseline</p>
+
+<h2>2. Processes and exposure group assessed</h2>
+<p><strong>Similar exposure group:</strong> Bay 2 grinders. </p>
+<p><strong>Basis for grouping:</strong> Same grinding task with the same tools, material and bench layout; same shift pattern and controls.</p>
+<p><strong>Substance:</strong> Demo Dust X (synthetic)</p>
+<ul><li>Weld finishing — Disc grinding of weld seams</li></ul>
+
+<h2>3. Sampling strategy and methods</h2>
+<p><strong>Approach:</strong> personal. Full-shift personal sampling of all three grinders on two representative production days.</p>
+<ul><li>DEMO-GRAV v1 — result basis mass on sample; flow tolerance 5%; suitable for formal assessment</li></ul>
+<p class="draftnote"><strong>Method review status:</strong> not reviewed — this calculation method has not been approved by a competent occupational hygienist. Results are for discussion only and must not be relied upon for conclusions.</p>
+
+<p><strong>Calculation:</strong> twa_8h v1.2.1 (engine 1.3.1). Parameters: exposure per shift 360 min; unsampled period assumption: none.</p>
+
+<h2>4. Instruments and quality checks</h2>
+<table><thead><tr><th>Instrument</th><th>Calibration at sampling</th><th>Designation</th></tr></thead><tbody>
+<tr><td>PUMP-07</td><td>Valid</td><td>Formal</td></tr><tr><td>PUMP-11</td><td>Expired or failed</td><td>Formal</td></tr>
+</tbody></table>
+<h3>Data quality findings</h3><ul class="issues"><li class="sev-qualify">[qualify] NF-26-003: Calibration for PUMP-11 was expired or failed at the sampling date; result treated as indicative only.</li><li class="sev-qualify">[qualify] NF-26-003: Non-detect (&lt; 20 ug). Carried as an interval from 0 to the reported limit; not replaced by zero.</li></ul>
+
+<h2>5. Results</h2>
+<table><thead><tr><th>Sample</th><th>Type</th><th>Subject</th><th>Sampled (min)</th><th>Volume (L)</th><th>Concentration</th><th>Used</th></tr></thead><tbody>
+<tr><td>NF-26-001</td><td>personal</td><td>NF-W01</td><td>360.0</td><td>720.0</td><td>0.2917 mg/m3</td><td>Yes</td></tr><tr><td>NF-26-002</td><td>personal</td><td>NF-W02</td><td>360.0</td><td>716.4</td><td>0.2233 mg/m3</td><td>Yes</td></tr><tr><td>NF-26-003</td><td>personal</td><td>NF-W03</td><td>360.0</td><td>720.0</td><td>&lt; 0.02778 mg/m3 <span class="tag tag-q">range 0–0.02778</span> <span class="tag">indicative</span></td><td>Yes</td></tr><tr><td>NF-26-004</td><td>personal</td><td>NF-W01</td><td>360.0</td><td>723.6</td><td>0.4561 mg/m3</td><td>Yes</td></tr>
+</tbody></table>
+<h3>8-hour time-weighted averages (personal)</h3>
+<table><thead><tr><th>Worker ref</th><th>Shift date</th><th>Samples</th><th>Coverage</th><th>8-h TWA</th><th>Benchmark comparison</th></tr></thead><tbody>
+<tr><td>NF-W01</td><td>2026-03-02</td><td>NF-26-001</td><td>100%</td><td>0.2188 mg/m3</td><td>below benchmark (ratio 0.4375)</td></tr><tr><td>NF-W01</td><td>2026-03-03</td><td>NF-26-004</td><td>100%</td><td>0.342 mg/m3</td><td>below benchmark (ratio 0.6841)</td></tr><tr><td>NF-W02</td><td>2026-03-02</td><td>NF-26-002</td><td>100%</td><td>0.1675 mg/m3</td><td>below benchmark (ratio 0.335)</td></tr><tr><td>NF-W03</td><td>2026-03-02</td><td>NF-26-003</td><td>100%</td><td>&lt; 0.02083 mg/m3 <span class="tag tag-q">range 0–0.02083</span></td><td>not compared</td></tr>
+</tbody></table>
+
+
+<h2>6. Applicable benchmark</h2>
+<p>DEMO LTEL (480-min reference): 0.5 mg/m3. Source: SYNTHETIC DEMONSTRATION VALUE — not an exposure limit, demo-1; effective from 01 Jan 2020. Verification: verified. Provenance: synthetic demonstration value. <strong>SYNTHETIC DEMONSTRATION VALUE — not a real exposure limit.</strong></p>
+<p>3 formal worker-shift result(s) compared with DEMO LTEL 0.5 mg/m3 (SYNTHETIC DEMONSTRATION VALUE — not an exposure limit, demo-1).</p>
+<p class="muted">Calculated outputs and benchmark comparisons are not a compliance conclusion. Professional interpretation by a competent person is required.</p>
+
+<h2>7. Limitations and uncertainty</h2>
+<p>Two production days; one result qualified by expired calibration evidence; synthetic benchmark used for demonstration.</p>
+<p><strong>Reviewer-stated limitations:</strong> Small data set; demonstration benchmark; see qualified result NF-26-003</p>
+
+<h2>8. Professional interpretation</h2>
+<p>Results range up to roughly half the synthetic benchmark. One non-detect was collected with a pump whose calibration had expired, which qualifies that result. The data set is small and covers two days only.</p>
+<p><strong>Conclusion category:</strong> improvement required</p>
+
+<h2>9. Required actions and verification requirements</h2>
+<p>No actions recorded against this assessment.</p>
+
+<h2>10. Review and revision history</h2>
+<table><thead><tr><th>Revision</th><th>Status</th><th>Reviewer</th><th>Approved</th><th>Reason for revision</th></tr></thead><tbody>
+<tr><td>r1</td><td>approved</td><td>Rhys Reviewer</td><td>18 Oct 2026, 22:47</td><td>—</td></tr>
+</tbody></table>
+<p class="sig">Approved by Rhys Reviewer (reviewer@demo.test) on 18 Oct 2026, 22:47. Approval record hash: <code>58ac4c4a2d1c4eb2ae90d52719d7d7c9c88a4031adb89a2721ee8842ff250235</code></p>
+<footer>SHEQ Experts Limited · Occupational Hygiene &amp; Exposure Assurance by Assurentra. Clinical diagnosis and medical fitness decisions are outside the scope of this report.</footer>
+</body></html>

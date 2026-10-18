@@ -19,7 +19,8 @@
 // 1.2.0: STEL (stel_15) calculation; ppm ↔ mg/m³ conversion for benchmark comparison when molecular weight is recorded.
 // 1.3.0: results without valid calibration or instrument evidence are indicative only; unconvertible indicative/excluded
 // results block a favourable roll-up; STEL requires the elapsed window to be 15 minutes.
-export const ENGINE_VERSION = '1.3.0';
+// 1.3.1: roll-up treats uncalculable formal results as indeterminate (was not comparable); clearer comparison notes.
+export const ENGINE_VERSION = '1.3.1';
 
 export type Qualifier = '=' | '<LOD' | '<LOQ' | '>' | 'estimated';
 export type MassUnit = 'ug' | 'mg';
@@ -492,8 +493,8 @@ export interface AssessmentOutput {
 }
 
 export const CALCULATIONS: Record<CalcCode, { code: CalcCode; version: string; averagingMinutes: number; label: string }> = {
-  twa_8h: { code: 'twa_8h', version: '1.2.0', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
-  stel_15: { code: 'stel_15', version: '1.1.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
+  twa_8h: { code: 'twa_8h', version: '1.2.1', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
+  stel_15: { code: 'stel_15', version: '1.1.1', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
 };
 
 export function runAssessment(input: AssessmentInput): AssessmentOutput {
@@ -520,10 +521,23 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
   else if (b.verificationStatus !== 'verified') { benchmarkState = 'no_verified_benchmark'; benchmarkNote = `Selected benchmark version is ${b.verificationStatus}; it cannot be used for comparison until verified.`; }
   else if (b.averagingMinutes !== REF) { benchmarkState = 'not_comparable'; benchmarkNote = `Benchmark averaging period (${b.averagingMinutes} min) does not match the ${calc.label} calculation (${REF} min).`; }
   else {
-    const formal = withCmp.filter((s) => s.comparison);
+    // Only calculated, non-indicative results take part in the formal comparison.
+    const formal = withCmp.filter((s) => s.comparison && s.result);
+    const uncalculated = withCmp.filter((s) => !s.indicative && !s.result).length;
     if (!formal.length) {
-      benchmarkState = 'not_comparable';
-      benchmarkNote = shifts.length ? 'Only indicative (screening) personal results are available; no formal benchmark comparison.' : `No personal ${calc.label} results are available; static results are not comparable with personal benchmarks.`;
+      if (uncalculated) {
+        // 1.3.1: an uncalculable formal result leaves the comparison open rather than "not comparable".
+        benchmarkState = 'indeterminate';
+        benchmarkNote = `${uncalculated} ${what} result(s) could not be calculated; no formal benchmark comparison is possible.`;
+      } else if (shifts.length) {
+        benchmarkState = 'not_comparable';
+        benchmarkNote = 'Only indicative personal results are available (screening-only instrument, method not designated for formal assessment, or missing, expired or failed calibration); no formal benchmark comparison.';
+      } else {
+        benchmarkState = 'not_comparable';
+        benchmarkNote = staticSamples.length
+          ? `No personal ${calc.label} results are available; static results are not comparable with personal benchmarks.`
+          : `No usable personal ${calc.label} results are available (all samples excluded or not calculable).`;
+      }
     } else {
       const st = formal.map((s) => s.comparison!.state);
       benchmarkState = st.includes('at_or_above_benchmark') ? 'at_or_above_benchmark'

@@ -4,7 +4,9 @@ import pg from 'pg';
 import { hashPassword } from '../src/auth/crypto.js';
 
 export async function createTenant(admin: pg.Client, o: { name: string; kind?: 'direct' | 'consultancy'; isDemo?: boolean; mfaRequired?: boolean; clients?: string[] }) {
-  const t = (await admin.query('insert into tenants (name,kind,is_demo,mfa_required) values ($1,$2,$3,$4) returning *', [o.name, o.kind ?? 'direct', o.isDemo ?? false, o.mfaRequired ?? true])).rows[0];
+  // New organisations start at evaluation level with offline storage off; only the synthetic demo tenant is 'demo' with offline on.
+  const t = (await admin.query(`insert into tenants (name,kind,is_demo,mfa_required,assurance_level,offline_capture_enabled) values ($1,$2,$3,$4,$5,$3) returning *`,
+    [o.name, o.kind ?? 'direct', o.isDemo ?? false, o.mfaRequired ?? true, o.isDemo ? 'demo' : 'evaluation'])).rows[0];
   const clients: Record<string, string> = {};
   const names = o.clients?.length ? o.clients : [o.name];
   for (const [i, n] of names.entries()) {

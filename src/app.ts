@@ -44,7 +44,7 @@ export async function buildApp() {
   // Readiness: the database is reachable and migrations are applied. Use for load-balancer health checks.
   app.get('/readyz', async (_req, reply) => {
     try {
-      const r = await withAnon((tx) => one(tx, `select count(*)::int n from pg_proc where proname = 'auth_throttle_hit'`));
+      const r = await withAnon((tx) => one(tx, `select count(*)::int n from pg_proc where proname = 'auth_session_active'`));
       return r?.n ? { ok: true } : reply.code(503).send({ ok: false, reason: 'migrations not applied' });
     } catch {
       return reply.code(503).send({ ok: false, reason: 'database unavailable' });

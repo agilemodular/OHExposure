@@ -186,6 +186,18 @@ describe('MFA enforcement for sessions that existed before MFA was required', ()
   });
 });
 
+describe('session idle timeout', () => {
+  it('a session with no activity for longer than the idle limit is no longer accepted', async () => {
+    const admin = new pg.Client({ connectionString: URL_ }); await admin.connect();
+    const u = await createUserDirect(admin, { tenantId: w.B.tenant.id, email: `idle.${w.tag}@t.test`, name: 'I', role: 'practitioner', password: 'correct horse battery' });
+    const l = await login(u.email, 'correct horse battery');
+    expect(await resolveSession(l.token)).not.toBeNull();
+    await admin.query(`update sessions set last_seen_at = now() - interval '3 hours' where user_id=$1`, [u.id]);
+    await admin.end();
+    expect(await resolveSession(l.token)).toBeNull();
+  });
+});
+
 describe('controlled reference-data import', () => {
   it('validates every row and refuses the whole file on any error', () => {
     const { errors } = validateFile([
