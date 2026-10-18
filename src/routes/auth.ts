@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { completeMfa, login, logout, resolveSession } from '../auth/session.js';
 import { deriveFromParams, newTotpSecret, otpauthUri, hashPassword, sha256 } from '../auth/crypto.js';
 import { config } from '../config.js';
+import { sendAlert } from '../alerts.js';
 import { audit, one, withActor, withAnon } from '../db.js';
 import { AppError } from '../errors.js';
 import { html } from '../ui/html.js';
@@ -28,6 +29,7 @@ export function authRoutes(app: FastifyInstance) {
   // Per-IP throttle shared across all instances (stored in the database, keyed by a hash of the IP).
   app.post('/login', async (req, reply) => {
     const allowed = await withAnon(async (tx) => (await one(tx, 'select auth_throttle_hit($1,$2,900) ok', [sha256(`ip:${req.ip}`), config.loginIpLimit]))?.ok);
+    if (!allowed) void sendAlert('auth.ip_throttled', { ip_hash: sha256(`ip:${req.ip}`).slice(0, 16) }, req.ip);
     if (!allowed) return reply.redirect(`/login?e=${encodeURIComponent('Too many sign-in attempts from this network. Try again in 15 minutes.')}`, 303);
     const b = req.body as any;
     try {

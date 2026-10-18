@@ -1,4 +1,5 @@
 import { config } from '../config.js';
+import { sendAlert } from '../alerts.js';
 import { actorFrom, audit, one, withActor, withAnon, type Actor } from '../db.js';
 import { AppError } from '../errors.js';
 import { deriveFromParams, randomToken, sha256, verifyTotpStep } from './crypto.js';
@@ -11,6 +12,9 @@ export async function login(email: string, password: string, ua?: string, ip?: s
   const params = await withAnon((tx) => one<{ p: string }>(tx, 'select auth_password_params($1) p', [email]));
   const dk = deriveFromParams(password, params!.p);
   const r = await withAnon((tx) => one<{ user_id: string | null; tenant_id: string | null; outcome: string }>(tx, 'select * from auth_login($1,$2)', [email, dk]));
+  if (r?.outcome === 'locked') {
+    void sendAlert('auth.account_locked', { email_hash: sha256(email.toLowerCase()).slice(0, 16), ip }, email.toLowerCase());
+  }
   if (r?.outcome === 'locked') throw new AppError(429, 'locked', 'Account temporarily locked after repeated failed attempts. Try again later.');
   if (r?.outcome !== 'ok' || !r.user_id || !r.tenant_id) throw new AppError(401, 'auth_failed', 'Email or password not recognised');
   const u = { id: r.user_id, tenant_id: r.tenant_id };
@@ -43,11 +47,14 @@ export async function resolveSession(token: string | undefined, ip?: string): Pr
   const boot: Actor = { userId: s.user_id, tenantId: s.tenant_id, clientId: null, role: 'client_readonly', name: '', email: '', perms: new Set() };
   const { u, t } = await withActor(boot, async (tx) => ({
     u: await one(tx, 'select id,tenant_id,client_id,role,name,email,mfa_enabled,must_change_password from users where id=$1', [s.user_id]),
-    t: await one(tx, 'select id,name,kind,is_demo,mfa_required from tenants where id=$1', [s.tenant_id]),
+    t: await one(tx, 'select id,name,kind,is_demo,mfa_required,assurance_level,offline_capture_enabled,suspended_workflows,suspension_reason from tenants where id=$1', [s.tenant_id]),
   }));
   if (!u) return null;
   await withAnon((tx) => tx.query('select auth_touch_session($1)', [sid]));
-  return { actor: actorFrom(u, ip), csrf: s.csrf_token, mfaPassed: s.mfa_passed, sessionId: sid, mfaEnabled: u.mfa_enabled, mfaRequired: t.mfa_required, mustChangePassword: u.must_change_password, tenant: t };
+  // If the organisation requires two-step verification, a session only counts as verified when the user has enrolled —
+  // even if the session was created before the requirement was switched on.
+  const mfaPassed = s.mfa_passed && (u.mfa_enabled || !t.mfa_required);
+  return { actor: actorFrom(u, ip), csrf: s.csrf_token, mfaPassed, sessionId: sid, mfaEnabled: u.mfa_enabled, mfaRequired: t.mfa_required, mustChangePassword: u.must_change_password, tenant: t };
 }
 
 export async function completeMfa(si: SessionInfo, code: string) {
@@ -78,6 +85,7 @@ export async function completeMfa(si: SessionInfo, code: string) {
     await audit(tx, si.actor, locked ? 'auth.mfa_session_revoked' : 'auth.mfa_failed', 'user', si.actor.userId);
     return locked ? ('locked' as const) : ('failed' as const);
   });
+  if (outcome === 'locked') void sendAlert('auth.mfa_lockout', { user_id: si.actor.userId, tenant_id: si.actor.tenantId }, si.actor.userId);
   if (outcome === 'locked') throw new AppError(401, 'mfa_locked', 'Too many incorrect codes. Sign in again.');
   if (outcome === 'failed') throw new AppError(401, 'mfa_failed', 'Code not accepted');
 }

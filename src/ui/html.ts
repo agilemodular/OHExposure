@@ -30,7 +30,7 @@ export const fmtNum = (n: unknown, dp = 3) => {
 };
 export const label = (s: unknown) => String(s ?? '').replace(/_/g, ' ');
 export function interval(i: any) {
-  if (!i) return html`<span class="muted">not calculable</span>`;
+  if (!i) return html`<span class="muted">insufficient evidence — not calculated</span>`;
   if (i.lower === i.upper) return html`${fmtNum(i.lower)} ${i.unit}`;
   if (i.lower === 0) return html`&lt; ${fmtNum(i.upper)} ${i.unit} <span class="tag tag-q">range 0–${fmtNum(i.upper)}</span>`;
   return html`${fmtNum(i.lower)}–${fmtNum(i.upper)} ${i.unit} <span class="tag tag-q">interval</span>`;
@@ -48,4 +48,9 @@ export function evidenceStrip(dq: string | null, bm: string | null, ps: string |
   const seg = (title: string, v: string | null, tone: string) => html`<span class="ev-${tone}"><small>${title}</small><b>${v ? label(v) : 'not yet'}</b></span>`;
   return html`<span class="evidence" role="group" aria-label="Assessment states">${seg('Data quality', dq, dq ? DQ[dq] : 'neutral')}${seg('Benchmark comparison', bm, bm ? BM[bm] : 'neutral')}${seg('Professional review', ps, ps ? PS[ps] : 'neutral')}</span>`;
 }
+/** Distinguishes professionally verified reference data from organisation-entered and synthetic values. */
+export const provenanceBadge = (b: { provenance?: string; reviewer_name?: string | null }) =>
+  b.provenance === 'professional_reference' ? html`<span class="badge b-ok" title="Verified by ${b.reviewer_name ?? ''}">Professional reference</span>`
+  : b.provenance === 'synthetic' ? html`<span class="synthetic">Synthetic</span>`
+  : html`<span class="badge b-warn">Entered by organisation</span>`;
 export const statusBadge = (s: string, tone = 'neutral') => html`<span class="badge b-${tone}">${label(s)}</span>`;

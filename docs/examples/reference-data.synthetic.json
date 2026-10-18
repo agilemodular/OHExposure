@@ -1,0 +1,38 @@
+[
+  {
+    "substance": { "name": "Demo Solvent Y (synthetic)", "cas_number": null, "molecular_weight": 100.0, "molecular_weight_source": "Synthetic value for demonstration" },
+    "jurisdiction": "DEMO",
+    "benchmark_type": "LTEL",
+    "averaging_minutes": 480,
+    "value": 50,
+    "unit": "ppm",
+    "annotations": ["Sk"],
+    "source_title": "SYNTHETIC DEMONSTRATION SOURCE — not an exposure limit",
+    "source_version": "demo-2026",
+    "source_url": "https://example.invalid/synthetic-reference",
+    "effective_from": "2026-01-01",
+    "provenance": "synthetic",
+    "reviewer_name": "Synthetic example — no reviewer",
+    "verified_on": "2026-01-01",
+    "permitted_use": "Demonstration and software testing only",
+    "licence_note": "Invented value; no third-party rights"
+  },
+  {
+    "substance": { "name": "Demo Solvent Y (synthetic)", "cas_number": null },
+    "jurisdiction": "DEMO",
+    "benchmark_type": "STEL",
+    "averaging_minutes": 15,
+    "value": 100,
+    "unit": "ppm",
+    "annotations": [],
+    "source_title": "SYNTHETIC DEMONSTRATION SOURCE — not an exposure limit",
+    "source_version": "demo-2026",
+    "source_url": "https://example.invalid/synthetic-reference",
+    "effective_from": "2026-01-01",
+    "provenance": "synthetic",
+    "reviewer_name": "Synthetic example — no reviewer",
+    "verified_on": "2026-01-01",
+    "permitted_use": "Demonstration and software testing only",
+    "licence_note": "Invented value; no third-party rights"
+  }
+]

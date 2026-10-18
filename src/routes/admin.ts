@@ -7,6 +7,8 @@ import * as inst from '../services/instruments.js';
 import * as integ from '../services/integrations.js';
 import * as reg from '../services/register.js';
 import { lookups, substanceLabel } from '../services/lookups.js';
+import { methodCapabilities } from '../services/assurance.js';
+import { provenanceBadge } from '../ui/html.js';
 import { fmtDate, fmtDateTime, html, label } from '../ui/html.js';
 import { csrfField, empty, options } from '../ui/layout.js';
 import { action, api, page } from './kit.js';
@@ -97,17 +99,24 @@ export function adminRoutes(app: FastifyInstance) {
   });
 
   page(app, '/reference', async (c) => {
-    const [bm, methods, lk] = await Promise.all([asmt.listBenchmarks(c.actor), inst.listMethodVersions(c.actor), lookups(c.actor)]);
+    const [bm, methods, lk, caps] = await Promise.all([asmt.listBenchmarks(c.actor), inst.listMethodVersions(c.actor), lookups(c.actor), methodCapabilities(c.actor)]);
+    const capLabel = (s: string) => s === 'approved' ? 'Approved for pilot conclusions' : s === 'approved_with_conditions' ? 'Approved with conditions' : s === 'rejected' ? 'Rejected — unavailable' : 'Not reviewed';
     return {
       title: 'Benchmarks and methods',
       sub: 'Exposure benchmarks are versioned with their source. Only verified versions can be used for comparison, and approved assessments keep the version they used.',
       body: html`
       <div class="note">No real exposure limits are pre-loaded. Rows marked synthetic exist only for demonstration and testing. Enter limits from the current authoritative publication and have a second person verify them.</div>
+      <h2>Calculation methods</h2>
+      <p class="small muted">Review decisions are recorded by a platform operator from a competent occupational hygienist's signed review. Organisation administrators cannot change them. ${caps.controls.assuranceLevel === 'pilot' ? 'This organisation is in an authorised pilot: only approved methods can support approved conclusions.' : 'Outside an authorised pilot, unreviewed methods can be calculated but every output states that they are not reviewed.'}</p>
+      <div class="tablewrap"><table><thead><tr><th>Calculation</th><th>Version</th><th>Professional review</th><th>Reviewer</th><th>Usable for pilot conclusions</th></tr></thead><tbody>
+        ${caps.rows.map((m) => html`<tr><td>${m.label} <span class="small muted">(${m.averagingMinutes}-min reference)</span></td><td>${m.code} v${m.version}</td>
+          <td><span class="badge ${m.pilotEnabled ? 'b-ok' : m.status === 'rejected' ? 'b-bad' : 'b-warn'}">${capLabel(m.status)}</span>${m.conditions ? html`<br><span class="small">${m.conditions}</span>` : ''}</td>
+          <td>${m.reviewer ? html`${m.reviewer}<br><span class="small muted">${fmtDate(m.reviewedOn)} · ${m.evidenceRef}</span>` : html`<span class="muted">—</span>`}</td><td>${m.pilotEnabled ? 'Yes' : 'No'}</td></tr>`)}</tbody></table></div>
       <h2>Exposure benchmarks</h2>
       ${bm.length ? html`<div class="tablewrap"><table><thead><tr><th>Substance</th><th>Benchmark</th><th>Value</th><th>Source</th><th>Effective</th><th>Verification</th></tr></thead><tbody>
         ${bm.map((b) => html`<tr id="bv-${b.id}"><td>${b.substance_name}${b.cas_number ? html`<br><span class="small muted">CAS ${b.cas_number}</span>` : ''}</td><td>${b.jurisdiction} ${b.benchmark_type}<br><span class="small muted">${b.averaging_minutes}-min reference</span></td>
           <td>${b.value} ${b.unit}${b.annotations?.length ? html`<br><span class="small">${b.annotations.join(', ')}</span>` : ''}${b.is_synthetic ? html` <span class="synthetic">synthetic</span>` : ''}</td>
-          <td>${b.source_url ? html`<a href="${b.source_url}" rel="noopener noreferrer">${b.source_title}</a>` : b.source_title}<br><span class="small muted">${b.source_version}${b.platform ? ' · platform reference' : ''}</span></td>
+          <td>${b.source_url ? html`<a href="${b.source_url}" rel="noopener noreferrer">${b.source_title}</a>` : b.source_title}<br><span class="small muted">${b.source_version}</span><br>${provenanceBadge(b)}</td>
           <td>${fmtDate(b.effective_from)}${b.effective_to ? html` – ${fmtDate(b.effective_to)}` : ''}</td>
           <td>${b.verification_status === 'verified' ? html`verified<br><span class="small muted">${b.verified_by}</span>` : html`<span class="badge ${b.verification_status === 'withdrawn' ? 'b-neutral' : 'b-warn'}">${b.verification_status}</span>`}
             ${!b.platform && can(c.actor, 'benchmark.verify') && b.verification_status === 'unverified' ? html`<form method="post" action="/reference/benchmarks/${b.id}/verify" class="stack">${csrfField(c)}<input name="note" placeholder="Checked against (publication, page)" required><div class="actions-row"><button name="status" value="verified" class="tiny">Verify</button><button name="status" value="withdrawn" class="secondary tiny">Withdraw</button></div></form>` : ''}</td></tr>`)}</tbody></table></div>` : empty('No benchmarks.')}

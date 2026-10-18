@@ -1,0 +1,217 @@
+// Phase H1 pilot controls: method gating, reference provenance, workflow suspension, MFA on existing sessions,
+// device clock evidence, platform operator refusals and controlled reference-data import.
+import { randomUUID } from 'node:crypto';
+import pg from 'pg';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildWorld, type World } from './fixtures.js';
+import { closePool, withActor } from '../src/db.js';
+import * as reg from '../src/services/register.js';
+import * as inst from '../src/services/instruments.js';
+import * as plans from '../src/services/plans.js';
+import * as field from '../src/services/field.js';
+import * as lab from '../src/services/lab.js';
+import * as asmt from '../src/services/assessments.js';
+import { assertWorkflowActive, methodCapabilities, type Workflow } from '../src/services/assurance.js';
+import { CALCULATIONS } from '../src/calc/engine.js';
+import { sentAlerts, resetAlertDedupe } from '../src/alerts.js';
+import { login, resolveSession } from '../src/auth/session.js';
+import { createTenant, createUserDirect } from '../scripts/bootstrap.js';
+import { recordMethodReview, resumeWorkflows, setTenantLevel, suspendWorkflows } from '../scripts/platform-controls.js';
+import { importReferenceData, validateFile } from '../scripts/import-reference-data.js';
+
+const URL_ = process.env.DATABASE_ADMIN_URL!;
+let w: World;
+const S: Record<string, any> = {};
+const TWA = CALCULATIONS.twa_8h.version;
+const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+
+/** A test-only stand-in for a professionally verified reference row (exists only in the disposable test schema). */
+const refRow = (tag: string, value = 2) => ({
+  substance: { name: `Test Reference Substance ${tag}` }, jurisdiction: 'TEST', benchmark_type: 'LTEL', averaging_minutes: 480, value, unit: 'mg/m3',
+  source_title: 'Test fixture reference list', source_version: 'T1', source_url: 'https://example.org/test-reference', effective_from: '2020-01-01',
+  provenance: 'professional_reference', reviewer_name: 'Test Fixture Reviewer', verified_on: yesterday, permitted_use: 'Automated tests only', licence_note: 'Test fixture',
+});
+
+beforeAll(async () => {
+  w = await buildWorld();
+  resetAlertDedupe();
+  const r = await importReferenceData(URL_, [refRow(w.tag)], { importedBy: 'test operator' });
+  expect(r.created).toBe(1);
+  const admin = new pg.Client({ connectionString: URL_ }); await admin.connect();
+  const q = (await admin.query(`select s.id sub, bv.id bv from substances s join benchmarks b on b.substance_id=s.id join benchmark_versions bv on bv.benchmark_id=b.id where s.name=$1`, [`Test Reference Substance ${w.tag}`])).rows[0];
+  await admin.end();
+  S.refSub = q.sub; S.refBv = q.bv;
+});
+afterAll(async () => {
+  // Method reviews are platform-wide; restore the not-reviewed state so other suites are unaffected.
+  await recordMethodReview(URL_, { method: 'twa_8h', version: TWA, status: 'not_reviewed', recordedBy: 'test operator' });
+  await closePool();
+});
+
+describe('pilot gating of calculation methods and reference data', () => {
+  it('builds evidence for an assessment on a reference substance', async () => {
+    const { prac } = w.a;
+    const site = await reg.createSite(prac, { client_id: w.A.clients['Client One'], name: 'Pilot site', reference: `P-${w.tag}` });
+    const area = await reg.createWorkArea(prac, { site_id: site.id, name: 'Bay' });
+    const proc = await reg.createProcess(prac, { work_area_id: area.id, name: 'Process' });
+    const task = await reg.createTask(prac, { process_id: proc.id, name: 'Task', duration_min_per_shift: '480', duration_basis: 'recorded_fact' });
+    const hz = await reg.createHazard(prac, { task_id: task.id, substance_id: S.refSub, physical_form: 'dust', exposure_routes: ['inhalation'], exposure_duration_min: '480' });
+    S.group = await reg.createGroup(prac, { site_id: site.id, name: 'Operators', rationale: 'Same task, same tools and same shift pattern; comparable work methods observed.', task_ids: [task.id], hazard_ids: [hz.id] });
+    S.worker = await reg.createWorker(prac, { client_id: w.A.clients['Client One'], ref_code: `PW-${w.tag}`, full_name: 'Pat Example' });
+    await reg.addMembership(prac, { group_id: S.group.id, worker_id: S.worker.id, valid_from: '2026-01-01' });
+    S.pump = await inst.createInstrument(prac, { asset_tag: `PP-${w.tag}`, instrument_type: 'sampling_pump' });
+    await inst.recordCalibration(prac, S.pump.id, { performed_at: '2026-01-01', valid_until: '2027-12-31', outcome: 'pass' });
+    S.plan = await plans.createPlan(prac, { site_id: site.id, title: 'Pilot plan', purpose: 'Pilot gating test', assessment_question: 'What is the 8-hour TWA?', approach: 'personal', strategy_rationale: 'Full-shift personal samples for the test.', instrument_ids: [S.pump.id] });
+    await plans.addTarget(prac, S.plan.id, { group_id: S.group.id, substance_id: S.refSub, method_version_id: w.ref.methodVersionId, planned_samples: '1' });
+    await plans.transitionPlan(w.a.rev, S.plan.id, { to: 'reviewed' });
+    await plans.transitionPlan(prac, S.plan.id, { to: 'scheduled' });
+    await plans.transitionPlan(w.a.tech, S.plan.id, { to: 'in_progress' });
+    S.code = `PS-${w.tag}`;
+    S.payload = { plan_id: S.plan.id, sample_code: S.code, sample_type: 'personal', worker_id: S.worker.id, substance_id: S.refSub, method_version_id: w.ref.methodVersionId, instrument_id: S.pump.id,
+      timezone: 'Europe/London', start_local: '2026-03-02T08:00', end_local: '2026-03-02T16:00', flow_pre_lpm: 2.0, flow_post_lpm: 2.0 };
+    const [r] = await field.syncBatch(w.a.tech, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: S.payload }], { deviceNow: Date.now() - 600_000 });
+    expect(r.outcome).toBe('created');
+    expect(r.warnings!.join(' ')).toMatch(/clock differed/);
+    S.sample = r.server_id;
+    const ev = (await field.sampleDetail(w.a.prac, S.sample)).event;
+    expect(Math.abs(ev.device_clock_offset_s - 600)).toBeLessThan(5);
+    const lb = await inst.createLaboratory(prac, { name: `Lab ${w.tag}` });
+    await lab.createSubmission(prac, { laboratory_id: lb.id, reference: `PSUB-${w.tag}`, sample_ids: [S.sample], dispatched_at: '2026-03-04T09:00' });
+    const sub = (await lab.listSubmissions(prac)).find((s) => s.reference === `PSUB-${w.tag}`);
+    await lab.receiveSubmission(prac, sub.id, { received_at: '2026-03-05T10:00', received_condition: 'Intact' });
+    const imp = await lab.stageImport(prac, { filename: 'p.csv', laboratory_id: lb.id, csv: `sample_code,analyte,value,unit,qualifier,lod\n${S.code},Test Reference Substance ${w.tag},96,ug,=,5\n` });
+    expect(imp.status).toBe('validated');
+    await lab.commitImport(prac, imp.id);
+  });
+
+  it('refuses future capture times (device clock or time zone error)', async () => {
+    const tomorrow = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 16);
+    const [r] = await field.syncBatch(w.a.tech, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: { ...S.payload, sample_code: `PS-F-${w.tag}`, start_local: tomorrow, end_local: undefined } }]);
+    expect(r.outcome).toBe('rejected');
+    expect(r.message).toMatch(/in the future/);
+  });
+
+  it('only a platform operator can move a tenant to pilot; organisation administrators cannot', async () => {
+    await expect(withActor(w.a.admin, (tx) => tx.query(`update tenants set assurance_level='pilot'`))).rejects.toThrow(/permission denied/);
+    await expect(withActor(w.a.admin, (tx) => tx.query(`insert into method_reviews (calc_code,calc_version,status,recorded_by) values ('twa_8h','${TWA}','not_reviewed','x')`))).rejects.toThrow(/permission denied/);
+    await expect(setTenantLevel(URL_, w.A.tenant.id, 'pilot', 'Operator', '')).rejects.toThrow(/evidence/);
+    await setTenantLevel(URL_, w.A.tenant.id, 'pilot', 'Test Operator', 'TEST-GATE-REF');
+  });
+
+  it('blocks pilot conclusions that rely on an unreviewed method', async () => {
+    const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: S.refSub, plan_id: S.plan.id, title: 'Pilot assessment', assessment_question: 'Is exposure adequately controlled?' });
+    S.rev = revision.id;
+    const draft = { sample_ids: [S.sample], benchmark_version_id: S.refBv, exposure_minutes_per_shift: '480', unsampled_assumption: 'none',
+      interpretation: 'Single sample for the gating test; not representative of the group.', conclusion_category: 'insufficient_evidence', limitations: 'Automated test data only.' };
+    S.draft = draft;
+    await asmt.updateDraft(w.a.prac, S.rev, draft);
+    const calc = await asmt.calculate(w.a.prac, S.rev);
+    expect(calc.calc_output.shifts[0].twa8h.lower).toBeCloseTo(0.1, 6); // 96 µg / 960 L
+    await expect(asmt.submitForReview(w.a.prac, S.rev)).rejects.toThrow(/not reviewed by a competent occupational hygienist/);
+    const caps = await methodCapabilities(w.a.prac);
+    expect(caps.rows.find((r) => r.code === 'twa_8h')!.pilotEnabled).toBe(false);
+  });
+
+  it('a method review needs a named reviewer, competence, a past date and evidence, recorded by someone else', async () => {
+    const base = { method: 'twa_8h', version: TWA, status: 'approved', reviewer: 'Test Reviewer', competence: 'Test competence statement', reviewedOn: yesterday, evidence: 'TEST-PACK-1', recordedBy: 'Test Operator' };
+    await expect(recordMethodReview(URL_, { ...base, reviewer: undefined })).rejects.toThrow(/--reviewer/);
+    await expect(recordMethodReview(URL_, { ...base, evidence: '' })).rejects.toThrow(/--evidence/);
+    await expect(recordMethodReview(URL_, { ...base, recordedBy: 'test reviewer' })).rejects.toThrow(/cannot be the reviewer/);
+    await expect(recordMethodReview(URL_, { ...base, reviewedOn: '2099-01-01' })).rejects.toThrow(/past date/);
+    await expect(recordMethodReview(URL_, { ...base, version: '0.0.1' })).rejects.toThrow(/implemented version/);
+    await expect(recordMethodReview(URL_, { ...base, status: 'approved_with_conditions' })).rejects.toThrow(/conditions/);
+    await recordMethodReview(URL_, base);
+  });
+
+  it('blocks pilot conclusions on synthetic or organisation-entered benchmarks', async () => {
+    // An organisation-entered benchmark, even once verified inside the organisation, is not professional reference data.
+    const v = await asmt.createBenchmarkVersion(w.a.prac, { substance_id: S.refSub, jurisdiction: 'ORG', benchmark_type: 'IN-HOUSE', averaging_minutes: '480', value: '1', unit: 'mg/m3', source_title: 'In-house limit', source_version: '1', effective_from: '2020-01-01' });
+    await asmt.verifyBenchmarkVersion(w.a.rev, v.id, { status: 'verified', note: 'Checked against the in-house standard' });
+    await asmt.updateDraft(w.a.prac, S.rev, { ...S.draft, benchmark_version_id: v.id });
+    await asmt.calculate(w.a.prac, S.rev);
+    await expect(asmt.submitForReview(w.a.prac, S.rev)).rejects.toThrow(/Organisation-entered and synthetic benchmarks/);
+  });
+
+  it('allows and freezes a pilot conclusion with an approved method and a reference benchmark', async () => {
+    await asmt.updateDraft(w.a.prac, S.rev, S.draft);
+    await asmt.calculate(w.a.prac, S.rev);
+    await asmt.submitForReview(w.a.prac, S.rev);
+    const ap = await asmt.approve(w.a.rev, S.rev, { approval_scope: 'Pilot gating test scope', approval_limitations: 'Automated test only', confirm_reviewed: 'on' });
+    expect(ap.method_review_status).toBe('approved');
+    expect(ap.benchmark_provenance).toBe('professional_reference');
+  });
+
+  it('a later withdrawal of the method approval does not alter the approved revision', async () => {
+    await recordMethodReview(URL_, { method: 'twa_8h', version: TWA, status: 'not_reviewed', recordedBy: 'Test Operator' });
+    const d = await asmt.assessmentDetail(w.a.prac, (await withActor(w.a.prac, (tx) => tx.query('select assessment_id from assessment_revisions where id=$1', [S.rev]))).rows[0].assessment_id);
+    expect(d.approved.method_review_status).toBe('approved');
+    expect(d.method!.status).toBe('not_reviewed');
+  });
+});
+
+describe('workflow suspension under stop conditions', () => {
+  it('suspends named workflows, alerts, refuses actions and preserves records', async () => {
+    const t = w.B.tenant.id;
+    await expect(suspendWorkflows(URL_, t, ['field_sync', 'bogus'], 'x', 'Op')).rejects.toThrow(/Unknown workflow/);
+    await expect(suspendWorkflows(URL_, t, ['field_sync'], '', 'Op')).rejects.toThrow(/reason/);
+    const all: Workflow[] = ['field_sync', 'lab_import', 'assessment_approval', 'report_issue', 'action_closure'];
+    await suspendWorkflows(URL_, t, all, 'Stop condition SC-TEST', 'Test Operator');
+    expect(sentAlerts.some((a) => a.event === 'workflow.suspended' && a.detail.tenant_id === t)).toBe(true);
+    for (const wf of all) await expect(withActor(w.b.prac, (tx) => assertWorkflowActive(tx, wf))).rejects.toThrow(/suspended.*SC-TEST/);
+    // Other tenants are unaffected.
+    await withActor(w.a.prac, (tx) => assertWorkflowActive(tx, 'field_sync'));
+    const [r] = await field.syncBatch(w.b.prac, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: {} }]);
+    expect(r.outcome).toBe('rejected');
+    expect(r.message).toMatch(/suspended/);
+    await expect(resumeWorkflows(URL_, t, ['field_sync'], 'Op', '')).rejects.toThrow(/evidence/);
+    const left = await resumeWorkflows(URL_, t, ['field_sync'], 'Test Operator', 'REVALIDATION-TEST');
+    expect(left).not.toContain('field_sync');
+    await withActor(w.b.prac, (tx) => assertWorkflowActive(tx, 'field_sync'));
+    await expect(withActor(w.b.prac, (tx) => assertWorkflowActive(tx, 'lab_import'))).rejects.toThrow(/suspended/);
+  });
+});
+
+describe('MFA enforcement for sessions that existed before MFA was required', () => {
+  it('a session created while MFA was optional loses full access once MFA becomes mandatory', async () => {
+    const admin = new pg.Client({ connectionString: URL_ }); await admin.connect();
+    const { tenant } = await createTenant(admin, { name: `MFA Org ${w.tag}`, mfaRequired: false });
+    const u = await createUserDirect(admin, { tenantId: tenant.id, email: `mfa.${w.tag}@t.test`, name: 'M', role: 'practitioner', password: 'correct horse battery' });
+    const l = await login(u.email, 'correct horse battery');
+    expect((await resolveSession(l.token))!.mfaPassed).toBe(true);
+    await admin.query('update tenants set mfa_required=true where id=$1', [tenant.id]);
+    await admin.end();
+    const si = (await resolveSession(l.token))!;
+    expect(si.mfaPassed).toBe(false);
+    expect(si.mfaRequired).toBe(true);
+  });
+});
+
+describe('controlled reference-data import', () => {
+  it('validates every row and refuses the whole file on any error', () => {
+    const { errors } = validateFile([
+      { ...refRow('x'), provenance: 'synthetic' },
+      { ...refRow('y'), substance: { name: 'Synthetic thing', cas_number: '64-17-5' }, provenance: 'synthetic' },
+      { ...refRow('z'), verified_on: '2099-01-01' },
+      { ...refRow('m'), substance: { name: 'M', molecular_weight: 46.07 } },
+    ]);
+    expect(errors.join('\n')).toMatch(/row 1.*synthetic/);
+    expect(errors.join('\n')).toMatch(/row 2.*CAS/);
+    expect(errors.join('\n')).toMatch(/row 3.*future/);
+    expect(errors.join('\n')).toMatch(/row 4.*molecular_weight_source/);
+  });
+  it('never changes an existing version; a changed value must be a new source version', async () => {
+    const again = await importReferenceData(URL_, [refRow(w.tag)], { importedBy: 'test operator' });
+    expect(again.skippedExisting).toBe(1);
+    await expect(importReferenceData(URL_, [refRow(w.tag, 3)], { importedBy: 'test operator' })).rejects.toThrow(/new source version/);
+    const v2 = await importReferenceData(URL_, [{ ...refRow(w.tag, 3), source_version: 'T2', effective_from: '2026-01-01' }], { importedBy: 'test operator', dryRun: true });
+    expect(v2).toMatchObject({ created: 1, dryRun: true });
+    await expect(importReferenceData(URL_, [refRow(w.tag)], { importedBy: '' })).rejects.toThrow(/imported-by/);
+  });
+  it('the database refuses an incomplete professional reference row', async () => {
+    const admin = new pg.Client({ connectionString: URL_ }); await admin.connect();
+    const b = (await admin.query('select benchmark_id from benchmark_versions where id=$1', [S.refBv])).rows[0].benchmark_id;
+    await expect(admin.query(`insert into benchmark_versions (tenant_id,benchmark_id,value,unit,source_title,source_version,effective_from,verification_status,provenance)
+      values (null,$1,1,'mg/m3','x','x','2020-01-01','verified','professional_reference')`, [b])).rejects.toThrow(/professional_reference_complete/);
+    await admin.end();
+  });
+});

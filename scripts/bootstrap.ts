@@ -22,8 +22,8 @@ export async function createUserDirect(admin: pg.Client, o: { tenantId: string; 
 export async function loadSyntheticReference(admin: pg.Client) {
   const sub = (await admin.query(`insert into substances (tenant_id,name,cas_number,is_synthetic) values (null,'Demo Dust X (synthetic)',null,true) returning id`)).rows[0].id;
   const b = (await admin.query(`insert into benchmarks (tenant_id,substance_id,jurisdiction,benchmark_type,averaging_minutes) values (null,$1,'DEMO','LTEL',480) returning id`, [sub])).rows[0].id;
-  const bv = (await admin.query(`insert into benchmark_versions (tenant_id,benchmark_id,value,unit,source_title,source_version,effective_from,verification_status,verified_by,verified_at,is_synthetic)
-    values (null,$1,0.5,'mg/m3','SYNTHETIC DEMONSTRATION VALUE — not an exposure limit','demo-1','2020-01-01','verified','platform (synthetic)',now(),true) returning id`, [b])).rows[0].id;
+  const bv = (await admin.query(`insert into benchmark_versions (tenant_id,benchmark_id,value,unit,source_title,source_version,effective_from,verification_status,verified_by,verified_at,is_synthetic,provenance)
+    values (null,$1,0.5,'mg/m3','SYNTHETIC DEMONSTRATION VALUE — not an exposure limit','demo-1','2020-01-01','verified','platform (synthetic)',now(),true,'synthetic') returning id`, [b])).rows[0].id;
   const m = (await admin.query(`insert into sampling_methods (tenant_id,code,title,source_reference) values (null,'DEMO-GRAV','Synthetic gravimetric method (demonstration)','Synthetic — for demonstration and testing only') returning id`)).rows[0].id;
   const mv = (await admin.query(`insert into sampling_method_versions (tenant_id,method_id,version,collection_media,flow_rate_lpm_min,flow_rate_lpm_max,flow_drift_tolerance_pct,min_volume_l,result_basis,suitable_for_formal_assessment)
     values (null,$1,'1','Filter in sampling head (synthetic)',1.5,2.5,5,null,'mass_on_sample',true) returning id`, [m])).rows[0].id;

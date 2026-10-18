@@ -205,10 +205,9 @@ describe('second-round review fixes', () => {
     expect((await ctl.actionDetail(w.a.prac, act.id)).action.status).toBe('cancelled');
   });
   it('client-scoped sessions cannot change tenant settings or reference data', async () => {
-    await expect(withActor(w.a.client1, async (tx) => {
-      const r = await tx.query('update tenants set mfa_required=false');
-      if (r.rowCount) throw new Error('tenant updated');
-    })).resolves.toBeUndefined();
+    // Since migration 015 the application role cannot update tenant security or assurance columns at all.
+    await expect(withActor(w.a.client1, (tx) => tx.query('update tenants set mfa_required=false'))).rejects.toThrow(/permission denied/);
+    await expect(withActor(w.a.admin, (tx) => tx.query(`update tenants set assurance_level='pilot'`))).rejects.toThrow(/permission denied/);
     await expect(withActor(w.a.client1, (tx) => tx.query(`insert into substances (tenant_id,name) values ($1,'x')`, [w.A.tenant.id]))).rejects.toThrow(/row-level security/);
   });
   it('MFA failures count against the account across sessions', async () => {
@@ -230,8 +229,8 @@ describe('STEL through the assessment service', () => {
   it('calculates a 15-minute assessment and freezes the calculation code in the revision', async () => {
     const admin = new pg.Client({ connectionString: process.env.DATABASE_ADMIN_URL }); await admin.connect();
     const stelB = (await admin.query(`insert into benchmarks (tenant_id,substance_id,jurisdiction,benchmark_type,averaging_minutes) values (null,$1,'DEMO','STEL-${w.tag}',15) returning id`, [w.ref.substanceId])).rows[0].id;
-    const stelV = (await admin.query(`insert into benchmark_versions (tenant_id,benchmark_id,value,unit,source_title,source_version,effective_from,verification_status,verified_by,verified_at,is_synthetic)
-      values (null,$1,1.5,'mg/m3','SYNTHETIC DEMONSTRATION VALUE','demo-stel','2020-01-01','verified','platform (synthetic)',now(),true) returning id`, [stelB])).rows[0].id;
+    const stelV = (await admin.query(`insert into benchmark_versions (tenant_id,benchmark_id,value,unit,source_title,source_version,effective_from,verification_status,verified_by,verified_at,is_synthetic,provenance)
+      values (null,$1,1.5,'mg/m3','SYNTHETIC DEMONSTRATION VALUE','demo-stel','2020-01-01','verified','platform (synthetic)',now(),true,'synthetic') returning id`, [stelB])).rows[0].id;
     await admin.end();
     const id = await sample(`ST-${w.tag}`, { start_local: '2026-04-01T10:00', end_local: '2026-04-01T10:15' });
     await lab.createSubmission(w.a.prac, { laboratory_id: S.lab.id, reference: `STS-${w.tag}`, sample_ids: [id], dispatched_at: '2026-04-02T09:00' });

@@ -2,8 +2,11 @@ import { z } from 'zod';
 import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { AppError, conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
+import { assertWorkflowActive } from './assurance.js';
 import { isValidTz, optNum, optStr, optUuid, parse, reqStr, uuid, zonedToUtc } from './util.js';
 
+const FUTURE_TOLERANCE_MS = 15 * 60_000;
+export const CLOCK_WARN_S = 300;
 const localDT = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()).transform((v) => v ?? null);
 
 export const samplingInput = z.object({
@@ -44,6 +47,10 @@ async function prepare(tx: Tx, a: Actor, d: SamplingInput) {
   const start_at = d.start_local ? zonedToUtc(d.start_local, tz) : null;
   const end_at = d.end_local ? zonedToUtc(d.end_local, tz) : null;
   if (start_at && end_at && Date.parse(end_at) <= Date.parse(start_at)) throw invalid('Finish time must be after start time');
+  // Times in the future usually mean a wrong device clock or time zone; they are refused rather than stored.
+  const future = Date.now() + FUTURE_TOLERANCE_MS;
+  for (const [label, t] of [['Start', start_at], ['Finish', end_at]] as const)
+    if (t && Date.parse(t) > future) throw invalid(`${label} time ${d[label === 'Start' ? 'start_local' : 'end_local']} (${tz}) is in the future by server time. Check the device clock and time zone.`);
   const interruptions = d.interruptions.map((i) => ({ start: zonedToUtc(i.start, tz), end: zonedToUtc(i.end, tz), reason: i.reason ?? '' }));
   for (const i of interruptions) if (Date.parse(i.end) <= Date.parse(i.start)) throw invalid('Each interruption must end after it starts');
   if (d.flow_pre_lpm != null && d.flow_pre_lpm <= 0) throw invalid('Flow rate must be positive');
@@ -112,10 +119,13 @@ async function prepare(tx: Tx, a: Actor, d: SamplingInput) {
   return { clientId, values, status, warnings };
 }
 
-async function insertEvent(tx: Tx, a: Actor, d: SamplingInput, offline: boolean) {
+type CaptureExtras = { clockOffsetS?: number | null; recoveredFromUser?: string | null };
+async function insertEvent(tx: Tx, a: Actor, d: SamplingInput, offline: boolean, extras: CaptureExtras = {}) {
   const { clientId, values, status, warnings } = await prepare(tx, a, d);
-  const cols = [...FIELD_COLUMNS, 'tenant_id', 'client_id', 'status', 'client_uuid', 'captured_offline', 'created_by'];
-  const vals = [...FIELD_COLUMNS.map((c) => values[c]), a.tenantId, clientId, status, d.client_uuid, offline, a.userId];
+  if (extras.clockOffsetS != null && Math.abs(extras.clockOffsetS) > CLOCK_WARN_S)
+    warnings.push(`The capturing device's clock differed from server time by ${Math.round(extras.clockOffsetS / 60)} min; check the recorded times.`);
+  const cols = [...FIELD_COLUMNS, 'tenant_id', 'client_id', 'status', 'client_uuid', 'captured_offline', 'created_by', 'device_clock_offset_s', 'recovered_from_user'];
+  const vals = [...FIELD_COLUMNS.map((c) => values[c]), a.tenantId, clientId, status, d.client_uuid, offline, a.userId, extras.clockOffsetS ?? null, extras.recoveredFromUser ?? null];
   try {
     const r = await one(tx, `insert into sampling_events (${cols.join(',')}) values (${cols.map((_, i) => `$${i + 1}`).join(',')}) returning *`, vals);
     if (status === 'collected') await custody(tx, a, r, 'collected', values.end_at as string, null, 'Captured at end of sampling');
@@ -136,7 +146,7 @@ async function custody(tx: Tx, a: Actor, ev: any, event: string, at: string, par
 export async function createSamplingEvent(a: Actor, input: unknown) {
   requirePerm(a, 'field.capture');
   const d = parse(samplingInput, input);
-  return withActor(a, (tx) => insertEvent(tx, a, d, false));
+  return withActor(a, async (tx) => { await assertWorkflowActive(tx, 'field_sync'); return insertEvent(tx, a, d, false); });
 }
 
 const LOCKED = ['dispatched', 'received', 'analysed', 'void'];
@@ -161,6 +171,7 @@ export async function updateSamplingEvent(a: Actor, id: string, input: unknown) 
     const cur = await one(tx, 'select * from sampling_events where id=$1 for update', [id]);
     if (!cur) throw notFound('Sampling event');
     if (cur.version !== d.version) throw conflict('This sample record was changed by someone else since you opened it. Reload to see the current version.');
+    await assertWorkflowActive(tx, 'field_sync');
     return applyUpdate(tx, a, cur, d, false);
   });
 }
@@ -253,8 +264,13 @@ function comparable(row: any) {
  * Idempotent sync of field captures. Each item is processed in its own transaction so one failure
  * cannot block others. Never overwrites a newer server version: a mismatch is stored as a conflict.
  */
-export async function syncBatch(a: Actor, items: unknown[]): Promise<SyncResult[]> {
-  requirePerm(a, 'field.capture');
+export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: number | null; recoveredFromUser?: string | null; requirePerm?: boolean } = {}): Promise<SyncResult[]> {
+  if (opts.requirePerm !== false) requirePerm(a, 'field.capture');
+  // A suspended workflow refuses every item; nothing is lost because the device keeps its copy.
+  try { await withActor(a, (tx) => assertWorkflowActive(tx, 'field_sync')); } catch (e: any) {
+    return (items as any[]).map((x) => ({ client_uuid: x?.client_uuid ?? '?', outcome: 'rejected' as const, message: e.message }));
+  }
+  const clockOffsetS = typeof opts.deviceNow === 'number' && Number.isFinite(opts.deviceNow) ? Math.round((Date.now() - opts.deviceNow) / 1000) : null;
   const out: SyncResult[] = [];
   for (const raw of items) {
     let it: z.infer<typeof syncItem>;
@@ -267,7 +283,7 @@ export async function syncBatch(a: Actor, items: unknown[]): Promise<SyncResult[
           : await one(tx, 'select * from sampling_events where client_uuid=$1 for update', [it.client_uuid]);
         if (!cur) {
           if (it.server_id) return { client_uuid: it.client_uuid, outcome: 'rejected', message: 'Record not found or not accessible' };
-          const { event, warnings } = await insertEvent(tx, a, d, true);
+          const { event, warnings } = await insertEvent(tx, a, d, true, { clockOffsetS, recoveredFromUser: opts.recoveredFromUser ?? null });
           return { client_uuid: it.client_uuid, outcome: 'created', server_id: event.id, version: event.version, warnings };
         }
         const { values } = await prepare(tx, a, d);

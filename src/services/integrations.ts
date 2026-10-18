@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { sendAlert } from '../alerts.js';
 import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { invalid } from '../errors.js';
 import { bool, optStr, parse, reqStr } from './util.js';
@@ -77,6 +78,7 @@ export async function deliverPending(a: Actor, transport: Transport = mockTransp
         const attempts = m.attempts + 1;
         await tx.query(`update integration_outbox set status=$2, attempts=$3, last_error=$4, next_attempt_at=now() + ($5 || ' seconds')::interval where id=$1`,
           [m.id, attempts >= 8 ? 'dead' : 'failed', attempts, String(e.message).slice(0, 500), String(Math.min(3600, 2 ** attempts * 30))]);
+        if (attempts >= 8) void sendAlert('integration.dead_letter', { tenant_id: m.tenant_id, target: m.target, contract: m.contract, outbox_id: m.id }, m.id);
         res.failed++;
       }
     }

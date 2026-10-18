@@ -39,7 +39,7 @@ function draftForm(c: PageCtx, d: any) {
     <label>Calculation<select name="calc_code">
       <option value="twa_8h" ${r.calc_code !== 'stel_15' ? html`selected` : ''}>8-hour time-weighted average (long-term benchmark, 480 min)</option>
       <option value="stel_15" ${r.calc_code === 'stel_15' ? html`selected` : ''}>15-minute short-term exposure (short-term benchmark, 15 min)</option></select></label>
-    <label>Benchmark version<select name="benchmark_version_id">${options(d.benchmarks, 'id', (b: any) => `${b.jurisdiction} ${b.benchmark_type} ${b.value} ${b.unit} — ${b.source_version} (${b.verification_status}${b.is_synthetic ? ', SYNTHETIC' : ''})`, r.benchmark_version_id, '— no benchmark —')}</select></label>
+    <label>Benchmark version<select name="benchmark_version_id">${options(d.benchmarks, 'id', (b: any) => `${b.jurisdiction} ${b.benchmark_type} ${b.value} ${b.unit} — ${b.source_version} (${b.verification_status}; ${b.provenance === 'professional_reference' ? 'professional reference' : b.provenance === 'synthetic' ? 'SYNTHETIC' : 'entered by organisation'})`, r.benchmark_version_id, '— no benchmark —')}</select></label>
     <div class="row"><label>Exposure duration per shift (min) <span class="hint">From task records; required for an 8-hour TWA</span><input type="number" min="1" name="exposure_minutes_per_shift" value="${p.exposureMinutesPerShift ?? ''}"></label>
     <label>Unsampled exposure time<select name="unsampled_assumption">
       <option value="none" ${p.unsampledAssumption === 'none' ? html`selected` : ''}>No assumption — do not calculate a TWA if coverage is incomplete</option>
@@ -111,6 +111,10 @@ export function assessmentRoutes(app: FastifyInstance) {
         <dt>Scope</dt><dd>${r.approval_scope}</dd><dt>Limitations</dt><dd>${r.approval_limitations}</dd><dt>Record hash</dt><dd><code>${r.snapshot_hash}</code></dd></dl></section>` : ''}
 
       <h2>Calculation</h2>
+      ${d.method ? html`<p>${/approved/.test(d.method.status)
+        ? html`<span class="badge b-ok">Method approved${d.method.status === 'approved_with_conditions' ? ' with conditions' : ''}</span> <span class="small muted">${d.method.reviewer}, ${fmtDate(d.method.reviewedOn)}${d.method.conditions ? ` — ${d.method.conditions}` : ''}</span>`
+        : d.method.status === 'rejected' ? html`<span class="badge b-bad">Method rejected by professional review — unavailable for conclusions</span>`
+        : html`<span class="badge b-warn">Method not reviewed</span> <span class="small">${d.controls.assuranceLevel === 'pilot' ? 'Results are shown for reconciliation only; this revision cannot be submitted or approved until the method is approved.' : 'Results are for discussion only and are labelled as unreviewed in reports.'}</span>`}</p>` : ''}
       ${calcOutput(r.calc_output)}
       ${r.parameters?.unsampledAssumption && r.parameters.unsampledAssumption !== 'none' ? html`<p class="note">Unsampled-time assumption: ${label(r.parameters.unsampledAssumption)} — ${r.parameters.unsampledJustification}</p>` : ''}
 

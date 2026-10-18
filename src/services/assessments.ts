@@ -5,6 +5,7 @@ import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '.
 import { conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
 import { enqueue } from './integrations.js';
+import { assertConclusionAllowed, assertWorkflowActive, methodReview, tenantControls } from './assurance.js';
 import { bool, date, optNum, optStr, optUuid, parse, reqStr, strArray, uuid } from './util.js';
 
 // ───── Benchmarks
@@ -195,6 +196,7 @@ export async function submitForReview(a: Actor, revId: string) {
     if (r.status !== 'draft') throw invalid('Only drafts can be submitted');
     await assertCurrent(tx, r);
     checkConclusion(r);
+    await assertConclusionAllowed(tx, (r.calc_code ?? 'twa_8h') as CalcCode, r.calc_version, r.benchmark_version_id);
     const out = await one(tx, `update assessment_revisions set status='in_review', submitted_by=$2, submitted_at=now() where id=$1 returning *`, [revId, a.userId]);
     await audit(tx, a, 'assessment.submitted', 'assessment_revision', revId);
     return out;
@@ -219,17 +221,21 @@ export async function approve(a: Actor, revId: string, input: unknown) {
   return withActor(a, async (tx) => {
     const r = await loadRev(tx, revId, true);
     if (r.status !== 'in_review') throw invalid('Only revisions in review can be approved');
+    await assertWorkflowActive(tx, 'assessment_approval');
     if (r.submitted_by === a.userId || r.created_by === a.userId) throw forbidden('An assessment must be approved by someone other than its author or submitter');
     await assertCurrent(tx, r);
     checkConclusion(r);
     const ownDisposition = await one(tx, `select 1 from sample_qc_checks where sampling_event_id = any($1) and disposition_by=$2 limit 1`, [r.sample_ids, a.userId]);
     if (ownDisposition) throw forbidden('You recorded a QC disposition for a sample in this assessment, so another reviewer must approve it');
     if (r.calc_output?.issues?.some((f: any) => f.code === 'CALCULATION_PENDING')) throw invalid('Calculation incomplete');
+    // Re-checked at approval: the method review status and benchmark provenance are frozen into the approved revision.
+    const gate = await assertConclusionAllowed(tx, (r.calc_code ?? 'twa_8h') as CalcCode, r.calc_version, r.benchmark_version_id);
     const snapshotHash = sha256(JSON.stringify({ inputs_hash: r.inputs_hash, calc_output: r.calc_output, interpretation: r.interpretation, conclusion: r.conclusion_category, limitations: r.limitations, scope: d.approval_scope, approval_limitations: d.approval_limitations, reviewer: a.userId }));
     const prev = await many(tx, `select id from assessment_revisions where assessment_id=$1 and status='approved' and id<>$2`, [r.assessment_id, revId]);
     for (const p of prev) await tx.query(`update assessment_revisions set status='superseded' where id=$1`, [p.id]);
-    const out = await one(tx, `update assessment_revisions set status='approved', reviewer_id=$2, approved_at=now(), approval_scope=$3, approval_limitations=$4, snapshot_hash=$5 where id=$1 returning *`,
-      [revId, a.userId, d.approval_scope, d.approval_limitations, snapshotHash]);
+    const out = await one(tx, `update assessment_revisions set status='approved', reviewer_id=$2, approved_at=now(), approval_scope=$3, approval_limitations=$4, snapshot_hash=$5,
+        method_review_status=$6, benchmark_provenance=$7 where id=$1 returning *`,
+      [revId, a.userId, d.approval_scope, d.approval_limitations, snapshotHash, gate.methodStatus, gate.benchmarkProvenance]);
     await audit(tx, a, 'assessment.approved', 'assessment_revision', revId, { scope: d.approval_scope, limitations: d.approval_limitations, snapshot_hash: snapshotHash, superseded: prev.map((p) => p.id) });
     // Optional outbound integration messages (only if the tenant enabled the link; mock by default).
     const ctx = await one(tx, `select a.id, a.title, g.name group_name, si.reference site_ref, s.name substance, s.cas_number from assessments a join exposure_groups g on g.id=a.group_id
@@ -303,7 +309,9 @@ export async function assessmentDetail(a: Actor, id: string) {
     const staleApproved = approved && approved.id !== current?.id ? await staleness(tx, { ...approved, substance_id: as.substance_id, group_id: as.group_id }) : staleCurrent;
     const actions = await many(tx, `select * from actions where source_type='assessment' and source_id=$1 order by created_at`, [id]);
     const reports = await many(tx, 'select id, version, status, generated_at, assessment_revision_id from reports where assessment_id=$1 order by version desc', [id]);
-    return { assessment: as, revisions, current, approved, candidates, benchmarks, staleCurrent, staleApproved, actions, reports };
+    const method = current ? await methodReview(tx, current.calc_code ?? 'twa_8h', current.calc_version ?? CALCULATIONS.twa_8h.version) : null;
+    const controls = await tenantControls(tx);
+    return { assessment: as, revisions, current, approved, candidates, benchmarks, staleCurrent, staleApproved, actions, reports, method, controls };
   });
 }
 

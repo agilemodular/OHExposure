@@ -48,7 +48,7 @@ export function fieldRoutes(app: FastifyInstance) {
     const items = Array.isArray(c.body?.items) ? c.body.items : null;
     if (!items) throw invalid('Expected { items: [...] }');
     if (items.length > 200) throw invalid('Maximum 200 items per sync');
-    return { results: await field.syncBatch(c.actor, items) };
+    return { results: await field.syncBatch(c.actor, items, { deviceNow: typeof c.body?.device_now === 'number' ? c.body.device_now : null }) };
   });
 
   // ── Samples

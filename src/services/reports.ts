@@ -2,6 +2,7 @@ import { config } from '../config.js';
 import { sha256 } from '../auth/crypto.js';
 import { audit, can, many, one, requirePerm, withActor, type Actor } from '../db.js';
 import { forbidden, invalid, notFound } from '../errors.js';
+import { assertWorkflowActive, methodReview, tenantControls } from './assurance.js';
 import { bmBadge, dqBadge, fmtDate, fmtDateTime, fmtNum, html, interval, label, psBadge, raw } from '../ui/html.js';
 
 /**
@@ -20,6 +21,10 @@ export async function generateReport(a: Actor, assessmentId: string, revisionId:
     if (!rev) throw notFound('Revision');
     if (!rev.calc_output) throw invalid('The revision has no calculation output to report');
     const issued = rev.status === 'approved';
+    if (issued) await assertWorkflowActive(tx, 'report_issue');
+    // Issued reports state the method review status frozen at approval; drafts state the current status.
+    const methodStatus: string = issued ? (rev.method_review_status ?? 'not recorded (approved before method review tracking)') : (await methodReview(tx, rev.calc_code ?? 'twa_8h', rev.calc_version)).status;
+    const controls = await tenantControls(tx);
     const plan = as.plan_id ? await one(tx, 'select * from monitoring_plans where id=$1', [as.plan_id]) : null;
     const tasks = await many(tx, 'select t.name, t.description, p.name process_name from exposure_group_tasks gt join tasks t on t.id=gt.task_id join processes p on p.id=t.process_id where gt.group_id=$1', [as.group_id]);
     const bench = rev.benchmark_version_id ? await one(tx, 'select v.*, b.jurisdiction, b.benchmark_type, b.averaging_minutes from benchmark_versions v join benchmarks b on b.id=v.benchmark_id where v.id=$1', [rev.benchmark_version_id]) : null;
@@ -58,6 +63,8 @@ ${tasks.length ? html`<ul>${tasks.map((t) => html`<li>${t.process_name} — ${t.
 <h2>3. Sampling strategy and methods</h2>
 ${plan ? html`<p><strong>Approach:</strong> ${label(plan.approach)}. ${plan.strategy_rationale}</p>${plan.coverage_notes ? html`<p><strong>Coverage:</strong> ${plan.coverage_notes}</p>` : ''}` : html`<p>No monitoring plan linked.</p>`}
 <ul>${methods.map(([k, m]: any) => html`<li>${k} — result basis ${label(m.resultBasis)}; flow tolerance ${m.flowDriftTolerancePct ?? 'not defined'}%; ${m.suitableForFormalAssessment ? 'suitable for formal assessment' : 'indicative only'}</li>`)}</ul>
+<p class="${/approved/.test(methodStatus) ? '' : 'draftnote'}"><strong>Method review status:</strong> ${label(methodStatus)}${/approved/.test(methodStatus) ? '' : ' — this calculation method has not been approved by a competent occupational hygienist. Results are for discussion only and must not be relied upon for conclusions.'}</p>
+${controls.assuranceLevel === 'evaluation' ? html`<p class="draftnote">EVALUATION USE — this organisation is not operating under an authorised pilot. Outputs are not for reliance.</p>` : ''}
 <p><strong>Calculation:</strong> ${out.calcCode} v${out.calcVersion} (engine ${out.engineVersion}). ${out.calcCode === 'stel_15' ? html`Short-sample assumption: ${label(rev.parameters?.shortSampleAssumption ?? 'none')}${rev.parameters?.shortSampleJustification ? html` — ${rev.parameters.shortSampleJustification}` : ''}.` : html`Parameters: exposure per shift ${rev.parameters?.exposureMinutesPerShift ?? 'not recorded'} min; unsampled period assumption: ${label(rev.parameters?.unsampledAssumption ?? 'none')}${rev.parameters?.unsampledJustification ? html` — ${rev.parameters.unsampledJustification}` : ''}.`}</p>
 
 <h2>4. Instruments and quality checks</h2>
@@ -77,7 +84,7 @@ ${out.shifts.length ? out.shifts.map((s: any) => html`<tr><td>${s.subjectRef}</t
 ${out.staticSamples.length ? html`<p class="muted">Static samples are reported as contextual evidence and are not compared with personal exposure benchmarks.</p>` : ''}
 
 <h2>6. Applicable benchmark</h2>
-${bench ? html`<p>${bench.jurisdiction} ${bench.benchmark_type} (${bench.averaging_minutes}-min reference): ${fmtNum(bench.value)} ${bench.unit}${bench.annotations?.length ? html` [${bench.annotations.join(', ')}]` : ''}. Source: ${bench.source_title}, ${bench.source_version}; effective from ${fmtDate(bench.effective_from)}. Verification: ${label(bench.verification_status)}.${bench.is_synthetic ? html` <strong>SYNTHETIC DEMONSTRATION VALUE — not a real exposure limit.</strong>` : ''}</p>` : html`<p>No benchmark applied.</p>`}
+${bench ? html`<p>${bench.jurisdiction} ${bench.benchmark_type} (${bench.averaging_minutes}-min reference): ${fmtNum(bench.value)} ${bench.unit}${bench.annotations?.length ? html` [${bench.annotations.join(', ')}]` : ''}. Source: ${bench.source_title}, ${bench.source_version}; effective from ${fmtDate(bench.effective_from)}. Verification: ${label(bench.verification_status)}. Provenance: ${bench.provenance === 'professional_reference' ? html`professionally verified reference data (${bench.reviewer_name}, ${fmtDate(bench.verified_on)})` : bench.provenance === 'synthetic' ? 'synthetic demonstration value' : 'entered by the organisation — not professionally verified reference data'}.${bench.is_synthetic ? html` <strong>SYNTHETIC DEMONSTRATION VALUE — not a real exposure limit.</strong>` : ''}</p>` : html`<p>No benchmark applied.</p>`}
 <p>${out.benchmarkNote}</p>
 <p class="muted">${out.disclaimer}</p>
 

@@ -3,6 +3,7 @@ import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } fr
 import { forbidden, invalid, notFound } from '../errors.js';
 import { flagGroupsForReview } from './register.js';
 import { enqueue } from './integrations.js';
+import { assertWorkflowActive } from './assurance.js';
 import { bool, date, optDate, optStr, optUuid, parse, reqStr, uuid } from './util.js';
 
 const ENGINEERING = ['enclosure', 'local_exhaust_ventilation', 'general_ventilation', 'suppression', 'process_change', 'elimination_substitution'];
@@ -199,6 +200,7 @@ export async function reviewEffectiveness(a: Actor, id: string, input: unknown) 
   const d = parse(z.object({ outcome: z.enum(['effective', 'partially_effective', 'not_effective']), verification_assessment_revision_id: optUuid, notes: reqStr(20) }), input);
   return withActor(a, async (tx) => {
     const act = await one(tx, 'select * from actions where id=$1 for update', [id]);
+    await assertWorkflowActive(tx, 'action_closure');
     if (!act) throw notFound('Action');
     if (act.status !== 'evidence_submitted') throw invalid(`Action is ${act.status}`);
     if (act.implemented_by === a.userId) throw forbidden('Effectiveness must be reviewed by someone other than the implementer');
@@ -234,6 +236,7 @@ export async function closeVerified(a: Actor, id: string, input: unknown) {
   const d = parse(z.object({ notes: reqStr(10) }), input);
   return withActor(a, async (tx) => {
     const act = await one(tx, 'select * from actions where id=$1 for update', [id]);
+    await assertWorkflowActive(tx, 'action_closure');
     if (!act) throw notFound('Action');
     if (act.status !== 'effectiveness_reviewed' || act.effectiveness_outcome !== 'effective') throw invalid('Only actions reviewed as effective can be closed as verified');
     await tx.query(`update actions set status='verified_closed', closed_by=$2, closed_at=now() where id=$1`, [id, a.userId]);

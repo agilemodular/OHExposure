@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { invalid, notFound } from '../errors.js';
+import { assertWorkflowActive } from './assurance.js';
 import { optNum, optStr, optUuid, parse, reqStr, strArray, uuid, zonedToUtc } from './util.js';
 
 const resultSchema = z.object({
@@ -60,7 +61,7 @@ async function writeResult(tx: Tx, a: Actor, d: ResultIn, batchId: string | null
 export async function recordResult(a: Actor, input: unknown) {
   requirePerm(a, 'lab.write');
   const d = parse(resultSchema, input);
-  return withActor(a, (tx) => writeResult(tx, a, d, null));
+  return withActor(a, async (tx) => { await assertWorkflowActive(tx, 'lab_import'); return writeResult(tx, a, d, null); });
 }
 
 // ───── Submissions & chain of custody
@@ -194,6 +195,7 @@ export async function commitImport(a: Actor, batchId: string) {
     const b = await one(tx, 'select * from import_batches where id=$1 for update', [batchId]);
     if (!b) throw notFound('Import batch');
     if (b.status === 'committed') return { already: true, count: b.row_count };
+    await assertWorkflowActive(tx, 'lab_import');
     if (b.status !== 'validated') throw invalid('Only a fully validated batch can be committed; correct the file and re-import');
     const rows = await many(tx, 'select * from import_rows where batch_id=$1 order by row_no', [batchId]);
     for (const r of rows) await writeResult(tx, a, parse(resultSchema, r.parsed), batchId);
