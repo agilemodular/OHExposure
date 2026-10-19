@@ -1,7 +1,9 @@
+import { tenantControls } from './assurance.js';
+import { AppError } from '../errors.js';
 import { z } from 'zod';
 import { hashPassword, randomToken } from '../auth/crypto.js';
 import { ROLES } from '../authz.js';
-import { audit, can, many, one, requirePerm, withActor, type Actor } from '../db.js';
+import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { forbidden, invalid, notFound } from '../errors.js';
 import { purgeStoredFile } from './attachments.js';
 import { optUuid, parse, reqStr, uuid } from './util.js';
@@ -97,6 +99,7 @@ export async function requestDisposal(a: Actor, input: unknown) {
   requirePerm(a, 'disposal.request');
   const d = parse(z.object({ record_class: z.enum(['worker_identity', 'attachment']), entity_id: uuid, reason: reqStr(20) }), input);
   return withActor(a, async (tx) => {
+    await assertNoSuspension(tx, 'disposal');
     const exists = d.record_class === 'attachment'
       ? await one(tx, 'select uploaded_at as created from attachments where id=$1 and disposed_at is null', [d.entity_id])
       : await one(tx, 'select w.created_at as created from worker_identities wi join workers w on w.id=wi.worker_id where wi.worker_id=$1 and wi.disposed_at is null', [d.entity_id]);
@@ -111,6 +114,7 @@ export async function decideDisposal(a: Actor, id: string, input: unknown) {
   requirePerm(a, 'disposal.approve');
   const d = parse(z.object({ decision: z.enum(['approved', 'rejected']), notes: reqStr(5) }), input);
   return withActor(a, async (tx) => {
+    await assertNoSuspension(tx, 'disposal');
     const r = await one(tx, 'select * from disposal_requests where id=$1 for update', [id]);
     if (!r) throw notFound('Disposal request');
     if (r.status !== 'pending') throw invalid('Already decided');
@@ -150,4 +154,12 @@ export async function exportData(a: Actor) {
     await audit(tx, a, 'export.full', 'tenant', a.tenantId, { tables: Object.keys(out), includes_identities: !!out.worker_identities });
     return { exported_at: new Date().toISOString(), tenant_id: a.tenantId, client_scope: a.clientId, data: out };
   });
+}
+
+/** Disposal destroys evidence, so it is refused while any workflow of the organisation is suspended. */
+async function assertNoSuspension(tx: Tx, action: string) {
+  const c = await tenantControls(tx, { lock: true });
+  if (c.suspendedWorkflows.length) {
+    throw new AppError(423, 'workflow_suspended', `Records cannot be disposed of while workflows are suspended (${c.suspendedWorkflows.join(', ')}). Evidence must be preserved until the investigation is closed.`);
+  }
 }

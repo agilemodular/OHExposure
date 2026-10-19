@@ -5,7 +5,7 @@ import * as field from '../services/field.js';
 import * as att from '../services/attachments.js';
 import { lookups, substanceLabel, workerLabel } from '../services/lookups.js';
 import { controlsFor } from '../services/assurance.js';
-import { importRecoveryFile, recoveryAttestKey, recoveryPublicKey } from '../services/recovery.js';
+import { activeRecoveryKey, attestKeyFrom, importRecoveryFile } from '../services/recovery.js';
 import { utcToZonedInput } from '../services/util.js';
 import { fmtDate, fmtDateTime, html, label } from '../ui/html.js';
 import { csrfField, empty, options, type PageCtx } from '../ui/layout.js';
@@ -13,11 +13,28 @@ import { action, api, authed, authedMultipart, back, page, setFlash } from './ki
 
 export function attachmentsBlock(c: PageCtx, entityType: string, entityId: string, files: any[], canAdd: boolean) {
   return html`<h3>Attachments</h3>
-    ${files.length ? html`<ul>${files.map((f) => html`<li><a href="/attachments/${f.id}">${f.filename}</a> <span class="small muted">${Math.ceil(f.size_bytes / 1024)} KB · ${fmtDateTime(f.uploaded_at)}${f.contains_pii ? ' · identifiable' : ''}</span></li>`)}</ul>` : html`<p class="muted small">None.</p>`}
+    ${files.length ? html`<ul>${files.map((f) => html`<li><a href="/attachments/${f.id}">${f.filename}</a> <span class="small muted">${Math.ceil(f.size_bytes / 1024)} KB · ${fmtDateTime(f.uploaded_at)}${f.contains_pii ? ' · identifiable' : ''}</span>
+      ${f.quarantined ? (f.admitted_at ? html` <span class="badge b-ok">Remediation evidence — admitted ${fmtDate(f.admitted_at)}</span>`
+        : html` <span class="badge b-warn">Quarantined remediation evidence — not admitted</span> <span class="small">${f.intake_reason}</span>
+          ${can(c.actor, 'assess.approve') && f.uploaded_by !== c.actor.userId ? html`<form method="post" action="/attachments/${f.id}/admit" class="inline">${csrfField(c)}<input name="notes" placeholder="Why it is admitted" required minlength="10"><button class="secondary tiny">Admit</button></form>` : ''}`) : ''}</li>`)}</ul>` : html`<p class="muted small">None.</p>`}
     ${canAdd ? html`<form method="post" action="/attachments" enctype="multipart/form-data" class="stack panel">${csrfField(c)}
       <input type="hidden" name="entity_type" value="${entityType}"><input type="hidden" name="entity_id" value="${entityId}">
       <label>File <span class="hint">PDF, PNG, JPEG, CSV or TXT</span><input type="file" name="file" required accept=".pdf,.png,.jpg,.jpeg,.csv,.txt"></label>
-      <label class="check"><input type="checkbox" name="contains_pii" value="on"> Contains identifiable worker information</label><div><button class="secondary">Upload</button></div></form>` : ''}`;
+      <label class="check"><input type="checkbox" name="contains_pii" value="on"> Contains identifiable worker information</label>
+      ${can(c.actor, 'assess.write') || can(c.actor, 'assess.approve') ? html`<details><summary class="small">Remediation intake (only while this record's workflow is suspended)</summary>
+        <label>Reason <span class="hint">The file is quarantined and cannot be used as evidence until a technical reviewer admits it after the workflow is resumed.</span><input name="intake_reason" minlength="10"></label></details>` : ''}
+      <div><button class="secondary">Upload</button></div></form>` : ''}`;
+}
+
+function holdsSection(c: PageCtx, h: { held: any[]; toReview: any[] }) {
+  if (!h.held.length && !h.toReview.length) return '';
+  return html`<h2>Held field records</h2>
+    <p class="small">Records submitted while field synchronisation was suspended are held here and kept on the devices. When they finally synchronise they must be cleared by someone other than the submitter before they can be used in an assessment.</p>
+    ${h.toReview.length ? html`<div class="tablewrap"><table><thead><tr><th>Sample</th><th>Submitted by</th><th>Received</th><th></th></tr></thead><tbody>
+      ${h.toReview.map((e) => html`<tr><td><a href="/samples/${e.id}">${e.sample_code}</a> <span class="badge b-warn">Needs suspension review</span></td><td>${e.created_by_name ?? '—'}</td><td>${fmtDateTime(e.created_at)}</td>
+        <td><form method="post" action="/samples/${e.id}/suspension-review" class="inline">${csrfField(c)}<input name="notes" placeholder="Checked against …" required minlength="10"><button class="secondary tiny">Clear for use</button></form></td></tr>`)}</tbody></table></div>` : ''}
+    ${h.held.length ? html`<details><summary>${h.held.filter((x) => x.status === 'held').length} held, ${h.held.filter((x) => x.status !== 'held').length} since synchronised</summary><div class="tablewrap"><table><thead><tr><th>Sample code</th><th>Submitted by</th><th>Received</th><th>Reason</th><th>Status</th></tr></thead><tbody>
+      ${h.held.map((x) => html`<tr><td>${x.payload?.sample_code ?? '—'}</td><td>${x.submitted_by_name ?? '—'}</td><td>${fmtDateTime(x.received_at)}</td><td class="small">${x.suspension_reason ?? ''}</td><td>${label(x.status)}</td></tr>`)}</tbody></table></div></details>` : ''}`;
 }
 
 export function fieldRoutes(app: FastifyInstance) {
@@ -37,14 +54,17 @@ export function fieldRoutes(app: FastifyInstance) {
     const lk = await lookups(c.actor);
     const plans = await withActor(c.actor, (tx) => many(tx, `select p.id, p.title, s.name site_name from monitoring_plans p join sites s on s.id=p.site_id where p.status in ('scheduled','in_progress') order by p.planned_start nulls last`));
     const ctl = await controlsFor(c.actor);
-    const recoveryKey = ctl.offlineCaptureEnabled ? await withActor(c.actor, (tx) => recoveryPublicKey(tx, c.actor.tenantId)) : null;
+    const rk = ctl.offlineCaptureEnabled ? await withActor(c.actor, async (tx) => {
+      const k = await activeRecoveryKey(tx, c.actor.tenantId);
+      return { spki: k.spki, version: k.version, attest: attestKeyFrom(k.privateKeyEnc, c.actor.tenantId, c.actor.userId) };
+    }) : null;
     return {
       userId: c.actor.userId, tenantId: c.actor.tenantId, csrf: c.csrf, fetchedAt: new Date().toISOString(),
       // Offline policy (see docs/offline-field-capture.md). Offline storage is only offered when a platform operator has
       // enabled it for the organisation after the offline data-protection gate is accepted (demo tenants: synthetic data).
-      offline: { enabled: ctl.offlineCaptureEnabled, cacheDays: 7, lockMinutes: 15, syncedRetentionHours: 24, recoveryKey, demo: ctl.assuranceLevel === 'demo' },
+      offline: { enabled: ctl.offlineCaptureEnabled, cacheDays: 7, lockMinutes: 15, syncedRetentionHours: 24, recoveryKey: rk?.spki ?? null, recoveryKeyVersion: rk?.version ?? null, demo: ctl.assuranceLevel === 'demo' },
       // Kept by the device only inside its PIN-encrypted reference cache; used to attest recovery envelopes.
-      recoveryAttestKey: ctl.offlineCaptureEnabled ? await withActor(c.actor, (tx) => recoveryAttestKey(tx, c.actor.tenantId, c.actor.userId)) : null,
+      recoveryAttestKey: rk?.attest ?? null,
       plans,
       // Minimum dataset: pseudonymous worker reference codes only. Names and employee numbers are never sent to the device;
       // the mapping from reference code to person stays on the server under role-restricted access.
@@ -192,20 +212,23 @@ export function fieldRoutes(app: FastifyInstance) {
   page(app, '/conflicts', async (c) => {
     requirePerm(c.actor, 'conflicts.resolve');
     const list = await field.listConflicts(c.actor);
+    const holds = await field.listSuspensionHolds(c.actor);
     const KEYS = ['sample_code', 'worker_id', 'start_local', 'end_local', 'flow_pre_lpm', 'flow_post_lpm', 'tasks_performed', 'control_status', 'operating_conditions', 'deviations', 'notes'];
     const server = (s: any, k: string) => k === 'start_local' ? fmtDateTime(s.start_at, s.timezone) : k === 'end_local' ? fmtDateTime(s.end_at, s.timezone) : s[k];
     return {
       title: 'Offline sync conflicts', sub: 'When a device synchronises edits made against an older copy, both versions are kept here. Nothing is overwritten until someone decides.',
       head: can(c.actor, 'field.capture') ? html`<a class="button secondary" href="/field/recovery">Recover field records</a>` : '',
-      body: list.length ? list.map((x) => html`<section class="panel"><h2><a href="/samples/${x.entity_id}">${x.server_payload.sample_code}</a> <span class="badge ${x.status === 'open' ? 'b-warn' : 'b-neutral'}">${label(x.status)}</span></h2>
+      body: html`${holdsSection(c, holds)}<h2>Conflicts</h2>${list.length ? list.map((x) => html`<section class="panel"><h2><a href="/samples/${x.entity_id}">${x.server_payload.sample_code}</a> <span class="badge ${x.status === 'open' ? 'b-warn' : 'b-neutral'}">${label(x.status)}</span></h2>
         <p class="small muted">Submitted ${fmtDateTime(x.submitted_at)} by ${x.submitted_by_name ?? '—'}; device edited version ${x.base_version ?? 'new'}, server was at version ${x.server_version}.</p>
         <div class="tablewrap"><table><thead><tr><th>Field</th><th>Server copy</th><th>Device copy</th></tr></thead><tbody>
           ${KEYS.map((k) => { const a = server(x.server_payload, k) ?? '', b = x.client_payload[k] ?? ''; return String(a) !== String(b) ? html`<tr><td>${label(k)}</td><td>${String(a)}</td><td><b>${String(b)}</b></td></tr>` : ''; })}</tbody></table></div>
         ${x.status === 'open' ? html`<form method="post" action="/conflicts/${x.id}" class="stack">${csrfField(c)}<label>Decision notes<input name="notes" required></label>
           <div class="actions-row"><button name="resolution" value="resolved_keep_server" class="secondary">Keep server copy</button><button name="resolution" value="resolved_apply_client">Apply device copy</button></div></form>` : html`<p class="small">${x.resolution_notes}</p>`}
-        </section>`) : empty('No sync conflicts.'),
+        </section>`) : empty('No sync conflicts.')}`,
     };
   });
+  action(app, '/attachments/:id/admit', async (c) => { await att.admitAttachment(c.actor, c.params.id, c.body); return { to: back(c), ok: 'Remediation evidence admitted' }; });
+  action(app, '/samples/:id/suspension-review', async (c) => { await field.clearSuspensionReview(c.actor, c.params.id, c.body); return { to: '/conflicts', ok: 'Record cleared for use' }; });
   action(app, '/conflicts/:id', async (c) => { await field.resolveConflict(c.actor, c.params.id, c.body); return { to: '/conflicts', ok: 'Conflict resolved' }; });
 
   // ── Attachments (multipart upload, authorised download)
@@ -214,8 +237,9 @@ export function fieldRoutes(app: FastifyInstance) {
     if (!m) return reply;
     try {
       if (!m.file) throw invalid('Choose a file');
-      await att.saveAttachment(m.si.actor, { entity_type: m.fields.entity_type, entity_id: m.fields.entity_id, filename: m.file.filename, data: m.file.data, contains_pii: m.fields.contains_pii === 'on' });
-      setFlash(reply, 'ok', 'File uploaded');
+      const intake = m.fields.intake_reason?.trim() ? { reason: m.fields.intake_reason.trim() } : undefined;
+      await att.saveAttachment(m.si.actor, { entity_type: m.fields.entity_type, entity_id: m.fields.entity_id, filename: m.file.filename, data: m.file.data, contains_pii: m.fields.contains_pii === 'on', intake });
+      setFlash(reply, intake ? 'warn' : 'ok', intake ? 'File received as quarantined remediation evidence' : 'File uploaded');
     } catch (e: any) {
       if (!e.status) throw e;
       setFlash(reply, 'err', e.message);

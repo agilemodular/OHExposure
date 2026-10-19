@@ -52,7 +52,7 @@
     const iv = crypto.getRandomValues(new Uint8Array(12));
     const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, rk, te.encode(JSON.stringify(obj)));
     const wk = await crypto.subtle.encrypt({ name: 'RSA-OAEP' }, pub, await crypto.subtle.exportKey('raw', rk));
-    const env = { v: 1, wk: b64(wk), iv: b64(iv), ct: b64(ct) };
+    const env = { v: 1, kv: policy.recoveryKeyVersion || 1, wk: b64(wk), iv: b64(iv), ct: b64(ct) };
     // Attestation: HMAC under this user's key (held only inside the PIN-encrypted cache) binds the envelope to the user.
     if (!attestKey) throw new Error('This device needs to connect once to refresh its offline keys before records can be saved on it. Reconnect and unlock again.');
     const hk = await crypto.subtle.importKey('raw', unb64(attestKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
@@ -201,6 +201,7 @@
 
   async function afterUnlock() {
     lastActivity = Date.now();
+    let rekey = false;
     const saved = await getMeta('policy');
     const enc = await getMeta('refEnc');
     const cached = enc ? await decJSON(key, enc).catch(() => null) : null;
@@ -216,7 +217,10 @@
       csrf = b.csrf; ref = b;
       if (b.recoveryAttestKey) attestKey = b.recoveryAttestKey;
       // Keep the saved recovery key while winding down, so records that cannot be synchronised remain recoverable.
-      policy = { ...b.offline, enabled: true, windingDown: !b.offline.enabled, recoveryKey: b.offline.recoveryKey || (saved && saved.recoveryKey), tenantId: b.tenantId };
+      policy = { ...b.offline, enabled: true, windingDown: !b.offline.enabled, recoveryKey: b.offline.recoveryKey || (saved && saved.recoveryKey),
+        recoveryKeyVersion: b.offline.recoveryKeyVersion || (saved && saved.recoveryKeyVersion) || 1, tenantId: b.tenantId };
+      // The organisation's recovery key was replaced: re-seal unsynchronised records to the new version below.
+      rekey = !!(saved && saved.recoveryKeyVersion && b.offline.recoveryKeyVersion && saved.recoveryKeyVersion !== b.offline.recoveryKeyVersion);
       if (policy.windingDown) { await disableOffline(); return; }
       await setMeta('policy', policy);
       await setMeta('refEnc', await encJSON(key, b));
@@ -231,6 +235,11 @@
     }
     await purgeSynced();
     records = await loadRecords();
+    if (rekey) {
+      // Each record is re-sealed in its own write: an interruption leaves the rest on the older version, which the
+      // server still accepts, so nothing becomes unrecoverable.
+      for (const r of records.filter((x) => x.state !== 'synced' && x.state !== 'unreadable')) await saveRecord(r);
+    }
     await migrateLegacy();
     render(); sync();
   }

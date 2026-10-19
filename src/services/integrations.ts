@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { sendAlert } from '../alerts.js';
 import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { invalid } from '../errors.js';
+import { tenantControls } from './assurance.js';
 import { bool, optStr, parse, reqStr } from './util.js';
 
 /**
@@ -65,9 +66,18 @@ export const mockTransport: Transport & { sent: any[] } = { sent: [], async send
 export async function deliverPending(a: Actor, transport: Transport = mockTransport) {
   requirePerm(a, 'integrations.manage');
   return withActor(a, async (tx) => {
+    // Outbound findings are held (left pending, not failed) while approval or report issue is suspended, so that a
+    // stop-condition investigation is not overtaken by copies of the findings leaving the platform.
+    const ctl = await tenantControls(tx, { lock: true });
+    const holding = ctl.suspendedWorkflows.filter((w) => w === 'assessment_approval' || w === 'report_issue');
+    if (holding.length) {
+      const n = await one(tx, `select count(*)::int n from integration_outbox where status in ('pending','failed')`);
+      await audit(tx, a, 'integration.delivery_held', 'integration', null as any, { held: n.n, suspended: holding });
+      return { mock: 0, delivered: 0, failed: 0, held: n.n };
+    }
     const due = await many(tx, `select o.*, l.mode from integration_outbox o join integration_links l on l.target=o.target and l.tenant_id=o.tenant_id
       where o.status in ('pending','failed') and o.next_attempt_at <= now() order by o.created_at limit 50 for update of o skip locked`);
-    const res = { mock: 0, delivered: 0, failed: 0 };
+    const res = { mock: 0, delivered: 0, failed: 0, held: 0 };
     for (const m of due) {
       try {
         await transport.send(m);

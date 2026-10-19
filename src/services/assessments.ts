@@ -5,7 +5,7 @@ import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '.
 import { conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
 import { enqueue } from './integrations.js';
-import { assertConclusionAllowed, assertWorkflowActive, methodReview, tenantControls } from './assurance.js';
+import { assertAssessmentNotOnHold, assertConclusionAllowed, assertWorkflowActive, METHOD_APPROVED, methodReview, tenantControls } from './assurance.js';
 import { bool, date, optNum, optStr, optUuid, parse, reqStr, strArray, uuid } from './util.js';
 
 // ───── Benchmarks
@@ -133,6 +133,7 @@ export async function updateDraft(a: Actor, revId: string, input: unknown) {
   const d = parse(draftSchema, input);
   return withActor(a, async (tx) => {
     const r = await loadRev(tx, revId, true);
+    await assertAssessmentNotOnHold(tx, r.assessment_id);
     if (r.status !== 'draft') throw invalid(`Only draft revisions can be edited (this one is ${r.status}). Create a new revision.`);
     for (const sid of d.sample_ids) {
       const e = await one(tx, `select e.client_id, e.substance_id, e.sample_code,
@@ -161,6 +162,7 @@ export async function calculate(a: Actor, revId: string) {
   requirePerm(a, 'assess.write');
   return withActor(a, async (tx) => {
     const r = await loadRev(tx, revId, true);
+    await assertAssessmentNotOnHold(tx, r.assessment_id);
     if (r.status !== 'draft') throw invalid('Only draft revisions can be recalculated');
     const snap = await buildSnapshot(tx, r, r.substance_id);
     const calc = calcOf(r.calc_code);
@@ -175,6 +177,11 @@ export async function calculate(a: Actor, revId: string) {
 
 async function assertCurrent(tx: Tx, r: any) {
   if (!r.calc_output || !r.inputs_hash) throw invalid('Run the calculation first');
+  // Share-lock the evidence so that no result amendment, QC disposition or void can commit between this check and the
+  // end of the transaction (writers take FOR UPDATE on the same sampling-event rows).
+  await tx.query('select id from sampling_events where id = any($1) order by id for share', [r.sample_ids ?? []]);
+  const pending = await one(tx, 'select sample_code from sampling_events where id = any($1) and suspension_review_required and suspension_reviewed_at is null limit 1', [r.sample_ids ?? []]);
+  if (pending) throw invalid(`Sample ${pending.sample_code} reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.`);
   const snap = await buildSnapshot(tx, r, r.substance_id);
   if (hashOf(snap, r.calc_code) !== r.inputs_hash) throw conflict('Underlying evidence has changed since the calculation was run (e.g. an amended laboratory result or QC disposition). Recalculate before continuing.');
 }
@@ -193,6 +200,7 @@ export async function submitForReview(a: Actor, revId: string) {
   requirePerm(a, 'assess.write');
   return withActor(a, async (tx) => {
     const r = await loadRev(tx, revId, true);
+    await assertAssessmentNotOnHold(tx, r.assessment_id);
     if (r.status !== 'draft') throw invalid('Only drafts can be submitted');
     await assertCurrent(tx, r);
     checkConclusion(r);
@@ -208,6 +216,7 @@ export async function returnToDraft(a: Actor, revId: string, input: unknown) {
   const d = parse(z.object({ notes: reqStr(10) }), input);
   return withActor(a, async (tx) => {
     const r = await loadRev(tx, revId, true);
+    await assertAssessmentNotOnHold(tx, r.assessment_id);
     if (r.status !== 'in_review') throw invalid('Only revisions in review can be returned');
     await tx.query(`update assessment_revisions set status='draft', submitted_by=null, submitted_at=null where id=$1`, [revId]);
     await audit(tx, a, 'assessment.returned', 'assessment_revision', revId, d);
@@ -220,6 +229,7 @@ export async function approve(a: Actor, revId: string, input: unknown) {
   if (!d.confirm_reviewed) throw invalid('Confirm you have reviewed the evidence, calculation and interpretation');
   return withActor(a, async (tx) => {
     const r = await loadRev(tx, revId, true);
+    await assertAssessmentNotOnHold(tx, r.assessment_id);
     if (r.status !== 'in_review') throw invalid('Only revisions in review can be approved');
     await assertWorkflowActive(tx, 'assessment_approval');
     if (r.submitted_by === a.userId || r.created_by === a.userId) throw forbidden('An assessment must be approved by someone other than its author or submitter');
@@ -259,6 +269,7 @@ export async function newRevision(a: Actor, assessmentId: string, input: unknown
   return withActor(a, async (tx) => {
     const as = await one(tx, 'select * from assessments where id=$1 for update', [assessmentId]);
     if (!as) throw notFound('Assessment');
+    await assertAssessmentNotOnHold(tx, assessmentId);
     const cur = await one(tx, 'select * from assessment_revisions where assessment_id=$1 and revision=$2', [assessmentId, as.current_revision]);
     if (['draft', 'in_review'].includes(cur.status)) throw invalid('The current revision is still open; edit it instead');
     const n = as.current_revision + 1;
@@ -289,6 +300,13 @@ export async function staleness(tx: Tx, r: any) {
     if (newer) reasons.push(`A newer verified benchmark version exists (${newer.value} ${newer.unit}, ${newer.source_version}); reassessment may be required. This revision's conclusion is unchanged.`);
     const cur = await one(tx, 'select verification_status from benchmark_versions where id=$1', [r.benchmark_version_id]);
     if (cur?.verification_status === 'withdrawn') reasons.push('The benchmark version used has since been withdrawn.');
+  }
+  // A change in the professional review of the method since approval is reported for review; the approved revision and
+  // its reports keep the status recorded at approval.
+  if (r.status === 'approved' && r.method_review_status && r.calc_version) {
+    const now = (await methodReview(tx, r.calc_code ?? 'twa_8h', r.calc_version)).status;
+    if (METHOD_APPROVED.has(r.method_review_status) && !METHOD_APPROVED.has(now))
+      reasons.push(`The professional approval of the calculation method (${r.calc_code ?? 'twa_8h'} v${r.calc_version}) is now "${now.replace(/_/g, ' ')}". This revision was approved while it was "${r.method_review_status.replace(/_/g, ' ')}" and is unchanged; it should be reviewed.`);
   }
   return reasons;
 }

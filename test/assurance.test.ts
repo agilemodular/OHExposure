@@ -27,6 +27,13 @@ let w: World;
 const S: Record<string, any> = {};
 const TWA = CALCULATIONS.twa_8h.version;
 const yesterday = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+// Stand-in for a signed review / authorisation document (test schema only).
+import { mkdtempSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+const EVIDENCE = join(mkdtempSync(join(tmpdir(), 'ohea-ev-')), 'signed-review.pdf');
+writeFileSync(EVIDENCE, '%PDF-1.4 test fixture: signed professional review');
+const APPROVAL = { scope: 'Automated test scope only', evidenceFile: EVIDENCE };
 
 /** A test-only stand-in for a professionally verified reference row (exists only in the disposable test schema). */
 const refRow = (tag: string, value = 2) => ({
@@ -100,7 +107,16 @@ describe('pilot gating of calculation methods and reference data', () => {
     await expect(withActor(w.a.admin, (tx) => tx.query(`update tenants set assurance_level='pilot'`))).rejects.toThrow(/permission denied/);
     await expect(withActor(w.a.admin, (tx) => tx.query(`insert into method_reviews (calc_code,calc_version,status,recorded_by) values ('twa_8h','${TWA}','not_reviewed','x')`))).rejects.toThrow(/permission denied/);
     await expect(setTenantLevel(URL_, w.A.tenant.id, 'pilot', 'Operator', '')).rejects.toThrow(/evidence/);
+    // An upgrade needs a recorded G11 authorisation and at least one approved method (here STEL) and reference benchmark.
+    await expect(setTenantLevel(URL_, w.A.tenant.id, 'pilot', 'Test Operator', 'TEST-GATE-REF')).rejects.toThrow(/No recorded pilot authorisation/);
+    const { recordPilotAuthorisation } = await import('../scripts/platform-controls.js');
+    const authIn = { tenantId: w.A.tenant.id, scopeRef: 'TEST-PROTOCOL', provider: 'Test Director', organisation: 'Test Client Lead', authorisedOn: yesterday, document: 'TEST-G11', documentFile: EVIDENCE, recordedBy: 'Test Operator' };
+    await expect(recordPilotAuthorisation(URL_, { ...authIn, recordedBy: 'test director' })).rejects.toThrow(/cannot be one of the authorisers/);
+    await recordPilotAuthorisation(URL_, authIn);
+    await expect(setTenantLevel(URL_, w.A.tenant.id, 'pilot', 'Test Operator', 'TEST-GATE-REF')).rejects.toThrow(/No calculation method has a current professional approval/);
+    await recordMethodReview(URL_, { method: 'stel_15', version: CALCULATIONS.stel_15.version, status: 'approved', reviewer: 'Test Reviewer', competence: 'Test', reviewedOn: yesterday, evidence: 'T', recordedBy: 'Test Operator', ...APPROVAL });
     await setTenantLevel(URL_, w.A.tenant.id, 'pilot', 'Test Operator', 'TEST-GATE-REF');
+    await recordMethodReview(URL_, { method: 'stel_15', version: CALCULATIONS.stel_15.version, status: 'not_reviewed', recordedBy: 'Test Operator' });
   });
 
   it('blocks pilot conclusions that rely on an unreviewed method', async () => {
@@ -114,13 +130,19 @@ describe('pilot gating of calculation methods and reference data', () => {
     expect(calc.calc_output.shifts[0].twa8h.lower).toBeCloseTo(0.1, 6); // 96 µg / 960 L
     await expect(asmt.submitForReview(w.a.prac, S.rev)).rejects.toThrow(/not reviewed by a competent occupational hygienist/);
     // The database refuses the same approval even if the service layer is bypassed.
-    await expect(withActor(w.a.rev, (tx) => tx.query(`update assessment_revisions set status='approved' where id=$1`, [S.rev]))).rejects.toThrow(/pilot approval refused/);
+    await expect(withActor(w.a.rev, (tx) => tx.query(`update assessment_revisions set status='approved' where id=$1`, [S.rev]))).rejects.toThrow(/only a revision in review/);
+    await expect(withActor(w.a.rev, async (tx) => {
+      await tx.query(`update assessment_revisions set status='in_review', submitted_by=$2 where id=$1`, [S.rev, w.a.prac.userId]);
+      await tx.query(`update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [S.rev, w.a.rev.userId]);
+    })).rejects.toThrow(/pilot approval refused/);
     const caps = await methodCapabilities(w.a.prac);
     expect(caps.rows.find((r) => r.code === 'twa_8h')!.pilotEnabled).toBe(false);
   });
 
   it('a method review needs a named reviewer, competence, a past date and evidence, recorded by someone else', async () => {
-    const base = { method: 'twa_8h', version: TWA, status: 'approved', reviewer: 'Test Reviewer', competence: 'Test competence statement', reviewedOn: yesterday, evidence: 'TEST-PACK-1', recordedBy: 'Test Operator' };
+    const base = { method: 'twa_8h', version: TWA, status: 'approved', reviewer: 'Test Reviewer', competence: 'Test competence statement', reviewedOn: yesterday, evidence: 'TEST-PACK-1', recordedBy: 'Test Operator', ...APPROVAL };
+    await expect(recordMethodReview(URL_, { ...base, scope: undefined })).rejects.toThrow(/--scope/);
+    await expect(recordMethodReview(URL_, { ...base, evidenceFile: '/nonexistent.pdf' })).rejects.toThrow(/--evidence-file/);
     await expect(recordMethodReview(URL_, { ...base, reviewer: undefined })).rejects.toThrow(/--reviewer/);
     await expect(recordMethodReview(URL_, { ...base, evidence: '' })).rejects.toThrow(/--evidence/);
     await expect(recordMethodReview(URL_, { ...base, recordedBy: 'test reviewer' })).rejects.toThrow(/cannot be the reviewer/);
@@ -159,7 +181,7 @@ describe('pilot gating of calculation methods and reference data', () => {
   it('a pilot benchmark must match the calculation averaging period', async () => {
     const { assertConclusionAllowed } = await import('../src/services/assurance.js');
     await expect(withActor(w.a.prac, (tx) => assertConclusionAllowed(tx, 'stel_15', CALCULATIONS.stel_15.version, S.refBv))).rejects.toThrow(/not reviewed|averaging period/);
-    await recordMethodReview(URL_, { method: 'stel_15', version: CALCULATIONS.stel_15.version, status: 'approved', reviewer: 'Test Reviewer', competence: 'Test', reviewedOn: yesterday, evidence: 'T', recordedBy: 'Test Operator' });
+    await recordMethodReview(URL_, { method: 'stel_15', version: CALCULATIONS.stel_15.version, status: 'approved', reviewer: 'Test Reviewer', competence: 'Test', reviewedOn: yesterday, evidence: 'T', recordedBy: 'Test Operator', ...APPROVAL });
     try {
       await expect(withActor(w.a.prac, (tx) => assertConclusionAllowed(tx, 'stel_15', CALCULATIONS.stel_15.version, S.refBv))).rejects.toThrow(/averaging period/);
     } finally {
@@ -347,7 +369,7 @@ describe('field recovery key integrity and KEK rotation', () => {
     const spki = generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
     await withActor(w.b.admin, (tx) => tx.query('insert into field_recovery_keys (tenant_id, public_key_spki, private_key_enc) values ($1,$2,$3)', [w.B.tenant.id, spki, 'AAAA.AAAA.AAAA']));
     await expect(withActor(w.b.admin, (tx) => recoveryPublicKey(tx, w.B.tenant.id))).rejects.toThrow(/does not open/);
-    expect((await verifyRecoveryKeys(URL_)).invalid).toContain(w.B.tenant.id);
+    expect((await verifyRecoveryKeys(URL_)).invalid.some((x) => x.startsWith(w.B.tenant.id))).toBe(true);
     await admin.query('delete from field_recovery_keys where tenant_id=$1', [w.B.tenant.id]);
     await admin.end();
   });

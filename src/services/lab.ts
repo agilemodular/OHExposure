@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { invalid, notFound } from '../errors.js';
 import { assertWorkflowActive } from './assurance.js';
+import { assertLinkableAttachment } from './attachments.js';
 import { assertNotFuture, optNum, optStr, optUuid, parse, reqStr, strArray, uuid, zonedToUtc } from './util.js';
 
 const resultSchema = z.object({
@@ -33,6 +34,7 @@ function validateResult(d: ResultIn) {
 
 async function writeResult(tx: Tx, a: Actor, d: ResultIn, batchId: string | null) {
   validateResult(d);
+  await assertLinkableAttachment(tx, d.source_attachment_id);
   const e = await one(tx, 'select * from sampling_events where id=$1 for update', [d.sampling_event_id]);
   if (!e) throw notFound('Sampling event');
   if (e.status === 'void') throw invalid(`Sample ${e.sample_code} is void`);
@@ -145,6 +147,7 @@ export async function stageImport(a: Actor, input: { filename: string; csv: stri
   if (!header.includes('analyte') && !header.includes('cas_number')) throw invalid('Provide an analyte or cas_number column');
   if (rows.length > 5001) throw invalid('Maximum 5,000 rows per import');
   return withActor(a, async (tx) => {
+    await assertLinkableAttachment(tx, input.source_attachment_id);
     const b = await one(tx, 'insert into import_batches (tenant_id,kind,filename,laboratory_id,source_attachment_id,created_by) values ($1,$2,$3,$4,$5,$6) returning *',
       [a.tenantId, 'lab_results_csv', input.filename, input.laboratory_id ?? null, input.source_attachment_id ?? null, a.userId]);
     let errors = 0;
@@ -200,6 +203,7 @@ export async function commitImport(a: Actor, batchId: string) {
     if (!b) throw notFound('Import batch');
     if (b.status === 'committed') return { already: true, count: b.row_count };
     await assertWorkflowActive(tx, 'lab_import');
+    await assertLinkableAttachment(tx, b.source_attachment_id);
     if (b.status !== 'validated') throw invalid('Only a fully validated batch can be committed; correct the file and re-import');
     const rows = await many(tx, 'select * from import_rows where batch_id=$1 order by row_no', [batchId]);
     for (const r of rows) await writeResult(tx, a, parse(resultSchema, r.parsed), batchId);

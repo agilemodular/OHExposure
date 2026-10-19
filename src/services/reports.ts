@@ -2,7 +2,7 @@ import { config } from '../config.js';
 import { sha256 } from '../auth/crypto.js';
 import { audit, can, many, one, requirePerm, withActor, type Actor } from '../db.js';
 import { AppError, forbidden, invalid, notFound } from '../errors.js';
-import { assertWorkflowActive, METHOD_APPROVED, methodReview, tenantControls } from './assurance.js';
+import { assertAssessmentNotOnHold, assertWorkflowActive, METHOD_APPROVED, methodReview, tenantControls } from './assurance.js';
 import { bmBadge, dqBadge, fmtDate, fmtDateTime, fmtNum, html, interval, label, psBadge, raw } from '../ui/html.js';
 
 /**
@@ -21,7 +21,7 @@ export async function generateReport(a: Actor, assessmentId: string, revisionId:
     if (!rev) throw notFound('Revision');
     if (!rev.calc_output) throw invalid('The revision has no calculation output to report');
     const issued = rev.status === 'approved';
-    if (issued) await assertWorkflowActive(tx, 'report_issue');
+    if (issued) { await assertWorkflowActive(tx, 'report_issue', 'issue report'); await assertAssessmentNotOnHold(tx, assessmentId, 'issue report'); }
     // Issued reports state the method review status frozen at approval; drafts state the current status.
     const current = await methodReview(tx, rev.calc_code ?? 'twa_8h', rev.calc_version);
     const methodStatus: string = issued ? (rev.method_review_status ?? 'not_recorded') : current.status;
@@ -35,8 +35,8 @@ export async function generateReport(a: Actor, assessmentId: string, revisionId:
       // A pilot organisation can only issue reports for conclusions approved under the pilot gate.
       if (levelAtApproval !== 'pilot' || !methodOk || rev.benchmark_provenance !== 'professional_reference')
         throw new AppError(422, 'not_pilot_approved', 'This revision was not approved under the pilot controls (approved method and professional reference benchmark). Create a new revision and have it approved before issuing a report.');
-      if (current.status === 'rejected')
-        throw new AppError(422, 'method_rejected', 'The calculation method used by this revision has since been rejected by professional review. Reassess before issuing a report.');
+      if (current.status === 'rejected' || current.status === 'withdrawn')
+        throw new AppError(422, 'method_rejected', `The professional approval of the calculation method used by this revision has since been ${current.status}. Reassess before issuing a report.`);
     }
     const plan = as.plan_id ? await one(tx, 'select * from monitoring_plans where id=$1', [as.plan_id]) : null;
     const tasks = await many(tx, 'select t.name, t.description, p.name process_name from exposure_group_tasks gt join tasks t on t.id=gt.task_id join processes p on p.id=t.process_id where gt.group_id=$1', [as.group_id]);

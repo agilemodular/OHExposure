@@ -1,5 +1,5 @@
 import { CALCULATIONS, type CalcCode } from '../calc/engine.js';
-import { many, one, withActor, type Actor, type Tx } from '../db.js';
+import { getPool, many, one, withActor, type Actor, type Tx } from '../db.js';
 import { AppError } from '../errors.js';
 
 /**
@@ -26,8 +26,10 @@ export interface TenantControls {
   suspensionReason: string | null;
 }
 
-export async function tenantControls(tx: Tx): Promise<TenantControls> {
-  const t = await one(tx, 'select assurance_level, offline_capture_enabled, suspended_workflows, suspension_reason from tenants where id = app_tenant()');
+export async function tenantControls(tx: Tx, opts: { lock?: boolean } = {}): Promise<TenantControls> {
+  // With lock: the tenant row is share-locked until the transaction ends, so a suspension (or level change) cannot be
+  // committed between this check and the write that depends on it.
+  const t = await one(tx, `select assurance_level, offline_capture_enabled, suspended_workflows, suspension_reason from tenants where id = app_tenant()${opts.lock ? ' for share' : ''}`);
   return { assuranceLevel: t.assurance_level, offlineCaptureEnabled: t.offline_capture_enabled, suspendedWorkflows: t.suspended_workflows ?? [], suspensionReason: t.suspension_reason };
 }
 /** Statuses that permit use of a method in conclusions. Compared exactly, never by pattern. */
@@ -36,29 +38,57 @@ export const METHOD_APPROVED = new Set(['approved', 'approved_with_conditions'])
 export const controlsFor = (a: Actor) => withActor(a, tenantControls);
 
 /** Refuses an action whose workflow has been suspended under a pilot stop condition. Records are not touched. */
-export async function assertWorkflowActive(tx: Tx, w: Workflow) {
-  const c = await tenantControls(tx);
-  if (c.suspendedWorkflows.includes(w))
+export async function assertWorkflowActive(tx: Tx, w: Workflow, action = 'write') {
+  const c = await tenantControls(tx, { lock: true });
+  if (c.suspendedWorkflows.includes(w)) {
+    await recordBlocked(tx, 'workflow.blocked', { workflow: w, action, reason: c.suspensionReason });
     throw new AppError(423, 'workflow_suspended', `${WORKFLOW_LABEL[w]} is suspended for this organisation${c.suspensionReason ? `: ${c.suspensionReason}` : ''}. Existing records are preserved and remain readable.`);
+  }
 }
 
-export type MethodState = 'approved' | 'approved_with_conditions' | 'not_reviewed' | 'rejected';
-export interface MethodReview { code: string; version: string; status: MethodState; conditions: string | null; reviewer: string | null; reviewedOn: string | null; evidenceRef: string | null }
+/** Refuses changes to an assessment placed on hold by a platform operator. */
+export async function assertAssessmentNotOnHold(tx: Tx, assessmentId: string, action = 'write') {
+  const h = await one(tx, 'select reason from assessment_holds where assessment_id=$1 and released_at is null', [assessmentId]);
+  if (h) {
+    await recordBlocked(tx, 'assessment.blocked', { assessment_id: assessmentId, action, reason: h.reason });
+    throw new AppError(423, 'assessment_on_hold', `This assessment is on hold: ${h.reason}. Existing records are preserved and remain readable.`);
+  }
+}
 
+/**
+ * Records a refused attempt in the audit trail. Written on a separate connection so that it survives the rollback of
+ * the refused transaction; the actor and tenant are taken from the refused transaction's session settings.
+ */
+async function recordBlocked(tx: Tx, action: string, detail: Record<string, unknown>) {
+  const ctx = await one(tx, `select current_setting('app.tenant_id', true) t, current_setting('app.user_id', true) u`);
+  const c = await getPool().connect();
+  try {
+    await c.query('begin');
+    await c.query(`select set_config('app.tenant_id',$1,true), set_config('app.client_id','',true), set_config('app.user_id',$2,true)`, [ctx.t, ctx.u]);
+    await c.query(`insert into audit_events (tenant_id, user_id, action, entity_type, entity_id, detail) values ($1,$2,$3,'tenant',$4,$5)`, [ctx.t, ctx.u || null, action, ctx.t, detail]);
+    await c.query('commit');
+  } catch { await c.query('rollback').catch(() => {}); } finally { c.release(); }
+}
+
+export type MethodState = 'approved' | 'approved_with_conditions' | 'not_reviewed' | 'rejected' | 'withdrawn' | 'expired';
+export interface MethodReview { code: string; version: string; status: MethodState; conditions: string | null; reviewer: string | null; reviewedOn: string | null; evidenceRef: string | null; scope: string | null; expiresOn: string | null }
+
+/** The effective status is computed in the database (method_status_effective), the same function the triggers use. */
 export async function methodReview(tx: Tx, code: string, version: string): Promise<MethodReview> {
-  const r = await one(tx, 'select * from current_method_reviews where calc_code=$1 and calc_version=$2', [code, version]);
-  return { code, version, status: r?.status ?? 'not_reviewed', conditions: r?.conditions ?? null, reviewer: r?.reviewer_name ?? null, reviewedOn: r?.reviewed_on ?? null, evidenceRef: r?.evidence_ref ?? null };
+  const r = await one(tx, 'select *, method_status_effective($1,$2) effective from current_method_reviews where calc_code=$1 and calc_version=$2', [code, version]);
+  return { code, version, status: r?.effective ?? 'not_reviewed', conditions: r?.conditions ?? null, reviewer: r?.reviewer_name ?? null, reviewedOn: r?.reviewed_on ?? null,
+    evidenceRef: r?.evidence_ref ?? null, scope: r?.permitted_scope ?? null, expiresOn: r?.expires_on ?? null };
 }
 
 /** Review state of every implemented calculation version, for display. */
 export async function methodCapabilities(a: Actor) {
   return withActor(a, async (tx) => {
-    const reviews = await many(tx, 'select * from current_method_reviews');
+    const reviews = await many(tx, 'select *, method_status_effective(calc_code, calc_version) effective from current_method_reviews');
     const history = await many(tx, 'select calc_code, calc_version, status, reviewer_name, reviewed_on, recorded_at from method_reviews order by recorded_at desc limit 50');
     const controls = await tenantControls(tx);
     const rows = (Object.values(CALCULATIONS)).map((c) => {
       const r = reviews.find((x) => x.calc_code === c.code && x.calc_version === c.version);
-      const status: MethodState = r?.status ?? 'not_reviewed';
+      const status: MethodState = r?.effective ?? 'not_reviewed';
       return { ...c, status, reviewer: r?.reviewer_name ?? null, reviewedOn: r?.reviewed_on ?? null, conditions: r?.conditions ?? null, evidenceRef: r?.evidence_ref ?? null,
         pilotEnabled: status === 'approved' || status === 'approved_with_conditions' };
     });

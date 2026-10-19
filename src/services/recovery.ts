@@ -9,7 +9,7 @@
 import { createCipheriv, createDecipheriv, createHash, createHmac, createPrivateKey, createPublicKey, generateKeyPairSync, privateDecrypt, constants, randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { sendAlert } from '../alerts.js';
-import { audit, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
+import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { invalid } from '../errors.js';
 import { syncBatch } from './field.js';
 
@@ -44,38 +44,47 @@ export function keyRowValid(row: { public_key_spki: string; private_key_enc: str
 }
 const verifiedTenants = new Set<string>();
 
-/** Returns the organisation's recovery public key (SPKI, base64), creating the key pair on first use. */
-export async function recoveryPublicKey(tx: Tx, tenantId: string): Promise<string> {
-  const k = await one(tx, 'select public_key_spki, private_key_enc from field_recovery_keys');
-  if (k) {
-    if (!verifiedTenants.has(tenantId)) {
-      if (!keyRowValid(k)) {
-        void sendAlert('recovery_key.invalid', { tenant_id: tenantId }, tenantId);
-        throw new Error('Field recovery key for this organisation does not open with FIELD_RECOVERY_KEK or does not match; offline capture is unavailable until a platform operator resolves it (scripts/recovery-keys.ts verify).');
-      }
-      verifiedTenants.add(tenantId);
-    }
-    return k.public_key_spki;
-  }
+/** New key material: an RSA-OAEP 3072-bit pair with the private half sealed under the KEK. */
+export function newKeyMaterial(k: Buffer = kek()) {
   const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 3072 });
-  const spki = publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
-  const pkcs8 = privateKey.export({ type: 'pkcs8', format: 'der' });
-  const r = await one(tx, `insert into field_recovery_keys (tenant_id, public_key_spki, private_key_enc) values ($1,$2,$3) on conflict (tenant_id) do nothing returning public_key_spki`, [tenantId, spki, seal(pkcs8)]);
-  return r?.public_key_spki ?? (await one(tx, 'select public_key_spki from field_recovery_keys')).public_key_spki;
+  return { public_key_spki: publicKey.export({ type: 'spki', format: 'der' }).toString('base64'), private_key_enc: sealWith(k, privateKey.export({ type: 'pkcs8', format: 'der' })) };
 }
+
+export interface ActiveKey { version: number; spki: string; privateKeyEnc: string }
+/**
+ * The organisation's active recovery key version, created on first use and verified (against the KEK and its own
+ * public half) the first time this process uses it. Older versions are kept, inactive, so envelopes sealed to them on
+ * devices that have not reconnected stay importable.
+ */
+export async function activeRecoveryKey(tx: Tx, tenantId: string): Promise<ActiveKey> {
+  let k = await one(tx, 'select key_version, public_key_spki, private_key_enc from field_recovery_keys where active');
+  if (!k) {
+    const m = newKeyMaterial();
+    await tx.query(`insert into field_recovery_keys (tenant_id, key_version, public_key_spki, private_key_enc, active) values ($1,1,$2,$3,true) on conflict do nothing`, [tenantId, m.public_key_spki, m.private_key_enc]);
+    k = await one(tx, 'select key_version, public_key_spki, private_key_enc from field_recovery_keys where active');
+  }
+  const tag = `${tenantId}:${k.key_version}`;
+  if (!verifiedTenants.has(tag)) {
+    if (!keyRowValid(k)) {
+      void sendAlert('recovery_key.invalid', { tenant_id: tenantId, key_version: k.key_version }, tag);
+      throw new Error('Field recovery key for this organisation does not open with FIELD_RECOVERY_KEK or does not match; offline capture is unavailable until a platform operator resolves it (scripts/recovery-keys.ts verify).');
+    }
+    verifiedTenants.add(tag);
+  }
+  return { version: k.key_version, spki: k.public_key_spki, privateKeyEnc: k.private_key_enc };
+}
+export const recoveryPublicKey = async (tx: Tx, tenantId: string) => (await activeRecoveryKey(tx, tenantId)).spki;
 
 /**
  * Per-user attestation key. Sent to the device only inside the PIN-encrypted reference data; each envelope carries an
  * HMAC under it, so a recovery file can only claim records for the user whose device (and PIN) produced it. Holding the
- * organisation's public key alone is not enough to forge an attributable record.
+ * organisation's public key alone is not enough to forge an attributable record. Derived from the private key of a key
+ * version, so it survives KEK rotation and is distinct for each key version.
  */
-/** Derived from the organisation's private recovery key, so it survives KEK rotation (the key pair is unchanged). */
 export const attestKeyFrom = (privateKeyEnc: string, tenantId: string, userId: string) =>
   createHmac('sha256', createHash('sha256').update(unseal(privateKeyEnc)).digest()).update(`ohea-recovery-attest|${tenantId}|${userId}`).digest('base64');
 export async function recoveryAttestKey(tx: Tx, tenantId: string, userId: string) {
-  await recoveryPublicKey(tx, tenantId); // creates and verifies the key row
-  const k = await one(tx, 'select private_key_enc from field_recovery_keys');
-  return attestKeyFrom(k.private_key_enc, tenantId, userId);
+  return attestKeyFrom((await activeRecoveryKey(tx, tenantId)).privateKeyEnc, tenantId, userId);
 }
 const macOk = (key: string, e: { wk: string; iv: string; ct: string; mac: string }) => {
   const want = createHmac('sha256', Buffer.from(key, 'base64')).update(`${e.wk}.${e.iv}.${e.ct}`).digest();
@@ -83,7 +92,7 @@ const macOk = (key: string, e: { wk: string; iv: string; ct: string; mac: string
   return got.length === want.length && timingSafeEqual(got, want);
 };
 
-const envelope = z.object({ v: z.literal(1), wk: z.string().min(16).max(2000), iv: z.string().min(8).max(64), ct: z.string().min(8).max(200_000), mac: z.string().min(16).max(200) });
+const envelope = z.object({ v: z.literal(1), kv: z.number().int().positive().default(1), wk: z.string().min(16).max(2000), iv: z.string().min(8).max(64), ct: z.string().min(8).max(200_000), mac: z.string().min(16).max(200) });
 const file = z.object({
   format: z.literal('ohea-field-recovery'), version: z.literal(1), tenant_id: z.string().uuid(), user_id: z.string().uuid(),
   exported_at: z.string(), records: z.array(envelope).min(1).max(200),
@@ -98,21 +107,27 @@ export async function importRecoveryFile(a: Actor, raw: string) {
   try { parsed = file.parse(JSON.parse(raw)); } catch { throw invalid('This is not a valid field recovery file.'); }
   if (parsed.tenant_id !== a.tenantId) throw invalid('This recovery file belongs to a different organisation and cannot be imported here.');
   const sha = createHash('sha256').update(raw).digest('hex');
-  const { pk, already } = await withActor(a, async (tx) => ({
-    pk: await one(tx, 'select private_key_enc from field_recovery_keys'),
+  const { keys, already } = await withActor(a, async (tx) => ({
+    keys: await many(tx, 'select key_version, public_key_spki, private_key_enc from field_recovery_keys'),
     already: await one(tx, 'select id, imported_at from field_recovery_imports where file_sha256=$1', [sha]),
   }));
-  if (!pk) throw invalid('No recovery key exists for this organisation, so this file cannot have been produced here.');
+  if (!keys.length) throw invalid('No recovery key exists for this organisation, so this file cannot have been produced here.');
   const owner = await withActor(a, (tx) => one(tx, 'select id from users where id=$1', [parsed.user_id]));
   if (!owner) throw invalid('The user named in this recovery file is not a user of this organisation.');
-  const attest = attestKeyFrom(pk.private_key_enc, a.tenantId, parsed.user_id);
-  const priv = { key: unseal(pk.private_key_enc), format: 'der' as const, type: 'pkcs8' as const, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' };
+  // Each envelope names the key version it was sealed to; every version the organisation has had is kept.
+  const byVersion = new Map<number, { attest: string; priv: any }>();
+  for (const k of keys) {
+    if (!keyRowValid(k)) continue; // an invalid row (wrong KEK, planted) opens nothing
+    byVersion.set(k.key_version, { attest: attestKeyFrom(k.private_key_enc, a.tenantId, parsed.user_id),
+      priv: { key: unseal(k.private_key_enc), format: 'der' as const, type: 'pkcs8' as const, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' } });
+  }
   const items: any[] = [];
   const undecryptable: number[] = [];
   parsed.records.forEach((e, i) => {
     try {
-      if (!macOk(attest, e)) { undecryptable.push(i + 1); return; }
-      const key = privateDecrypt(priv, Buffer.from(e.wk, 'base64'));
+      const kv = byVersion.get(e.kv);
+      if (!kv || !macOk(kv.attest, e)) { undecryptable.push(i + 1); return; }
+      const key = privateDecrypt(kv.priv, Buffer.from(e.wk, 'base64'));
       const buf = Buffer.from(e.ct, 'base64');
       const d = createDecipheriv('aes-256-gcm', key, Buffer.from(e.iv, 'base64'));
       d.setAuthTag(buf.subarray(buf.length - 16));

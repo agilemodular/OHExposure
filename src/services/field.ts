@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { AppError, conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
-import { assertWorkflowActive } from './assurance.js';
+import { assertWorkflowActive, tenantControls, WORKFLOW_LABEL } from './assurance.js';
 import { assertNotFuture, FUTURE_TOLERANCE_MS, isValidTz, optNum, optStr, optUuid, parse, reqStr, uuid, zonedToUtc } from './util.js';
 
 export const CLOCK_WARN_S = 300;
@@ -202,7 +202,7 @@ export async function addQcCheck(a: Actor, sampleId: string, input: unknown) {
   const d = parse(z.object({ check_type: reqStr(2, 100), outcome: z.enum(['pass', 'fail', 'not_applicable']), detail: optStr }), input);
   return withActor(a, async (tx) => {
     await assertWorkflowActive(tx, 'field_sync');
-    const e = await one(tx, 'select tenant_id, client_id from sampling_events where id=$1', [sampleId]);
+    const e = await one(tx, 'select tenant_id, client_id from sampling_events where id=$1 for update', [sampleId]);
     if (!e) throw notFound('Sampling event');
     const r = await one(tx, 'insert into sample_qc_checks (tenant_id,client_id,sampling_event_id,check_type,outcome,detail,recorded_by) values ($1,$2,$3,$4,$5,$6,$7) returning *',
       [e.tenant_id, e.client_id, sampleId, d.check_type, d.outcome, d.detail, a.userId]);
@@ -217,6 +217,7 @@ export async function disposeQcFailure(a: Actor, checkId: string, input: unknown
     await assertWorkflowActive(tx, 'field_sync');
     const q = await one(tx, 'select * from sample_qc_checks where id=$1 for update', [checkId]);
     if (!q) throw notFound('QC check');
+    await tx.query('select id from sampling_events where id=$1 for update', [q.sampling_event_id]);
     if (q.outcome !== 'fail') throw invalid('Only failed checks need a disposition');
     if (q.disposition) throw invalid('This failure already has a disposition');
     const r = await one(tx, 'update sample_qc_checks set disposition=$2, disposition_reason=$3, disposition_by=$4, disposition_at=now() where id=$1 returning *', [checkId, d.disposition, d.reason, a.userId]);
@@ -272,12 +273,6 @@ function comparable(row: any) {
  */
 export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: number | null; recoveredFromUser?: string | null; requirePerm?: boolean } = {}): Promise<SyncResult[]> {
   if (opts.requirePerm !== false) requirePerm(a, 'field.capture');
-  // A suspended workflow refuses every item; nothing is lost because the device keeps its copy.
-  try { await withActor(a, (tx) => assertWorkflowActive(tx, 'field_sync')); } catch (e: any) {
-    if (!(e instanceof AppError) || e.code !== 'workflow_suspended') throw e;
-    // Deferred, not rejected: devices keep the records pending and retry after the workflow is resumed.
-    return (items as any[]).map((x) => ({ client_uuid: x?.client_uuid ?? '?', outcome: 'deferred' as const, message: e.message }));
-  }
   const clockOffsetS = typeof opts.deviceNow === 'number' && Number.isFinite(opts.deviceNow) ? Math.round((Date.now() - opts.deviceNow) / 1000) : null;
   const out: SyncResult[] = [];
   for (const raw of items) {
@@ -285,6 +280,17 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
     try { it = parse(syncItem, raw); } catch (e: any) { out.push({ client_uuid: (raw as any)?.client_uuid ?? '?', outcome: 'rejected', message: e.message }); continue; }
     try {
       const res = await withActor(a, async (tx): Promise<SyncResult> => {
+        // Suspension is checked per item, with the tenant row share-locked, so a suspension cannot slip in mid-batch.
+        // Items received while field sync is suspended are held for review on the server (not entered into records),
+        // and the device keeps its copy pending ('deferred') until the workflow is resumed.
+        const ctl = await tenantControls(tx, { lock: true });
+        if (ctl.suspendedWorkflows.includes('field_sync')) {
+          const h = await one(tx, `insert into field_intake_holds (tenant_id, client_uuid, server_id, base_version, payload, submitted_by, suspension_reason)
+            values ($1,$2,$3,$4,$5,$6,$7) on conflict (tenant_id, client_uuid, md5(payload::text)) do nothing returning id`,
+            [a.tenantId, it.client_uuid, it.server_id ?? null, it.base_version, it.payload, a.userId, ctl.suspensionReason]);
+          if (h) await audit(tx, a, 'field.sync_held', 'field_intake_hold', h.id, { client_uuid: it.client_uuid, reason: ctl.suspensionReason });
+          return { client_uuid: it.client_uuid, outcome: 'deferred', message: `${WORKFLOW_LABEL.field_sync} is suspended${ctl.suspensionReason ? `: ${ctl.suspensionReason}` : ''}. A copy is held on the server for review; keep this record on the device.` };
+        }
         const d = parse(samplingInput, { ...it.payload, client_uuid: it.client_uuid });
         const cur = it.server_id
           ? await one(tx, 'select * from sampling_events where id=$1 for update', [it.server_id])
@@ -313,6 +319,17 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
         return { client_uuid: it.client_uuid, outcome: 'conflict', server_id: cur.id, version: cur.version, conflict_id: c.id,
           message: LOCKED.includes(cur.status) ? `Sample is already ${cur.status}; your offline changes were kept for review.` : 'The server copy changed since you went offline; both versions were kept for review.' };
       });
+      // A record that was held during a suspension is flagged for review when it finally arrives, so it cannot enter an
+      // assessment unnoticed.
+      if (res.server_id && (res.outcome === 'created' || res.outcome === 'updated')) {
+        await withActor(a, async (tx) => {
+          const held = await many(tx, `update field_intake_holds set status='synchronised', resolved_at=now(), sampling_event_id=$2 where client_uuid=$1 and status='held' returning id`, [it.client_uuid, res.server_id]);
+          if (held.length) {
+            await tx.query('update sampling_events set suspension_review_required=true, suspension_reviewed_by=null, suspension_reviewed_at=null where id=$1', [res.server_id]);
+            res.warnings = [...(res.warnings ?? []), 'This record was received during a suspension; a reviewer must clear it before it can be used in an assessment.'];
+          }
+        });
+      }
       out.push(res);
     } catch (e: any) {
       out.push({ client_uuid: it.client_uuid, outcome: 'rejected', message: e instanceof AppError ? e.message : 'Server error' });
@@ -369,4 +386,29 @@ export async function listSamples(a: Actor, filter: { status?: string } = {}) {
       (select count(*) from sample_qc_checks q where q.sampling_event_id=e.id and q.outcome='fail' and q.disposition is null)::int unresolved_qc
     from sampling_events e left join workers w on w.id=e.worker_id left join substances s on s.id=e.substance_id left join monitoring_plans p on p.id=e.plan_id
     where ($1::text is null or e.status=$1) order by e.start_at desc nulls first limit 500`, [filter.status ?? null]));
+}
+
+// ───── Records received during a suspension
+export async function listSuspensionHolds(a: Actor) {
+  requirePerm(a, 'conflicts.resolve');
+  return withActor(a, async (tx) => ({
+    held: await many(tx, `select h.*, u.name submitted_by_name from field_intake_holds h left join users u on u.id=h.submitted_by order by h.status='held' desc, h.received_at desc limit 200`),
+    toReview: await many(tx, `select e.id, e.sample_code, e.created_at, u.name created_by_name from sampling_events e left join users u on u.id=e.created_by
+      where e.suspension_review_required and e.suspension_reviewed_at is null order by e.created_at`),
+  }));
+}
+
+/** A reviewer confirms a record received during a suspension may be used. The capturer cannot clear their own record. */
+export async function clearSuspensionReview(a: Actor, sampleId: string, input: unknown) {
+  requirePerm(a, 'conflicts.resolve');
+  const d = parse(z.object({ notes: reqStr(10) }), input);
+  return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync', 'clear suspension review');
+    const e = await one(tx, 'select id, created_by, suspension_review_required, suspension_reviewed_at from sampling_events where id=$1 for update', [sampleId]);
+    if (!e) throw notFound('Sampling event');
+    if (!e.suspension_review_required || e.suspension_reviewed_at) throw invalid('This record does not need suspension review');
+    if (e.created_by === a.userId) throw forbidden('Someone other than the person who submitted the record must clear it');
+    await tx.query('update sampling_events set suspension_reviewed_by=$2, suspension_reviewed_at=now() where id=$1', [sampleId, a.userId]);
+    await audit(tx, a, 'sample.suspension_review_cleared', 'sampling_event', sampleId, d);
+  });
 }
