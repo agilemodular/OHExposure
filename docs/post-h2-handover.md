@@ -9,7 +9,7 @@ Sources of truth: `findings-register.md` (findings), `pilot-gate-register.md` (g
 
 | State | Status | Basis |
 |---|---|---|
-| Software verification complete | **Substantially complete, with stated exceptions.** All Critical and High findings are closed. Medium: H1-F01 is fixed in software but awaits professional disposition; R2-P3 and R2-P4 are closed. Two Lows (R2-P6, OO-R6) are fixed and tested but not re-reviewed. The reviews were made by separate AI review agents, not by people or an external firm | `findings-register.md` §4–5 |
+| Software verification complete | **Substantially complete, with stated exceptions.** All Critical and High findings are closed. Medium: H1-F01 is fixed in software but awaits professional disposition; R2-P3 and R2-P4 are closed. Four Lows (R2-Q4, R2-P5, R2-P6, OO-R6) are fixed and tested but not re-reviewed. The reviews were made by separate AI review agents, not by people or an external firm | `findings-register.md` §4–5 |
 | Operational verification complete | **No.** No hosting environment exists: no TLS, secrets, alert delivery, monitoring, scheduled backups, hosting restore or rollback rehearsal. No device has been tested | G5, G6, G9 |
 | Professional approval complete | **No.** No hygienist appointed; no method approved; H1-F01 not dispositioned; no real reference data | G2, G3, G4 |
 | Ready for pilot authorisation | **No.** No gate is accepted | `pilot-gate-register.md` |
@@ -78,7 +78,7 @@ All are **proposals awaiting the named owner's acceptance** (`findings-register.
 - no automatic replay on reconnection;
 - guidance for interrupted fieldwork.
 
-**Independent re-check:** all eight pass after the fixes. **This is not device evidence.** Online-only operation does not remove device, browser or privacy risks (`online-only-pilot-configuration.md` §4).
+**Re-check by a separate AI review agent (R3; not a human or external review):** all eight pass after the fixes. **This is not device evidence.** Online-only operation does not remove device, browser or privacy risks (`online-only-pilot-configuration.md` §4).
 
 ## 7. Gates
 
@@ -93,7 +93,7 @@ All are **proposals awaiting the named owner's acceptance** (`findings-register.
 | Choose hosting and agree RPO and RTO (P12, P12a); then deploy, pin digests, and run backup, restore, alerting and rollback checks | SHEQ Experts director / hosting owner | G5, G6 |
 | Accept or reject the G8 and G9 scope proposals and the Low-finding treatments | Platform owner, controller, pilot site lead, hosting owner (per row) | G8, G9 |
 | Name the devices; run the retained F tests and O1–O10 on each | Pilot site lead + SHEQ field technician | G9 |
-| Appoint the DP adviser; sign the PIA; set retention (P13) | SHEQ Experts / controller | G7 |
+| Appoint the DP adviser; sign the PIA; set retention (P13) | DP adviser + controller (appointment by SHEQ Experts) | G7 |
 | Name support contacts; deliver and record training (P14, P15) | Pilot lead | G10 |
 | Commission the external security review, or record a decision to pilot without one | SHEQ Experts director | G5, G8 |
 

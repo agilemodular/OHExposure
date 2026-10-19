@@ -24,9 +24,9 @@ Evidence class: automated desktop Chromium check on the demonstration organisati
 
 | # | Requirement | Result | Evidence |
 |---|---|---|---|
-| 1 | Offline enrolment and capture cannot be enabled by ordinary users | Pass | OO-1 checks; app role refused on the column (`review-regressions.test.ts`, independent review) |
+| 1 | Offline enrolment and capture cannot be enabled by ordinary users | Pass | OO-1 checks; app role refused on the column (`review-regressions.test.ts`; R3 review agent) |
 | 2 | Sensitive responses not intentionally retained in offline caches | Pass | OO-2: no service worker, no shell cache, no browser database, `no-store` headers. Residual: a device winding down an earlier offline store keeps its shell cache until the next page load. |
-| 3 | Previously enrolled devices and local data handled explicitly | Pass | OO-3 (earlier unencrypted store: review then user send, then deletion); offline wind-down (existing browser check and independent review) |
+| 3 | Previously enrolled devices and local data handled explicitly | Pass | OO-3 (earlier unencrypted store: review then user send, then deletion); offline wind-down (existing browser check and R3 review agent) |
 | 4 | Loss of connectivity gives a clear unsaved or failed state | Pass after fix | *Not saved — send again* with an explanation; *New sample* disabled offline; a half-completed form is kept on screen with a notice (review finding fixed in `3ac4474`) |
 | 5 | No indication of saved without server acknowledgement | Pass | *Saved on the server* only after the server's response; rejections, 400 responses and suspension holds are never shown as saved |
 | 6 | Repeated submissions do not create duplicates | Pass | OO-6: resend after a lost response, and a double submission from the page, each leave one record |

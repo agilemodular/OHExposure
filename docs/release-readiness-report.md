@@ -1,6 +1,6 @@
 # Release readiness report
 
-**Updated:** 19 October 2026 (post-H2 evidence closure) · **Scope:** airborne contaminants · **Engine:** 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1) · **Migrations:** 24
+**Updated:** 19 October 2026 (post-H2 evidence closure) · **Scope:** airborne contaminants · **Engine:** 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1) · **Migrations:** 25
 
 ## Classification
 
@@ -35,9 +35,9 @@ No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is t
 - **Automated evidence:** 169 tests, all passing. Desktop browser checks 24/24 (offline) and 17/17 (online-only). A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
 - **Independent software review (R2).** R2 reviewed the Phase H2 controls, re-checked the fixes, then re-checked the final fixes.
   - The first review found 2 critical, 4 high, 8 medium and 9 low findings, plus 9 more from the re-checks.
-  - **All Critical, High and Medium software findings are closed.**
+  - **All Critical and High software findings are closed. Every Medium software finding is closed except H1-F01, which is fixed in software and awaits the hygienist's disposition.**
   - The open Low findings are listed in `findings-register.md` §4.
-  - An acceptance check closed the remaining software low findings (R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2) and accepted R-X1 as mitigated. The follow-on name-check findings (R2-Q1 to R2-Q4) are fixed and tested; Q1–Q3 closed on re-check; see `findings-register.md` §3.4.
+  - An acceptance check closed the remaining software low findings (R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2) and confirmed R-X1 as mitigated (risk acceptance is proposed and awaits the SHEQ Experts director, `findings-register.md` §6). The follow-on name-check findings (R2-Q1 to R2-Q4) are fixed and tested; Q1–Q3 closed on re-check; see `findings-register.md` §3.4.
 
 ## Correction to the 18 October report
 
@@ -98,7 +98,7 @@ Out of scope: noise, vibration, thermal exposure, statistical compliance testing
 | Privacy roles and retention undecided | High for pilot | G7. PIA re-verified against the code |
 | Offline protection depends on PIN strength and device management | Medium | Off by default; proposed online-only pilot; G8/G9 |
 | Online-only operation loses unsent records if the page closes | Medium | Paper field-sheet procedure; warnings; device tests O3–O10 |
-| Owner role is privileged (BYPASSRLS, table owner) | Medium | Privileged-access rules (`approval-and-issue-controls.md` §4); database audit logging (G5) |
+| Owner role is privileged (BYPASSRLS, table owner) | Low (R2-H3, residual) | Privileged-access rules (`approval-and-issue-controls.md` §4); database audit logging (G5) |
 | Representativeness and statistics not assessed by the software | Medium | Professional interpretation; flagged prominently in the review handover |
 | Open Low software findings | Low | `findings-register.md` §4 |
 
