@@ -35,7 +35,6 @@ let w: World;
 const S: Record<string, any> = {};
 type Line = { kind: 'step' | 'refused' | 'note'; title: string; who?: string; detail: string };
 const log: Line[] = [];
-async function refused(title: string, who: string, p: Promise<unknown>, expected: RegExp): Promise<void>;
 const step = (title: string, who: string, detail: string) => log.push({ kind: 'step', title, who, detail });
 const note = (title: string, detail: string) => log.push({ kind: 'note', title, detail });
 async function refused(title: string, who: string, p: Promise<unknown>, expected: RegExp) {
