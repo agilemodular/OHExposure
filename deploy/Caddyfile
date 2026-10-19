@@ -1,0 +1,15 @@
+# TLS termination and HTTP→HTTPS redirect. Certificates from Let's Encrypt (ACME) for OHEA_DOMAIN.
+{
+	email {$ACME_EMAIL}
+}
+{$OHEA_DOMAIN} {
+	encode gzip
+	reverse_proxy app:3000 {
+		header_up X-Forwarded-For {remote_host}
+	}
+	# The application sets HSTS, CSP and frame headers itself (COOKIE_SECURE=true); do not override them here.
+	log {
+		output stdout
+		format json
+	}
+}

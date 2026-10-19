@@ -26,6 +26,18 @@ export async function migrate(adminUrl: string) {
   }
 }
 
+/** Migration files not yet applied (empty for a fresh database that has no schema_migrations table yet). */
+export async function pendingMigrations(adminUrl: string): Promise<string[]> {
+  const c = new pg.Client({ connectionString: adminUrl });
+  await c.connect();
+  try {
+    const exists = (await c.query(`select to_regclass('public.schema_migrations') t`)).rows[0].t;
+    if (!exists) return [];
+    const done = new Set((await c.query('select name from schema_migrations')).rows.map((r) => r.name));
+    return readdirSync(join(import.meta.dirname, '..', 'db', 'migrations')).filter((f) => f.endsWith('.sql') && !done.has(f)).sort();
+  } finally { await c.end(); }
+}
+
 /** Sets the application role's password from a secret, replacing the development default created by migration 002. */
 export async function setAppRolePassword(adminUrl: string, password: string) {
   if (password.length < 16) throw new Error('APP_DB_PASSWORD must be at least 16 characters');
