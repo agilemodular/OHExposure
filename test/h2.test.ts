@@ -474,3 +474,38 @@ describe('independent review R2 findings', () => {
     await c.end();
   });
 });
+
+describe('independent review R2 re-check (N1–N6)', () => {
+  beforeAll(async () => { await recordMethodReview(URL_, APPROVE); }); // organisation A is at pilot level by now
+  const direct = (actor: any, sql: string, p: unknown[] = []) => withActor(actor, (tx) => tx.query(sql, p));
+  it('N1/N3: held records cannot be edited directly; a stale hold is dismissed by someone else and unblocks the sample', async () => {
+    const holds = await field.listSuspensionHolds(w.a.prac);
+    const h = holds.held.find((x) => x.status === 'in_conflict');
+    expect(h).toBeTruthy();
+    await expect(direct(w.a.prac, `update field_intake_holds set status='synchronised' where id=$1`, [h.id])).rejects.toThrow(/flagged for review|hold refused/);
+    await expect(direct(w.a.prac, `update field_intake_holds set submitted_by=$2 where id=$1`, [h.id, w.a.rev.userId])).rejects.toThrow(/cannot be changed/);
+    await expect(direct(w.a.prac, `delete from field_intake_holds where id=$1`, [h.id])).rejects.toThrow(/permission denied|append-only|cannot/i);
+    await expect(field.dismissHold(w.a.tech, h.id, { notes: 'Device was reset by the site' })).rejects.toThrow(/permission/);
+    await field.dismissHold(w.a.prac, h.id, { notes: 'Device was reset; the held edit is obsolete' });
+    // The assessment from the held-update test can now be submitted.
+    const r = (await direct(w.a.prac, `select r.id from assessment_revisions r join assessments a on a.id=r.assessment_id where a.title='H2 held update' and r.status='draft'`)).rows[0];
+    await asmt.calculate(w.a.prac, r.id);
+    await asmt.submitForReview(w.a.prac, r.id);
+  });
+  it('N2: an attachment cannot be moved to another record or have its content swapped', async () => {
+    const a1 = await att.saveAttachment(w.a.prac, { entity_type: 'assessment', entity_id: S.asA, filename: 'n2.txt', data: Buffer.from('n2') });
+    await expect(direct(w.a.prac, `update attachments set entity_type='sampling_event', entity_id=$2 where id=$1`, [a1.id, S.samples[0]])).rejects.toThrow(/cannot be changed/);
+    await expect(direct(w.a.prac, `update attachments set sha256='x', storage_key='y' where id=$1`, [a1.id])).rejects.toThrow(/cannot be changed/);
+  });
+  it('N4/N5/N6: calibrations are not editable; approval time and transitions are fixed; other organisations\' suspension state is not readable', async () => {
+    await expect(direct(w.a.prac, `update calibrations set outcome='pass'`)).rejects.toThrow(/permission denied/);
+    const { revId } = await inReview([S.samples[0]]);
+    await expect(direct(w.a.prac, `update assessment_revisions set status='withdrawn' where id=$1`, [revId])).rejects.toThrow(/not a permitted transition/);
+    const ap = (await direct(w.a.rev, `update assessment_revisions set status='approved', reviewer_id=$2, approved_at='2020-01-01', approval_scope='Direct test scope', approval_limitations='Direct test', snapshot_hash='x' where id=$1 returning approved_at`, [revId, w.a.rev.userId]).catch((e) => e));
+    // A direct approval meeting every rule goes through, but the approval time is the database's, not the writer's.
+    expect(ap).not.toBeInstanceOf(Error);
+    expect(Math.abs(new Date(ap.rows[0].approved_at).getTime() - Date.now())).toBeLessThan(60_000);
+    const other = (await direct(w.a.prac, 'select workflow_suspended($1, $2) s', [w.B.tenant.id, 'field_sync'])).rows[0].s;
+    expect(other).toBe(true);
+  });
+});

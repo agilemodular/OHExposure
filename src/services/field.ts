@@ -304,8 +304,8 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
         const same = comparable(values) === comparable(cur);
         if (same) {
           // The server already holds exactly this content, so nothing held entered the record; close any hold.
-          await tx.query(`update field_intake_holds set status='synchronised', resolved_at=now(), sampling_event_id=$2 where client_uuid=$1 and status='held'`, [it.client_uuid, cur.id]);
-          return { client_uuid: it.client_uuid, outcome: 'duplicate', server_id: cur.id, version: cur.version };
+          const w = await releaseHolds(tx, it.client_uuid, cur.id);
+          return { client_uuid: it.client_uuid, outcome: 'duplicate', server_id: cur.id, version: cur.version, ...(w.length ? { warnings: w } : {}) };
         }
         if (it.base_version !== null && it.base_version === cur.version && !LOCKED.includes(cur.status)) {
           const { event, warnings } = await applyUpdate(tx, a, cur, d, true);
@@ -314,6 +314,7 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
         // The same device copy re-sent (retry, recovery re-import) is not recorded as a new conflict.
         const prior = await one(tx, `select id, status from sync_conflicts where entity_id=$1 and client_uuid=$2 and coalesce(base_version,-1)=coalesce($3::int,-1) and client_payload=$4::jsonb order by submitted_at desc limit 1`,
           [cur.id, it.client_uuid, it.base_version, JSON.stringify(it.payload)]);
+        if (prior) await tx.query(`update field_intake_holds set status='in_conflict', sampling_event_id=$2 where client_uuid=$1 and status='held'`, [it.client_uuid, cur.id]);
         if (prior) return { client_uuid: it.client_uuid, outcome: 'conflict', server_id: cur.id, version: cur.version, conflict_id: prior.id,
           message: prior.status === 'open' ? 'Already recorded as a conflict awaiting review.' : 'This device copy was already reviewed as a conflict; no new conflict was recorded.' };
         const c = await one(tx, `insert into sync_conflicts (tenant_id,client_id,entity_type,entity_id,client_uuid,base_version,server_version,client_payload,server_payload,submitted_by)
@@ -352,7 +353,9 @@ export async function resolveConflict(a: Actor, id: string, input: unknown) {
       // If the device copy was first received during a suspension, the sample must now be reviewed before use.
       await releaseHolds(tx, c.client_uuid, cur.id, ['held', 'in_conflict']);
     } else {
-      await tx.query(`update field_intake_holds set status='synchronised', resolved_at=now() where client_uuid=$1 and status='in_conflict'`, [c.client_uuid]);
+      // The device copy was not applied: a held copy of it is dismissed by the person resolving the conflict.
+      await tx.query(`update field_intake_holds set status='dismissed', resolved_at=now(), resolved_by=$2, resolution_notes=$3 where client_uuid=$1 and status in ('held','in_conflict')`,
+        [c.client_uuid, a.userId, `Conflict resolved by keeping the server copy: ${d.notes}`]);
     }
     await tx.query('update sync_conflicts set status=$2, resolution_notes=$3, resolved_by=$4, resolved_at=now() where id=$1', [id, d.resolution, d.notes, a.userId]);
     await audit(tx, a, 'sync.conflict_resolved', 'sampling_event', c.entity_id, d);
@@ -392,9 +395,11 @@ export async function listSamples(a: Actor, filter: { status?: string } = {}) {
  * is closed and the sample is flagged so it cannot support a submission or approval until someone else clears it.
  */
 async function releaseHolds(tx: Tx, clientUuid: string, eventId: string, statuses = ['held']) {
-  const held = await many(tx, `update field_intake_holds set status='synchronised', resolved_at=now(), sampling_event_id=$2 where client_uuid=$1 and status = any($3) returning id`, [clientUuid, eventId, statuses]);
+  const held = await many(tx, `select id from field_intake_holds where client_uuid=$1 and status = any($2) for update`, [clientUuid, statuses]);
   if (!held.length) return [];
+  // Flag first: the database only lets a hold become 'synchronised' once its sample carries the review flag.
   await tx.query('update sampling_events set suspension_review_required=true, suspension_reviewed_by=null, suspension_reviewed_at=null where id=$1', [eventId]);
+  await tx.query(`update field_intake_holds set status='synchronised', resolved_at=now(), sampling_event_id=$2 where id = any($1)`, [held.map((h) => h.id), eventId]);
   return ['This record was received during a suspension; a reviewer must clear it before it can be used in an assessment.'];
 }
 
@@ -422,5 +427,23 @@ export async function clearSuspensionReview(a: Actor, sampleId: string, input: u
       throw forbidden('Someone other than the person who captured or submitted the record must clear it');
     await tx.query('update sampling_events set suspension_reviewed_by=$2, suspension_reviewed_at=now() where id=$1', [sampleId, a.userId]);
     await audit(tx, a, 'sample.suspension_review_cleared', 'sampling_event', sampleId, d);
+  });
+}
+
+/**
+ * Reviewed dismissal of a held record that will not enter the field record (e.g. the device was lost or reset, or the
+ * held edit is obsolete). Someone other than the submitter, with notes; audited. Unblocks samples held by it.
+ */
+export async function dismissHold(a: Actor, holdId: string, input: unknown) {
+  requirePerm(a, 'conflicts.resolve');
+  const d = parse(z.object({ notes: reqStr(10) }), input);
+  return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync', 'dismiss held record');
+    const h = await one(tx, 'select * from field_intake_holds where id=$1 for update', [holdId]);
+    if (!h) throw notFound('Held record');
+    if (!['held', 'in_conflict'].includes(h.status)) throw invalid('This held record is already resolved');
+    if (h.submitted_by === a.userId) throw forbidden('Someone other than the person who submitted the record must dismiss it');
+    await tx.query(`update field_intake_holds set status='dismissed', resolved_at=now(), resolved_by=$2, resolution_notes=$3 where id=$1`, [holdId, a.userId, d.notes]);
+    await audit(tx, a, 'field.hold_dismissed', 'field_intake_hold', holdId, { notes: d.notes, client_uuid: h.client_uuid });
   });
 }

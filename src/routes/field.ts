@@ -34,7 +34,8 @@ function holdsSection(c: PageCtx, h: { held: any[]; toReview: any[] }) {
       ${h.toReview.map((e) => html`<tr><td><a href="/samples/${e.id}">${e.sample_code}</a> <span class="badge b-warn">Needs suspension review</span></td><td>${e.created_by_name ?? '—'}</td><td>${fmtDateTime(e.created_at)}</td>
         <td><form method="post" action="/samples/${e.id}/suspension-review" class="inline">${csrfField(c)}<input name="notes" placeholder="Checked against …" required minlength="10"><button class="secondary tiny">Clear for use</button></form></td></tr>`)}</tbody></table></div>` : ''}
     ${h.held.length ? html`<details><summary>${h.held.filter((x) => x.status === 'held').length} held, ${h.held.filter((x) => x.status !== 'held').length} since synchronised</summary><div class="tablewrap"><table><thead><tr><th>Sample code</th><th>Submitted by</th><th>Received</th><th>Reason</th><th>Status</th></tr></thead><tbody>
-      ${h.held.map((x) => html`<tr><td>${x.payload?.sample_code ?? '—'}</td><td>${x.submitted_by_name ?? '—'}</td><td>${fmtDateTime(x.received_at)}</td><td class="small">${x.suspension_reason ?? ''}</td><td>${label(x.status)}</td></tr>`)}</tbody></table></div></details>` : ''}`;
+      ${h.held.map((x) => html`<tr><td>${x.payload?.sample_code ?? '—'}</td><td>${x.submitted_by_name ?? '—'}</td><td>${fmtDateTime(x.received_at)}</td><td class="small">${x.suspension_reason ?? ''}${x.resolution_notes ? html`<br>${x.resolution_notes}` : ''}</td>
+        <td>${label(x.status)}${['held', 'in_conflict'].includes(x.status) && x.submitted_by !== c.actor.userId ? html`<form method="post" action="/holds/${x.id}/dismiss" class="inline">${csrfField(c)}<input name="notes" placeholder="Why it will not enter the record" required minlength="10"><button class="secondary tiny">Dismiss</button></form>` : ''}</td></tr>`)}</tbody></table></div></details>` : ''}`;
 }
 
 export function fieldRoutes(app: FastifyInstance) {
@@ -228,6 +229,7 @@ export function fieldRoutes(app: FastifyInstance) {
     };
   });
   action(app, '/attachments/:id/admit', async (c) => { await att.admitAttachment(c.actor, c.params.id, c.body); return { to: back(c), ok: 'Remediation evidence admitted' }; });
+  action(app, '/holds/:id/dismiss', async (c) => { await field.dismissHold(c.actor, c.params.id, c.body); return { to: '/conflicts', ok: 'Held record dismissed' }; });
   action(app, '/samples/:id/suspension-review', async (c) => { await field.clearSuspensionReview(c.actor, c.params.id, c.body); return { to: '/conflicts', ok: 'Record cleared for use' }; });
   action(app, '/conflicts/:id', async (c) => { await field.resolveConflict(c.actor, c.params.id, c.body); return { to: '/conflicts', ok: 'Conflict resolved' }; });
 

@@ -3,6 +3,8 @@
 // only the application credentials (deploy/docker-compose.prod.yml), so the running process never holds owner rights.
 import { release } from './release.js';
 
-await release();
-if (process.env.OHEA_DROP_ADMIN_URL !== 'false') delete process.env.DATABASE_ADMIN_URL;
+// The owner URL is taken out of the process environment before anything else runs; only the release step sees it.
+const releaseEnv = { ...process.env };
+delete process.env.DATABASE_ADMIN_URL;
+await release(releaseEnv);
 await import('../src/server.js');
