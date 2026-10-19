@@ -48,7 +48,7 @@ Classification used throughout:
 |---|---|---|
 | Online sample capture with time zone, interruptions, flows, conditions, deviations | Verified | workflow + http |
 | Offline capture, idempotent sync, conflict preservation and resolution | Verified (desktop browser; **not on field devices**) | workflow test + browser run |
-| Offline data protection: online-only default; encrypted per-user store (AES-256-GCM, PBKDF2 PIN), inactivity lock, 24 h purge, 7-day reference expiry, minimum dataset (worker codes only) | Verified (desktop Chromium only) | `test/browser/field_offline_protection.py` 22/22; gate G8 open |
+| Offline data protection: online-only default; encrypted per-user store (AES-256-GCM, PBKDF2 PIN), inactivity lock, 24 h purge, 7-day reference expiry, minimum dataset (worker codes only) | Verified (desktop Chromium only) | `test/browser/field_offline_protection.py` 24/24; gate G8 open |
 | Recovery of unsynchronised field records via server-sealed envelopes; reviewer import page; idempotent, audited, alerted | Verified | assurance tests + browser run |
 | Device clock offset recorded and warned; future capture times refused | Verified | assurance tests |
 | Calibration evidence and on-date validity; expired/failed flagged | Verified | workflow + calc tests |
@@ -101,6 +101,23 @@ Classification used throughout:
 | Integration contracts, outbox, idempotency, retries | Verified (mock) | workflow test |
 | Live integrations | Blocked | D5 |
 | AI-assisted extraction/narrative | Interface only / Blocked | Suggestion store + acceptance flow; no provider (D6) |
+
+## Phase H2 controls
+
+| Capability | Status | Evidence / notes |
+|---|---|---|
+| Suspension policy (workflow, organisation, assessment hold) enforced in services and database; tenant row share-locked against races | Verified | `h2.test.ts`; `suspension-policy.md` |
+| Remediation evidence intake (quarantine, admission by a different reviewer after resumption, link-time refusal) | Verified | `h2.test.ts` |
+| Offline records received while suspended held on the server; flagged on arrival; excluded from submission and approval until cleared | Verified | `h2.test.ts` |
+| Refused attempts audited (`workflow.blocked`, `assessment.blocked`) | Verified | `h2.test.ts` |
+| Integration delivery held and disposal refused during suspensions | Verified | `h2.test.ts` |
+| Approval and issue prerequisites on every write path open to the application credentials (state, role, separation, suspension, hold, held samples, pilot rules) | Verified | `h2.test.ts`; `approval-and-issue-controls.md` |
+| Evidence share-locked during approval (no amendment race) | Verified | `h2.test.ts` |
+| Method approvals with permitted scope, hashed signed evidence, expiry and withdrawal; effective status shared by service and database; impact listing; staleness notice | Verified | `h2.test.ts`; `assurance.test.ts` |
+| Recorded pilot authorisation (G11) required for pilot level, also for the owner connection | Verified | `h2.test.ts` |
+| Versioned field recovery keys; replacement all-or-nothing; old versions importable; device re-seal on reconnect | Verified (server); verified in desktop Chromium only (device re-seal) | `h2.test.ts`; browser check 24/24 |
+| Pre-migration backup before applying migrations (required in production) | Verified in development | entrypoint run on a database one migration behind |
+| Production deployment profile (TLS proxy, jobs, timers, log limits, staleness check) | Prepared; compose validated; **not deployed** | `deploy/`; `hosting-decision-sheet.md` |
 
 ## Governance and operations
 
