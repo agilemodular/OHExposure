@@ -2,7 +2,7 @@
 
 Latest run: **19 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**, 22 migrations, reviewed commit range `1fce123..` (Phase H2). Command: `npm test` (Vitest, files run sequentially). The test schema is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security and every trigger are active. Environment: development workspace (Linux container). **Not the hosting environment.**
 
-**Result: 156 passed, 0 failed, across 6 suites.** Phase H1 ended at 129. A count is not evidence of suitability: the findings register maps each closed finding to the behaviour it verifies.
+**Result: 159 passed, 0 failed, across 6 suites** (156 at the H2 report; 3 added when the remaining low findings were closed, commit `9199a11` and the R2-Q1 fix). Phase H1 ended at 129. A count is not evidence of suitability: the findings register maps each closed finding to the behaviour it verifies.
 
 | Suite | Tests | Covers |
 |---|---|---|

@@ -524,6 +524,8 @@ describe('remaining low findings (19 Oct, evening)', () => {
   it('R-X1: separation checks compare normalised names (order, case, accents, punctuation)', async () => {
     const { samePerson } = await import('../scripts/identity.js');
     expect(samePerson('Smith, Jane', 'jane  SMITH')).toBe(true);
+    expect(samePerson('王伟', '李娜')).toBe(false);
+    expect(samePerson('王伟', ' 王伟 ')).toBe(true);
     expect(samePerson('Zoë O’Brien', 'zoe obrien')).toBe(true);
     expect(samePerson('Jane Smith', 'J. Smith')).toBe(false); // different spellings are not detected (documented)
     expect(samePerson('Zoë Brien', 'zoe brien')).toBe(true);

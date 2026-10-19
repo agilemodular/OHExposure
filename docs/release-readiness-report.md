@@ -24,16 +24,16 @@ No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is t
   - **Professional authority records.** These carry permitted scope, hashed signed evidence, expiry and withdrawal. A recorded pilot authorisation is required before pilot level can be set.
   - **Field recovery keys.** These are versioned, with replacement and revocation.
   - **Production deployment profile.** The running application never holds owner credentials.
-- **Automated evidence:** 156 tests, all passing. Desktop browser check 24/24. A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
+- **Automated evidence:** 159 tests, all passing. Desktop browser check 24/24. A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
 - **Independent software review (R2).** R2 reviewed the Phase H2 controls, re-checked the fixes, then re-checked the final fixes.
   - The first review found 2 critical, 4 high, 8 medium and 9 low findings, plus 9 more from the re-checks.
   - **All Critical, High and Medium software findings are closed.**
   - The open Low findings are listed in `findings-register.md` §4.
-  - Two final fixes (R2-P1, R2-P2) are verified by tests but have not been re-reviewed.
+  - An acceptance check closed the remaining software low findings (R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2) and accepted R-X1 as mitigated. One regression it raised (R2-Q1) is fixed and tested but not re-reviewed.
 
 ## Correction to the 18 October report
 
-The 18 October report listed attachment upload during suspension among "low" residual items. It was a **Medium** finding (R-M3), as the H1 completion report stated; it is now closed. The "four low findings" referred to were R-L2, R-L3, R-L5 and R-L7, now respectively closed, closed, mitigated and fixed.
+The 18 October report listed attachment upload during suspension among "low" residual items. It was a **Medium** finding (R-M3), as the H1 completion report stated; it is now closed. The "four low findings" referred to were R-L2, R-L3, R-L5 and R-L7, now all closed.
 
 ## Awaiting environment verification
 

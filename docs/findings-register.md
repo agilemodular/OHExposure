@@ -37,11 +37,11 @@ Reviewer key:
 | R-L1 | Cached page held personal data after sign-out | Offline | Low → Low (residual) | Sign-in page deletes the cache | Sign out, inspect Cache API | `signed-out.js` | Browser check | R1 ✓ after re-check fix | Residual: not cleared if the user never reaches the sign-in page. **Mitigated.** |
 | **R-L2** | No database-level issue gate; recovery key planting by the application role | Approval / report issue / recovery | Low → none | Triggers 018 and 019; key verification at start and first use | Insert an issued report as `ohea_app` | `enforce_report_issue`, `enforce_pilot_approval`, `activeRecoveryKey` | `assurance.test.ts`; `h2.test.ts` (direct writes refused) | **Closed (R2)**: issue path probed (C1/H1 fixed); key-row verification not separately probed | None |
 | **R-L3** | No KEK startup check or rotation | Recovery | Low → none | `recovery-keys.ts verify` / `rotate` / `replace`; start check | Wrong KEK only noticed at import | Scripts and start check | `assurance.test.ts` rotation; `h2.test.ts` replacement | **Closed (R2)**: rotation and replacement checked sound | None |
-| R-L4 | Alert de-duplication map unbounded; CLI accepted demo level | Operations | Low → Low (residual) | Level validated; map pruned past 5,000 entries | — | `alerts.ts`; `platform-controls.ts` | Code | R1 ✓ | Residual: unbounded within one 10-minute window. **Accepted for the pilot scale; not yet signed by anyone, so still Open (Low).** |
-| **R-L5** | Recovery import is CPU-heavy (synchronous RSA) | Recovery | Low → Low | Capped at 200 records and 5 MB per file | Import a 500-record file | Caps | Code | Not re-checked | **Mitigated.** Imports need practitioner rights. Production: move to a background job. |
+| R-L4 | Alert de-duplication map unbounded; CLI accepted demo level | Operations | Low → Low (residual) | Level validated; map pruned past 5,000 entries | — | `alerts.ts`; `platform-controls.ts` | Code | R1 ✓ | Map now hard-bounded at 5,000 keys (oldest evicted first; refreshed keys move to the end), commit `9199a11`, `h2.test.ts`. **Closed (R2 acceptance check).** |
+| **R-L5** | Recovery import is CPU-heavy (synchronous RSA) | Recovery | Low → Low | Capped at 200 records and 5 MB per file | Import a 500-record file | Caps; the import now yields between records and at most two imports run at once (others get *busy*), commit `9199a11` | `h2.test.ts` | **Closed (R2 acceptance check).** A background job remains an option before production. |
 | R-L6 | Reviewer could be the importer of reference data | Reference data | Low → Low (residual R-X1) | Name comparison added | — | `import-reference-data.ts` | Code | R1 ✓ | See R-X1 |
-| **R-L7** | Handover, interruption and custody times not checked for the future | Field / lab | Low → none | Checked for interruptions, handover, custody, dispatch and receipt | Future custody time accepted | `util.assertNotFuture` | `assurance.test.ts` (custody); `h2.test.ts` (interruption, handover, dispatch, receipt) | Fixed, awaiting acceptance (not probed by R2) | None once accepted |
-| R-X1 | Separation between reviewer and recording operator is a name comparison only (method reviews, reference imports, pilot authorisations) | Authority | Low | — | Use a different spelling of the same name | Signed documents are hashed and stored (H2), so the evidence can be checked | Code | — | **Open (Low).** Mitigation: the gate reviewer checks the signed document against the record. |
+| **R-L7** | Handover, interruption and custody times not checked for the future | Field / lab | Low → none | Checked for interruptions, handover, custody, dispatch and receipt | Future custody time accepted | `util.assertNotFuture` | `assurance.test.ts` (custody); `h2.test.ts` (interruption, handover, dispatch, receipt) | **Closed (R2 acceptance check)** | — |
+| R-X1 | Separation between reviewer and recording operator is a name comparison only (method reviews, reference imports, pilot authorisations) | Authority | Low | — | Use a different spelling of the same name | Signed documents are hashed and stored (H2), so the evidence can be checked | Names compared after normalisation (case, accents, punctuation, word order; Unicode letters kept); operator OS user and host recorded in the audit event (`scripts/identity.ts`, `9199a11`, regression fix below) | **Mitigated; name-based by design (accepted in the R2 acceptance check).** The gate reviewer checks the signed document against the record. |
 | R-X2 | Calibration evidence was not locked during approval | Approval | Low → none | Found in H2 analysis | Record a calibration while an approval is finalising | Instruments share-locked during approval; calibration writes lock the instrument (R2-M7) | Code | **Closed (R2)** | — |
 
 **The four remaining low findings named in the H1 release report** were R-L2, R-L3, R-L5 and R-L7. The release report's summary grouped three items (attachment upload, database-level issue gate, KEK rotation): it mixed R-M3 (Medium) with R-L2 and R-L3, and left out R-L5 and R-L7. Status now: R-L2, R-L3 and R-L7 are *Fixed, awaiting acceptance*; R-L5 is *Mitigated*.
@@ -79,7 +79,7 @@ R2 reviewed commits `1fce123..2640caf` with rolled-back probes as the applicatio
 | R2-M4 | Race between placing a hold and approval or issue | Suspension | Medium → none | Concurrent hold and approval | Assessment row share-locked (service and trigger); hold takes an update lock | `h2.test.ts` M4 | **Fixed** | — |
 | R2-M5 | Refused-attempt audit could exhaust the connection pool | Operations | Medium → none | 10 concurrent refusals | Dedicated two-connection pool with a timeout | Code | **Fixed** | — |
 | R2-M6 | Replaced key versions remained valid indefinitely; attest keys derived from private keys | Recovery | Medium → Low | Compromised old private key | Per-version attestation secret; `replace --revoke-previous` | `h2.test.ts` M6 | **Fixed (opt-in)** | Revocation strands unsynchronised records on devices that cannot reconnect (documented trade-off). Key versions created before migration 020 (demonstration organisation only) keep private-key-derived attestation until replaced; new organisations get separate attestation secrets automatically |
-| R2-M7 | Organisation suspension left calibrations and instruments open; approval did not lock them | Suspension / approval | Medium → Low | Record a calibration during suspension | Calibration and instrument status gated; instruments and benchmark share-locked during approval | `h2.test.ts` | **Fixed** | Residual: `recordMaintenance` not gated (maintenance does not enter calculations). **Open (Low).** |
+| R2-M7 | Organisation suspension left calibrations and instruments open; approval did not lock them | Suspension / approval | Medium → Low | Record a calibration during suspension | Calibration and instrument status gated; instruments and benchmark share-locked during approval | `h2.test.ts` | **Fixed** | Residual closed: `recordMaintenance` is gated by field-sync suspension and locks the instrument (`9199a11`). **Closed (R2 acceptance check).** |
 | R2-M8 | AI suggestion application raced with submission and ignored holds | Assessment | Medium → none | Apply a suggestion during submission | Row lock and hold check | Code | **Fixed** | AI provider disabled anyway |
 | R2-L | Lows: method-review ordering in one transaction; view columns; pilot authorisation mutability; NULL suspension helper; integration delivery and holds; expired methods at issue; MAC not covering the version; non-atomic device writes; gzip on authenticated pages; floating image tags; CREATEDB for restore; KEK in backup jobs; weak tests | Various | Low | — | All fixed except image tags (pinned by comment, to digest at deployment) and the name-only check (R-X1) | Tests for ordering and pilot authorisations; code | Re-check: **Fixed** except tags (partial) and R-X1 (accepted, not fixed) | Pin image digests in G5 |
 
@@ -105,12 +105,22 @@ Two further items were raised and fixed in migration 022:
 
 | ID | Finding | Remediation | Verification | Acceptance |
 |---|---|---|---|---|
-| R2-P1 | Practitioner who submitted a held copy could not *keep server copy*: the whole resolution failed with a database error | `resolveConflict` checks first and gives a clear message (someone else must resolve). It also checks field-sync suspension before dismissing. | Code | Fixed, awaiting acceptance (not re-reviewed) |
-| R2-P2 | An `in_conflict` hold could be repointed to another sample | Any same-status change refused; the sample of a held conflict is immutable | `h2.test.ts` "R2 final re-check" (final-hold case) | Fixed, awaiting acceptance (not re-reviewed). The in-conflict case is covered by the trigger logic but not by a test fixture. |
+| R2-P1 | Practitioner who submitted a held copy could not *keep server copy*: the whole resolution failed with a database error | `resolveConflict` checks first and gives a clear message (someone else must resolve). It also checks field-sync suspension before dismissing. | Code | **Closed (R2 acceptance check)** |
+| R2-P2 | An `in_conflict` hold could be repointed to another sample | Any same-status change refused; the sample of a held conflict is immutable | `h2.test.ts` "R2 final re-check" (final-hold case) | **Closed (R2 acceptance check).** |
 
 R2-N1 to N6 and N8 are therefore **Closed (R2)**. R2-C2, R2-H2 and R2-N3 are **Closed (R2)** through their follow-ups.
 
-## 4. Open findings summary (19 Oct 2026)
+### 3.4 Acceptance check of the remaining low findings (R2, commit `9199a11`)
+
+The reviewer confirmed R2-P1, R2-P2, R-L4, R-L5, R-L7 and the R2-M7 residual as fixed, accepted R-X1 as mitigated (name-based by design), and raised one regression:
+
+| ID | Finding | Remediation | Verification | Acceptance |
+|---|---|---|---|---|
+| R2-Q1 | The new name normalisation removed every non-Latin character, so any two non-Latin names (e.g. two Chinese names) compared as the same person and the separation check refused legitimate records | Unicode letters and digits are kept; if normalisation leaves nothing, the trimmed lower-case names are compared | `h2.test.ts` (`王伟` ≠ `李娜`; `王伟` = ` 王伟 `) | Fixed, awaiting acceptance (not re-reviewed) |
+
+## 4. Open findings summary (19 Oct 2026, after the acceptance check)
+
+Closed in the acceptance check and removed from this table: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2.
 
 | ID | Severity | Status | Implication | Next action / owner |
 |---|---|---|---|---|
@@ -120,16 +130,12 @@ R2-N1 to N6 and N8 are therefore **Closed (R2)**. R2-C2, R2-H2 and R2-N3 are **C
 | R-M6 | — | Fixed, awaiting device evidence (F17) | — | Pilot site (G9) |
 | R-M8 | Low | Mitigated; **accepted-risk decision needed** | PIN strength is the main defence | Controller, within G8 |
 | R-L1 | Low | Mitigated | Cached page may persist if the user never reaches the sign-in page | Accept within G8 |
-| R-L4 | Low | Open | Alert de-duplication map unbounded within a 10-minute window | Accept for pilot scale (G5) |
-| R-L5 | Low | Mitigated | Recovery import CPU cost | Background job before production |
-| R-L7 | Low | Fixed, awaiting acceptance | — | Next independent review |
-| R-X1 | Low | Open | Name-only separation checks for operator records | Gate reviewers check signed documents (hashes stored) |
+| R-X1 | Low | Mitigated (accepted by R2) | Separation checks are name-based by design | Gate reviewers check signed documents (hashes stored) |
 | R-X2 | — | Closed by R2-M7 (instruments locked during approval) | — | — |
 | R2-H3 | Low (residual) | Owner role remains privileged (BYPASSRLS, table owner) | Documented privileged access | Hosting owner (G5) |
-| R2-M7 | Low (residual) | `recordMaintenance` not gated | Maintenance does not feed calculations | Next development phase |
 | R2-N7 | Low | Open | Existing deployments need role and volume changes | Hosting owner on first deployment (G5) |
 | R2-N9 | Low | Open (documented boundary) | Inputs-hash check is service-only | Accept, or add a database check before production |
-| R2-P1, R2-P2 | Low | Fixed, awaiting acceptance | — | Next independent review |
+| R2-Q1 | Low | Fixed, awaiting acceptance | Name check regression for non-Latin names | Next independent review |
 | Image tags | Low | Partial | Pin digests at deployment | Hosting owner (G5) |
 
 **No Critical, High or Medium software finding is open.** The one open Medium item, H1-F01, is fixed in software and awaits the hygienist's professional disposition.

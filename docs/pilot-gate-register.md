@@ -43,7 +43,7 @@ Findings are recorded in `findings-register.md`. Open or unaccepted findings tha
 | Gate | Findings |
 |---|---|
 | G3 | H1-F01: awaiting professional disposition |
-| G5 | R-L4 (alert map), R-X1 (name-only separation checks), R-X2 (calibration lock); privileged-access controls in `approval-and-issue-controls.md` §4 to be confirmed with the hosting owner |
+| G5 | R-X1 (name-based separation checks, mitigated and accepted by R2), R2-Q1 (fixed, awaiting acceptance); privileged-access controls in `approval-and-issue-controls.md` §4 to be confirmed with the hosting owner |
 | G6 | H2-A7 (pre-migration backup): rehearsal in hosting needed |
 | G8 | R-M5 (wind-down not exercised on a device), R-M8 (PIN-strength residual risk needs a controller decision), R-L1 residual, R-H2a |
 | G9 | R-M5, R-M6: to be exercised in device tests F17 and F21 |
@@ -75,3 +75,4 @@ Record each status change: date · gate · from → to · by whom · evidence re
 | 19 Oct 2026 | G10 | Not started → In progress | Development team (not a gate decision) | User guides, training record template, support and incident procedure template | No one trained; contacts not confirmed |
 | 19 Oct 2026 | G1–G11 | Phase H2: no status changes to gates. Evidence references extended (findings register, suspension policy, approval/issue controls, hosting decision sheet, deployable configuration, decision pack, review handover). | Development team (not a gate decision) | `phase-h2-completion-report.md` | No gate accepted |
 | 19 Oct 2026 | — | Phase H2 closure: independent review R2 findings closed; no gate status changed | Development team (not a gate decision) | `phase-h2-completion-report.md`, `findings-register.md` | No gate accepted; no pilot authorised |
+| 19 Oct 2026 | — | Remaining software low findings closed (R2 acceptance check, `findings-register.md` §3.4); no gate status changed | Development team (not a gate decision) | `findings-register.md` | No gate accepted; no pilot authorised |

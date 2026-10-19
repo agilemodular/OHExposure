@@ -5,10 +5,16 @@
 import { hostname, userInfo } from 'node:os';
 
 export function normaliseName(n: string): string {
-  return n.normalize('NFKD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/['\u2019`]/g, '').replace(/[^a-z0-9\s]/g, ' ')
+  // Unicode letters and digits are kept (non-Latin names compare correctly); accents, apostrophes, other punctuation,
+  // case, spacing and word order are ignored.
+  return n.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/['\u2019`]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/).filter(Boolean).sort().join(' ');
 }
-export const samePerson = (a?: string | null, b?: string | null) => !!a && !!b && normaliseName(a) === normaliseName(b);
+export const samePerson = (a?: string | null, b?: string | null) => {
+  if (!a || !b) return false;
+  const x = normaliseName(a), y = normaliseName(b);
+  return x ? x === y : a.trim().toLowerCase() === b.trim().toLowerCase();
+};
 
 /** Where an operator command was run from, recorded with every platform decision for traceability. */
 export function operatorContext() {
