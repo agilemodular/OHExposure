@@ -23,6 +23,7 @@
 // It does not make the operator a reviewer: the reviewer, their competence and the evidence reference are mandatory.
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync } from 'node:fs';
+import { operatorContext, samePerson } from './identity.js';
 import pg from 'pg';
 import { CALCULATIONS } from '../src/calc/engine.js';
 import { sendAlert } from '../src/alerts.js';
@@ -97,7 +98,7 @@ export async function recordMethodReview(url: string, i: MethodReviewInput) {
   if (i.status !== 'not_reviewed') {
     for (const [k, v] of [['--reviewer', i.reviewer], ['--competence', i.competence], ['--reviewed-on', i.reviewedOn], ['--evidence', i.evidence]] as const)
       if (!v?.trim()) throw new Error(`${k} is required for a review decision`);
-    if (i.reviewer!.trim().toLowerCase() === i.recordedBy.trim().toLowerCase())
+    if (samePerson(i.reviewer, i.recordedBy))
       throw new Error('The operator recording a review cannot be the reviewer: a second person must record it from the signed evidence');
     if (i.status === 'approved_with_conditions' && !i.conditions?.trim()) throw new Error('--conditions is required for approved_with_conditions');
     if (!/^\d{4}-\d{2}-\d{2}$/.test(i.reviewedOn!) || Date.parse(i.reviewedOn!) > Date.now()) throw new Error('--reviewed-on must be a past date (YYYY-MM-DD)');
@@ -116,7 +117,7 @@ export async function recordMethodReview(url: string, i: MethodReviewInput) {
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, [i.method, i.version, i.status, i.conditions ?? null, i.reviewer ?? null, i.competence ?? null, i.reviewedOn ?? null, i.evidence ?? null, i.recordedBy,
         i.scope ?? null, i.expiresOn ?? null, evidenceSha]);
     await c.query(`insert into audit_events (tenant_id, user_id, action, entity_type, entity_id, detail) values (null, null, 'platform.method_review', 'method', $1, $2)`,
-      [`${i.method}@${i.version}`, { status: i.status, reviewer: i.reviewer ?? null, evidence: i.evidence ?? null, evidence_sha256: evidenceSha, scope: i.scope ?? null, expires_on: i.expiresOn ?? null, recorded_by: i.recordedBy }]);
+      [`${i.method}@${i.version}`, { status: i.status, reviewer: i.reviewer ?? null, evidence: i.evidence ?? null, evidence_sha256: evidenceSha, scope: i.scope ?? null, expires_on: i.expiresOn ?? null, recorded_by: i.recordedBy, operator_context: operatorContext() }]);
   });
 }
 
@@ -153,7 +154,8 @@ export async function recordPilotAuthorisation(url: string, i: PilotAuthorisatio
   for (const [k, v] of [['--scope-ref', i.scopeRef], ['--provider', i.provider], ['--organisation', i.organisation], ['--authorised-on', i.authorisedOn], ['--document', i.document], ['--recorded-by', i.recordedBy]] as const)
     if (!v?.trim()) throw new Error(`${k} is required`);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(i.authorisedOn) || Date.parse(i.authorisedOn) > Date.now()) throw new Error('--authorised-on must be a past date');
-  if ([i.provider, i.organisation].some((x) => x.trim().toLowerCase() === i.recordedBy.trim().toLowerCase())) throw new Error('The operator recording an authorisation cannot be one of the authorisers');
+  if (samePerson(i.provider, i.organisation)) throw new Error('The provider and organisation authorisers must be different people');
+  if ([i.provider, i.organisation].some((x) => samePerson(x, i.recordedBy))) throw new Error('The operator recording an authorisation cannot be one of the authorisers');
   if (!i.documentFile || !existsSync(i.documentFile)) throw new Error('--document-file must point to the signed authorisation');
   const sha = createHash('sha256').update(readFileSync(i.documentFile)).digest('hex');
   return withAdmin(url, async (c) => {
@@ -187,7 +189,7 @@ async function withAdmin<T>(url: string, fn: (c: pg.Client) => Promise<T>) {
   } finally { await c.end(); }
 }
 async function auditEvent(c: pg.Client, tenantId: string, action: string, detail: object) {
-  await c.query(`insert into audit_events (tenant_id, user_id, action, entity_type, entity_id, detail) values ($1, null, $2, 'tenant', $3, $4)`, [tenantId, action, String(tenantId), detail]);
+  await c.query(`insert into audit_events (tenant_id, user_id, action, entity_type, entity_id, detail) values ($1, null, $2, 'tenant', $3, $4)`, [tenantId, action, String(tenantId), { ...detail, operator_context: operatorContext() }]);
 }
 
 if (process.argv[1]?.endsWith('platform-controls.ts')) {

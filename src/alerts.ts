@@ -31,14 +31,21 @@ const SEVERITY: Record<AlertEvent, 'info' | 'warning' | 'critical'> = {
 // Suppress floods: one alert per event+key per window.
 const recent = new Map<string, number>();
 const WINDOW_MS = 10 * 60_000;
+const MAX_KEYS = 5000;
+export const alertDedupeSize = () => recent.size;
 export const sentAlerts: { event: AlertEvent; detail: Record<string, unknown> }[] = [];
 
 export async function sendAlert(event: AlertEvent, detail: Record<string, unknown> = {}, dedupeKey = '') {
   const k = `${event}|${dedupeKey}`;
   const now = Date.now();
   if ((recent.get(k) ?? 0) > now - WINDOW_MS) return false;
+  recent.delete(k);
   recent.set(k, now);
-  if (recent.size > 5000) for (const [rk, t] of recent) if (t <= now - WINDOW_MS) recent.delete(rk);
+  // Bounded: expired keys are dropped first; if the map is still full, the oldest keys go (Maps keep insertion order).
+  if (recent.size > MAX_KEYS) {
+    for (const [rk, t] of recent) if (t <= now - WINDOW_MS) recent.delete(rk);
+    for (const rk of recent.keys()) { if (recent.size <= MAX_KEYS) break; recent.delete(rk); }
+  }
   const body = { event, severity: SEVERITY[event], at: new Date(now).toISOString(), service: 'ohea', detail };
   sentAlerts.push({ event, detail });
   if (sentAlerts.length > 200) sentAlerts.shift();

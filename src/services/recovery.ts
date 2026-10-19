@@ -10,7 +10,7 @@ import { createCipheriv, createDecipheriv, createHash, createHmac, createPrivate
 import { z } from 'zod';
 import { sendAlert } from '../alerts.js';
 import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
-import { invalid } from '../errors.js';
+import { AppError, invalid } from '../errors.js';
 import { syncBatch } from './field.js';
 
 function kek(): Buffer {
@@ -113,7 +113,17 @@ const file = z.object({
   exported_at: z.string(), records: z.array(envelope).min(1).max(200),
 });
 
+// At most this many recovery imports run at once in a process; further requests are asked to retry.
+const MAX_CONCURRENT_IMPORTS = 2;
+let importsRunning = 0;
+
 export async function importRecoveryFile(a: Actor, raw: string) {
+  if (importsRunning >= MAX_CONCURRENT_IMPORTS) throw new AppError(429, 'busy', 'Another recovery import is in progress. Try again in a minute.');
+  importsRunning++;
+  try { return await importRecoveryFileInner(a, raw); } finally { importsRunning--; }
+}
+
+async function importRecoveryFileInner(a: Actor, raw: string) {
   // Importing creates field evidence, so it needs both conflict-resolution and field-capture rights.
   requirePerm(a, 'conflicts.resolve');
   requirePerm(a, 'field.capture');
@@ -139,20 +149,22 @@ export async function importRecoveryFile(a: Actor, raw: string) {
   }
   const items: any[] = [];
   const undecryptable: number[] = [];
-  parsed.records.forEach((e, i) => {
+  // RSA decryption is CPU-bound: yield to the event loop between records so other requests are served meanwhile.
+  for (const [i, e] of parsed.records.entries()) {
+    await new Promise((r) => setImmediate(r));
     try {
       const kv = byVersion.get(e.kv);
-      if (!kv || !macOk(kv.attest, e, kv.legacy)) { undecryptable.push(i + 1); return; }
+      if (!kv || !macOk(kv.attest, e, kv.legacy)) { undecryptable.push(i + 1); continue; }
       const key = privateDecrypt(kv.priv, Buffer.from(e.wk, 'base64'));
       const buf = Buffer.from(e.ct, 'base64');
       const d = createDecipheriv('aes-256-gcm', key, Buffer.from(e.iv, 'base64'));
       d.setAuthTag(buf.subarray(buf.length - 16));
       const rec = JSON.parse(Buffer.concat([d.update(buf.subarray(0, buf.length - 16)), d.final()]).toString('utf8'));
       // The sealed content names its organisation and user; both must match the file header.
-      if (rec.tenant_id !== a.tenantId || rec.user_id !== parsed.user_id) { undecryptable.push(i + 1); return; }
+      if (rec.tenant_id !== a.tenantId || rec.user_id !== parsed.user_id) { undecryptable.push(i + 1); continue; }
       items.push({ client_uuid: rec.client_uuid, server_id: rec.server_id ?? null, base_version: rec.base_version ?? null, payload: rec.payload });
     } catch { undecryptable.push(i + 1); }
-  });
+  }
   // Recovered records are attributed to the importing user, with the original capturing user recorded on each record.
   const results = items.length ? await syncBatch(a, items, { recoveredFromUser: parsed.user_id, requirePerm: false }) : [];
   const outcomes = { total: parsed.records.length, undecryptable, results: results.map((r) => ({ client_uuid: r.client_uuid, outcome: r.outcome, message: r.message ?? null })) };

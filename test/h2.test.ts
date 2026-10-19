@@ -519,3 +519,26 @@ describe('R2 final re-check', () => {
     await expect(withActor(w.a.prac, (tx) => tx.query(`update field_intake_holds set sampling_event_id=$2 where id=$1`, [h.id, S.samples[1]]))).rejects.toThrow(/hold refused/);
   });
 });
+
+describe('remaining low findings (19 Oct, evening)', () => {
+  it('R-X1: separation checks compare normalised names (order, case, accents, punctuation)', async () => {
+    const { samePerson } = await import('../scripts/identity.js');
+    expect(samePerson('Smith, Jane', 'jane  SMITH')).toBe(true);
+    expect(samePerson('Zoë O’Brien', 'zoe obrien')).toBe(true);
+    expect(samePerson('Jane Smith', 'J. Smith')).toBe(false); // different spellings are not detected (documented)
+    expect(samePerson('Zoë Brien', 'zoe brien')).toBe(true);
+    await expect(recordMethodReview(URL_, { ...APPROVE, reviewer: 'Operator, H2', recordedBy: 'h2 operator' })).rejects.toThrow(/cannot be the reviewer/);
+    await expect(recordPilotAuthorisation(URL_, { tenantId: w.B.tenant.id, scopeRef: 'X', provider: 'Ann Lee', organisation: 'lee, ann', authorisedOn: yesterday, document: 'D', documentFile: EVIDENCE, recordedBy: 'Op' })).rejects.toThrow(/different people/);
+  });
+  it('R-L4: the alert de-duplication map stays bounded', async () => {
+    const { sendAlert, alertDedupeSize } = await import('../src/alerts.js');
+    const warn = console.warn; console.warn = () => {};
+    try { for (let i = 0; i < 5200; i++) await sendAlert('auth.ip_throttled', {}, `ip-${i}`); } finally { console.warn = warn; }
+    expect(alertDedupeSize()).toBeLessThanOrEqual(5000);
+  });
+  it('R2-M7 residual: instrument maintenance is refused while field sync is suspended', async () => {
+    await suspendWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'SC3 maintenance test', 'H2 Operator');
+    await expect(inst.recordMaintenance(w.a.prac, S.pump.id, { at: '2026-03-01', kind: 'Service', notes: 'x' })).rejects.toThrow(/suspended/);
+    await resumeWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'H2 Operator', 'H2-REVAL');
+  });
+});

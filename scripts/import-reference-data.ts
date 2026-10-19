@@ -7,6 +7,7 @@
 // that froze an earlier version are unaffected. See docs/reference-data-workflow.md for the file format and the
 // verification steps required before a row may be marked professional_reference.
 import { readFileSync } from 'node:fs';
+import { samePerson } from './identity.js';
 import pg from 'pg';
 import { z } from 'zod';
 
@@ -63,7 +64,7 @@ export async function importReferenceData(url: string, json: unknown, opts: { dr
   if (!opts.importedBy?.trim()) throw new Error('--imported-by is required');
   const { rows, errors } = validateFile(json);
   if (errors.length) throw new Error(`Validation failed; nothing imported:\n  ${errors.join('\n  ')}`);
-  const self = rows.filter((r) => r.provenance === 'professional_reference' && r.reviewer_name.trim().toLowerCase() === opts.importedBy.trim().toLowerCase());
+  const self = rows.filter((r) => r.provenance === 'professional_reference' && samePerson(r.reviewer_name, opts.importedBy));
   if (self.length) throw new Error('The operator importing professional reference rows cannot be their reviewer; nothing imported');
   const c = new pg.Client({ connectionString: url });
   await c.connect();

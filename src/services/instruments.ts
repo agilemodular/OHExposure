@@ -58,6 +58,8 @@ export async function recordMaintenance(a: Actor, instrumentId: string, input: u
   requirePerm(a, 'instruments.write');
   const d = parse(z.object({ at: date, kind: reqStr(2, 100), notes: optStr }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync', 'record maintenance');
+    if (!(await one(tx, 'select 1 from instruments where id=$1 for update', [instrumentId]))) throw notFound('Instrument');
     const r = await one(tx, 'insert into instrument_maintenance (tenant_id,instrument_id,at,kind,notes,recorded_by) values ($1,$2,$3,$4,$5,$6) returning *', [a.tenantId, instrumentId, d.at, d.kind, d.notes, a.userId]);
     await audit(tx, a, 'instrument.maintenance', 'instrument', instrumentId, d);
     return r;
