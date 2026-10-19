@@ -11,7 +11,7 @@ Latest run: **19 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**,
 | `http.test.ts` | 13 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, headers, every page for every role, provisioning, readiness, shared throttle |
 | `review-regressions.test.ts` | 33 | Regression tests for the build-phase review findings; STEL flow; tenant controls not writable |
 | `assurance.test.ts` | 21 | Phase H1: pilot gating, provenance, report gate, suspension, MFA, idle timeout, clock, reference import, recovery, key verification and KEK rotation, direct-write refusals |
-| `h2.test.ts` | 27 | Phase H2, mapped to the brief's verification list (below) |
+| `h2.test.ts` | 30 | Phase H2, mapped to the brief's verification list (below) |
 
 ### Phase H2 verification list
 
