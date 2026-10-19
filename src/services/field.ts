@@ -3,9 +3,8 @@ import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } fr
 import { AppError, conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
 import { assertWorkflowActive } from './assurance.js';
-import { isValidTz, optNum, optStr, optUuid, parse, reqStr, uuid, zonedToUtc } from './util.js';
+import { assertNotFuture, FUTURE_TOLERANCE_MS, isValidTz, optNum, optStr, optUuid, parse, reqStr, uuid, zonedToUtc } from './util.js';
 
-const FUTURE_TOLERANCE_MS = 15 * 60_000;
 export const CLOCK_WARN_S = 300;
 const localDT = z.preprocess((v) => (v === '' ? undefined : v), z.string().optional()).transform((v) => v ?? null);
 
@@ -53,6 +52,8 @@ async function prepare(tx: Tx, a: Actor, d: SamplingInput) {
     if (t && Date.parse(t) > future) throw invalid(`${label} time ${d[label === 'Start' ? 'start_local' : 'end_local']} (${tz}) is in the future by server time. Check the device clock and time zone.`);
   const interruptions = d.interruptions.map((i) => ({ start: zonedToUtc(i.start, tz), end: zonedToUtc(i.end, tz), reason: i.reason ?? '' }));
   for (const i of interruptions) if (Date.parse(i.end) <= Date.parse(i.start)) throw invalid('Each interruption must end after it starts');
+  d.interruptions.forEach((i, n) => { assertNotFuture('Interruption end', interruptions[n].end, i.end, tz); });
+  if (d.handover_local) assertNotFuture('Handover time', zonedToUtc(d.handover_local, tz), d.handover_local, tz);
   if (d.flow_pre_lpm != null && d.flow_pre_lpm <= 0) throw invalid('Flow rate must be positive');
   if (d.flow_post_lpm != null && d.flow_post_lpm <= 0) throw invalid('Flow rate must be positive');
 
@@ -233,6 +234,7 @@ export async function recordCustody(a: Actor, sampleId: string, input: unknown) 
     if (!e) throw notFound('Sampling event');
     if (e.status === 'void') throw invalid('Sample is void');
     const at = zonedToUtc(d.at, d.timezone);
+    assertNotFuture('Custody time', at, d.at, d.timezone);
     await custody(tx, a, e, d.event, at, d.party, d.notes, d.condition);
     const next = d.event === 'dispatched' ? 'dispatched' : d.event === 'received_by_lab' ? 'received' : null;
     if (next) await tx.query('update sampling_events set status=$2, version=version+1, updated_at=now() where id=$1', [sampleId, next]);

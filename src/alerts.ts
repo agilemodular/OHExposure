@@ -12,7 +12,8 @@ export type AlertEvent =
   | 'backup.succeeded'
   | 'restore_verify.failed'
   | 'workflow.suspended'
-  | 'field.recovery_imported';
+  | 'field.recovery_imported'
+  | 'recovery_key.invalid';
 
 const SEVERITY: Record<AlertEvent, 'info' | 'warning' | 'critical'> = {
   'auth.account_locked': 'warning',
@@ -24,6 +25,7 @@ const SEVERITY: Record<AlertEvent, 'info' | 'warning' | 'critical'> = {
   'restore_verify.failed': 'critical',
   'workflow.suspended': 'critical',
   'field.recovery_imported': 'info',
+  'recovery_key.invalid': 'critical',
 };
 
 // Suppress floods: one alert per event+key per window.

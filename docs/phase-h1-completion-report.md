@@ -61,14 +61,14 @@ Existing documents were updated rather than duplicated. The checklist now points
 | R-H3 | Independent review (H) | High | Online-only records that failed to send could be lost silently, and an error message claimed they were stored encrypted | Fixed: in-page "held only in this page" warning, close confirmation, mode-specific text; browser check |
 | R-M1 | Independent review (M) | Medium | Anyone with the public key could forge a recovery file with any user's attribution | Fixed: per-user HMAC attestation; user must exist; test |
 | R-M2 | Independent review (M) | Medium | Recovery import did not need field-capture rights, so a reviewer could create evidence | Fixed: both permissions required; test |
-| R-M3 | Independent review (M) | Medium | Suspension missed several write paths | Fixed for conflict resolution, custody, void, QC, dispatch, receipt and action cancellation. **Attachment upload on sampling events is not gated** (documented) |
+| R-M3 | Independent review (M) | Medium | Suspension missed several write paths | Fixed for conflict resolution, custody, void, QC, dispatch, receipt and action cancellation; attachment upload gated on 19 Oct (§11) |
 | R-M4 | Independent review (M) | Medium | A suspended sync marked records as rejected | Fixed: `deferred` outcome; records stay pending |
 | R-M5 | Independent review (M) | Medium | Wind-down after offline was switched off lost the recovery key and broke saving | Fixed; logic reviewed, **not browser-tested** |
 | R-M6 | Independent review (M) | Medium | Unlock could sync under another user's session | Fixed: unlock refuses and locks; **not browser-tested** |
 | R-M7 | Independent review (M) | Medium | Re-sent conflicts created duplicate conflict rows | Fixed: de-duplicated |
 | R-M8 | Independent review (M) | Medium | 6-digit PINs allowed; the docs overstated protection | Fixed: at least 8 characters with a non-digit; docs restated |
 | R-M9 | Independent review (M) | Medium | The pilot gate did not check that the benchmark's averaging period matched the calculation | Fixed; test |
-| R-L1…L7 | Independent review (L) | Low | Cached page held personal data; no database-level issue gate; no KEK rotation; dedupe map unbounded; CLI accepted the demo level; reviewer could be the importer; some times not future-checked | Fixed: L1 (after re-check: cache deleted by the sign-in page; browser-tested), L4, L6. **Open and documented:** L2, L3, L5, L7 |
+| R-L1…L7 | Independent review (L) | Low | Cached page held personal data; no database-level issue gate; no KEK rotation; dedupe map unbounded; CLI accepted the demo level; reviewer could be the importer; some times not future-checked | Fixed: L1 (after re-check: cache deleted by the sign-in page; browser-tested), L4, L6. **Open and documented:** L2, L3, L5, L7 — closed on 19 Oct, see §11 |
 
 Independent re-check of the fixes: see §9.
 
@@ -129,3 +129,20 @@ The final fixes were verified by the full suite (127/127) and the browser check 
 | Decision | By | Date | Basis |
 |---|---|---|---|
 | **No pilot authorised.** The pilot may be authorised only through gate G11 once G1–G10 are accepted | — (no authorisation given) | 18 Oct 2026 | `pilot-gate-register.md` |
+
+## 11. Addendum — residual hardening (19 October 2026)
+
+The residual items documented above were closed without changing scope:
+
+| Item | Change | Evidence |
+|---|---|---|
+| R-M3 residual: attachments not gated by suspension | Attachments on sampling events, laboratory records, inspections, actions and assessments are refused while their workflow is suspended | assurance test |
+| R-L2: no database-level gate | Migration 018: approval triggers take method status, provenance and assurance level from authoritative tables and refuse non-compliant pilot approvals; issued-report trigger. Direct SQL through the application role is refused | assurance tests |
+| R-L2: planted recovery key | Key rows verified at production start and at first use; planted rows refused with a critical alert | assurance test |
+| R-L3: no KEK rotation or startup check | `scripts/recovery-keys.ts verify` / `rotate`; production start refuses invalid keys. Attestation keys now derive from the key pair, so rotation leaves devices and existing envelopes unaffected | assurance test (rotation round trip) |
+| R-L5: recovery import load | At most 200 records and 5 MB per file | code |
+| R-L7: other times not future-checked | Interruptions, handover, custody, dispatch and receipt times more than 15 min ahead of server time are refused | assurance test (custody) |
+| R-M8 residual: no change-PIN | *Change PIN* re-encrypts the store atomically; weak existing PINs prompt a change | browser check 22/22 |
+| Dependabot PR #3 (`actions/setup-node` 5 → 7) | Merged after its checks passed | CI |
+
+Tests after the addendum: **129/129** automated; browser check **22/22** (desktop Chromium, not device evidence). Remaining low items: name-only comparison for reviewer ≠ operator, and the CPU cost of recovery imports within the limits above. Classification unchanged: **Internal prototype — pilot gates remain open.**

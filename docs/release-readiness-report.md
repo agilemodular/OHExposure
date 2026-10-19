@@ -20,7 +20,7 @@ The evidence does not yet support a controlled pilot or a production release. Pi
   - session idle timeout, MFA on pre-existing sessions, signed security alerts
   - backup and restore-verification scripts
   - controlled reference-data import
-- **Automated evidence:** 127 tests, all passing (`test-evidence.md`); desktop browser check 21/21; development restore 18/18.
+- **Automated evidence:** 127 tests, all passing (`test-evidence.md`); desktop browser check 22/22; development restore 18/18.
 - **Independent software review:**
   - Three rounds during the build: no open critical or high findings.
   - One round on the Phase H1 controls: 3 high, 9 medium and 7 low findings. All high and medium findings are fixed with tests, except one documented gap: attachment upload is not gated by suspension. Four low findings remain documented.
@@ -66,7 +66,7 @@ The evidence does not yet support a controlled pilot or a production release. Pi
 | No hosting, alert delivery, penetration test, or hosting restore | High for pilot | G5/G6 |
 | PIA unreviewed; retention undecided | High for pilot | G7 |
 | Representativeness and statistics (BS EN 689) not assessed by software | Medium | Reviewer interpretation; convention C18 |
-| Attachment upload not gated by suspension; no database-level issue gate; no KEK rotation | Low | Documented in the completion report; address before production |
+| Residual low items: name-only reviewer ≠ operator checks; recovery import CPU cost (limited to 200 records per file) | Low | Documented in the completion report |
 
 ## Release decision
 

@@ -64,6 +64,15 @@ with sync_playwright() as p:
     pg.fill('input[name=pin]', PIN); pg.click('button:has-text("Unlock")')
     pg.wait_for_selector('text=New sample')
     check('correct PIN unlocks offline using encrypted reference cache', 'cached' in ' '.join(pg.locator('.flash').all_inner_texts()))
+    # Change the PIN while offline; the old PIN must stop working and the new one must open the same data.
+    NEW_PIN = 'changed-pin-1357'
+    pg.click('text=Change PIN'); pg.fill('input[name=pin]', NEW_PIN); pg.fill('input[name=pin2]', NEW_PIN); pg.click('button:has-text("Change PIN")')
+    pg.wait_for_selector('text=Device PIN changed')
+    pg.click('text=Lock now'); pg.wait_for_selector('text=Unlock field records')
+    pg.fill('input[name=pin]', PIN); pg.click('button:has-text("Unlock")'); pg.wait_for_selector('text=Incorrect PIN')
+    pg.fill('input[name=pin]', NEW_PIN); pg.click('button:has-text("Unlock")'); pg.wait_for_selector('text=New sample')
+    check('changing the PIN re-encrypts the store: old PIN refused, new PIN opens it', 'cached' in ' '.join(pg.locator('.flash').all_inner_texts()))
+    PIN = NEW_PIN
     pg.click('text=New sample')
     pg.fill('input[name=sample_code]', CODE)
     pg.select_option('select[name=plan_id]', index=1)

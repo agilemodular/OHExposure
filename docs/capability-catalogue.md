@@ -48,7 +48,7 @@ Classification used throughout:
 |---|---|---|
 | Online sample capture with time zone, interruptions, flows, conditions, deviations | Verified | workflow + http |
 | Offline capture, idempotent sync, conflict preservation and resolution | Verified (desktop browser; **not on field devices**) | workflow test + browser run |
-| Offline data protection: online-only default; encrypted per-user store (AES-256-GCM, PBKDF2 PIN), inactivity lock, 24 h purge, 7-day reference expiry, minimum dataset (worker codes only) | Verified (desktop Chromium only) | `test/browser/field_offline_protection.py` 21/21; gate G8 open |
+| Offline data protection: online-only default; encrypted per-user store (AES-256-GCM, PBKDF2 PIN), inactivity lock, 24 h purge, 7-day reference expiry, minimum dataset (worker codes only) | Verified (desktop Chromium only) | `test/browser/field_offline_protection.py` 22/22; gate G8 open |
 | Recovery of unsynchronised field records via server-sealed envelopes; reviewer import page; idempotent, audited, alerted | Verified | assurance tests + browser run |
 | Device clock offset recorded and warned; future capture times refused | Verified | assurance tests |
 | Calibration evidence and on-date validity; expired/failed flagged | Verified | workflow + calc tests |
@@ -113,6 +113,9 @@ Classification used throughout:
 | Monitoring | Verified (in-app) | `/readyz`, admin System health panel |
 | Security/operational alert webhook (HMAC-signed, de-duplicated) | Verified (emission); delivery to people is hosting owner | assurance tests; gate G5 |
 | Session idle timeout; MFA enforced on pre-existing sessions | Verified | assurance tests |
+| Database-level pilot gates: approval records method status, provenance and assurance level from authoritative tables and refuses non-compliant pilot approvals; issued reports refused unless pilot-approved | Verified | assurance tests |
+| Field recovery key verification (startup and first use) and KEK rotation | Verified | assurance tests; `scripts/recovery-keys.ts` |
+| Device PIN change with atomic re-encryption | Verified (desktop Chromium only) | browser check |
 | Platform operator controls: assurance level, offline enablement, workflow suspension under stop conditions, method review records — not changeable by organisation administrators | Verified | assurance tests |
 | CI pipeline with dependency audit | Verified | GitHub Actions run 39062015665 passed (17 Oct 2026) |
 | Multi-instance login throttle | Verified | http test |

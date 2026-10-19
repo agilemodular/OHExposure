@@ -77,7 +77,7 @@
   let key = null;         // non-extractable AES key, in memory only while unlocked
   let attestKey = null;   // per-user recovery attestation key, from the encrypted cache, in memory only while unlocked
   let records = [];       // decrypted records (offline mode) or in-memory queue (online-only mode)
-  let syncing = false, backoff = 0, lastActivity = Date.now(), lastError = null;
+  let syncing = false, backoff = 0, lastActivity = Date.now(), lastError = null, weakPin = false;
   const encrypted = () => policy && policy.enabled;
 
   async function fetchBootstrap() {
@@ -183,6 +183,7 @@
           try { const v = await decJSON(k, await getMeta('verifier')); if (v.user !== USER) throw new Error('user'); }
           catch { await setMeta('fails', n + 1); await setMeta('lastFailAt', Date.now()); msg.textContent = `Incorrect PIN (${n + 1} failed attempt${n ? 's' : ''}). Records are never deleted because of failed attempts.`; return; }
           key = k; await setMeta('fails', 0);
+          weakPin = pin.length < MIN_PIN || /^\d+$/.test(pin);
           await afterUnlock();
         },
         extra: el('details', {}, el('summary', {}, 'Forgotten your PIN?'),
@@ -232,6 +233,37 @@
     records = await loadRecords();
     await migrateLegacy();
     render(); sync();
+  }
+
+  // Re-encrypts everything under a key from a new PIN. New ciphertexts are prepared first and written in one
+  // transaction, so an interruption leaves either the old PIN or the new PIN working, never a mixture.
+  function showChangePin() {
+    root.replaceChildren(pinForm({
+      title: 'Change device PIN', intro: ['Choose a new PIN for the records on this device. Your account password is not affected.'],
+      confirmPin: true, submitLabel: 'Change PIN',
+      extra: el('button', { type: 'button', class: 'secondary', onclick: render }, 'Cancel'),
+      onSubmit: async (pin, msg) => {
+        const salt = crypto.getRandomValues(new Uint8Array(16));
+        const k2 = await deriveKey(pin, salt);
+        const raws = await rawRecords();
+        const out = [];
+        for (const raw of raws) { try { out.push({ ...raw, enc: await encJSON(k2, await decJSON(key, raw.enc)) }); } catch { msg.textContent = 'A record could not be re-encrypted; PIN not changed. Export a recovery file first.'; return; } }
+        const enc = await getMeta('refEnc');
+        const refEnc = enc ? await encJSON(k2, await decJSON(key, enc)) : null;
+        const verifier = await encJSON(k2, { check: 'ohea-field', user: USER });
+        const db = await openDb();
+        await new Promise((res, rej) => {
+          const t = db.transaction(['records', 'meta'], 'readwrite');
+          for (const r of out) t.objectStore('records').put(r);
+          const m = t.objectStore('meta');
+          m.put(b64(salt), 'salt'); m.put(verifier, 'verifier'); m.put(0, 'fails'); if (refEnc) m.put(refEnc, 'refEnc');
+          t.oncomplete = () => { db.close(); res(); }; t.onerror = () => { db.close(); rej(t.error); };
+        });
+        key = k2; weakPin = false;
+        await render();
+        alertBox('Device PIN changed.', 'ok');
+      },
+    }));
   }
 
   // Organisation no longer permits offline storage: synchronise what is here, then remove the local database.
@@ -392,6 +424,7 @@
     const unsynced = recs.filter((r) => r.state !== 'synced').length;
     root.replaceChildren(
       policy.demo ? el('div', { class: 'flash warn' }, 'Demonstration organisation: use synthetic data only.') : '',
+      encrypted() && weakPin ? el('div', { class: 'flash warn' }, `Your device PIN is weaker than now required (at least ${MIN_PIN} characters including a letter or symbol). Choose “Change PIN”.`) : '',
       policy.windingDown ? el('div', { class: 'flash warn' }, 'Offline capture has been switched off for your organisation. Resolve or synchronise the records below (or export a recovery file); new records cannot be saved on this device.') : '',
       !encrypted() && unsynced ? el('div', { class: 'flash err', role: 'alert' }, `${unsynced} record(s) have not reached the server and are held only in this open page. Do not close or reload it until they are synchronised.`) : '',
       el('div', { class: `flash ${navigator.onLine ? 'ok' : 'warn'}`, role: 'status' },
@@ -405,6 +438,7 @@
         el('button', { onclick: () => root.replaceChildren(form(null)), disabled: (!encrypted() && !navigator.onLine) || !!policy.windingDown }, 'New sample'),
         el('button', { class: 'secondary', onclick: sync, disabled: !navigator.onLine }, 'Sync now'),
         encrypted() ? el('button', { class: 'secondary', onclick: () => lock('Locked.') }, 'Lock now') : '',
+        encrypted() ? el('button', { class: 'secondary', onclick: showChangePin }, 'Change PIN') : '',
         encrypted() && unsynced ? el('button', { class: 'secondary', onclick: () => exportRecovery() }, 'Export recovery file') : ''),
       recs.length ? el('div', { class: 'tablewrap' }, el('table', {},
         el('thead', {}, el('tr', {}, el('th', {}, 'Sample'), el('th', {}, 'Start'), el('th', {}, 'Status'), el('th', {}, ''))),

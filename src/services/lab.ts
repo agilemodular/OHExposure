@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { invalid, notFound } from '../errors.js';
 import { assertWorkflowActive } from './assurance.js';
-import { optNum, optStr, optUuid, parse, reqStr, strArray, uuid, zonedToUtc } from './util.js';
+import { assertNotFuture, optNum, optStr, optUuid, parse, reqStr, strArray, uuid, zonedToUtc } from './util.js';
 
 const resultSchema = z.object({
   sampling_event_id: uuid,
@@ -76,6 +76,7 @@ export async function createSubmission(a: Actor, input: unknown) {
     if (clients.size > 1) throw invalid('A submission cannot mix samples from different clients');
     for (const s of samples) if (s.status !== 'collected') throw invalid(`Sample ${s.sample_code} is ${s.status}; only collected samples can be dispatched`);
     const at = zonedToUtc(d.dispatched_at, d.timezone);
+    assertNotFuture('Dispatch time', at, d.dispatched_at, d.timezone);
     const sub = await one(tx, 'insert into lab_submissions (tenant_id,client_id,laboratory_id,reference,dispatched_at,dispatched_by,courier_ref,notes) values ($1,$2,$3,$4,$5,$6,$7,$8) returning *',
       [a.tenantId, samples[0].client_id, d.laboratory_id, d.reference, at, a.userId, d.courier_ref, d.notes]);
     for (const s of samples) {
@@ -98,6 +99,7 @@ export async function receiveSubmission(a: Actor, id: string, input: unknown) {
     if (!sub) throw notFound('Submission');
     if (sub.received_at) throw invalid('Receipt already recorded');
     const at = zonedToUtc(d.received_at, d.timezone);
+    assertNotFuture('Receipt time', at, d.received_at, d.timezone);
     await tx.query('update lab_submissions set received_at=$2, received_condition=$3 where id=$1', [id, at, d.received_condition]);
     const samples = await many(tx, 'select e.* from lab_submission_samples x join sampling_events e on e.id=x.sampling_event_id where x.submission_id=$1', [id]);
     for (const s of samples) {

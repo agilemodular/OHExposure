@@ -34,6 +34,8 @@ tenants ─ clients
 - `assessment_revisions.method_review_status` and `benchmark_provenance` frozen at approval.
 - `sampling_events.device_clock_offset_s` and `recovered_from_user`.
 - Migration 016 adds `auth_session_active` (idle timeout).
+- Migration 017 adds `assessment_revisions.assurance_level_at_approval`.
+- Migration 018 adds triggers `trg_enforce_pilot_approval` and `trg_enforce_report_issue` (pilot rules enforced in the database).
 
 ### Facts, estimates and reviewed conclusions
 

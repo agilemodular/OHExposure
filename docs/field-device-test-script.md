@@ -42,6 +42,7 @@ Device make and model · operating system and version · browser and version · 
 | F20 | Retention | Check the device 25 hours after a successful sync | Synchronised records no longer listed on the device |
 | F21 | Offline switched off | Platform operator switches offline capture off; open Field sampling and unlock | Remaining records synchronise; local store removed; page then runs online-only and disables saving while offline |
 | F22 | Usability | Use in direct sunlight and with gloves | Text, buttons and inputs usable |
+| F23 | Change PIN | While unlocked offline choose *Change PIN*, set a new PIN, lock, then try the old PIN and the new PIN | Old PIN refused; new PIN opens the same records; nothing lost |
 
 ## Known limits to brief users on
 
@@ -62,4 +63,4 @@ Device make and model · operating system and version · browser and version · 
 
 | Environment | Build | Coverage | Result | Date |
 |---|---|---|---|---|
-| Desktop Chromium 141, headless Playwright, 420 × 900 viewport, development server | Phase H1 working tree (see `test-evidence.md`) | Automated equivalents of F1–F3, F6 (reload), F8 (one wrong PIN), F11, F17, F18, F21, online-only legacy-store migration and unsent-record warning, plus a scan of IndexedDB for plaintext | 21/21 checks passed | 18 Oct 2026 |
+| Desktop Chromium 141, headless Playwright, 420 × 900 viewport, development server | Phase H1 working tree (see `test-evidence.md`) | Automated equivalents of F1–F3, F6 (reload), F8 (one wrong PIN), F11, F17, F18, F21, online-only legacy-store migration and unsent-record warning, plus a scan of IndexedDB for plaintext | 22/22 checks passed | 18 Oct 2026 |

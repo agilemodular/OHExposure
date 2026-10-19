@@ -5,6 +5,7 @@ import { config } from '../config.js';
 import { sha256 } from '../auth/crypto.js';
 import { audit, can, many, one, withActor, type Actor } from '../db.js';
 import { forbidden, invalid, notFound } from '../errors.js';
+import { assertWorkflowActive, type Workflow } from './assurance.js';
 
 // Entity types that accept attachments, and the permission required to add one.
 const ENTITY: Record<string, { table: string; perm: Parameters<typeof can>[1][] }> = {
@@ -18,6 +19,11 @@ const ENTITY: Record<string, { table: string; perm: Parameters<typeof can>[1][] 
   control_inspection: { table: 'control_inspections', perm: ['controls.inspect'] },
   action: { table: 'actions', perm: ['actions.implement', 'actions.assign'] },
   assessment: { table: 'assessments', perm: ['assess.write'] },
+};
+// Evidence added to a record belongs to that record's workflow, so a suspended workflow also refuses new attachments.
+const WORKFLOW_OF: Record<string, Workflow> = {
+  sampling_event: 'field_sync', lab_submission: 'lab_import', lab_result: 'lab_import', import_batch: 'lab_import',
+  control_inspection: 'action_closure', action: 'action_closure', assessment: 'assessment_approval',
 };
 
 /** Detects type from content (not the client-supplied name or MIME) and accepts only an allowlist. */
@@ -44,6 +50,7 @@ export async function saveAttachment(a: Actor, input: { entity_type: string; ent
   if (!mime) throw invalid('Unsupported file type. Accepted: PDF, PNG, JPEG, CSV, TXT');
   const safeName = input.filename.replace(/[^\w.\- ]+/g, '_').slice(0, 150) || 'file';
   return withActor(a, async (tx) => {
+    if (WORKFLOW_OF[input.entity_type]) await assertWorkflowActive(tx, WORKFLOW_OF[input.entity_type]);
     const parent = await one(tx, `select ${input.entity_type === 'calibration' ? 'null::uuid' : 'client_id'} as client_id from ${ent.table} where id=$1`, [input.entity_id]);
     if (!parent) throw notFound('Record');
     const key = `${a.tenantId}/${randomUUID()}`;

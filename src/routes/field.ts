@@ -44,7 +44,7 @@ export function fieldRoutes(app: FastifyInstance) {
       // enabled it for the organisation after the offline data-protection gate is accepted (demo tenants: synthetic data).
       offline: { enabled: ctl.offlineCaptureEnabled, cacheDays: 7, lockMinutes: 15, syncedRetentionHours: 24, recoveryKey, demo: ctl.assuranceLevel === 'demo' },
       // Kept by the device only inside its PIN-encrypted reference cache; used to attest recovery envelopes.
-      recoveryAttestKey: ctl.offlineCaptureEnabled ? recoveryAttestKey(c.actor.tenantId, c.actor.userId) : null,
+      recoveryAttestKey: ctl.offlineCaptureEnabled ? await withActor(c.actor, (tx) => recoveryAttestKey(tx, c.actor.tenantId, c.actor.userId)) : null,
       plans,
       // Minimum dataset: pseudonymous worker reference codes only. Names and employee numbers are never sent to the device;
       // the mapping from reference code to person stays on the server under role-restricted access.

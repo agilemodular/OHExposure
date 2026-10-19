@@ -23,6 +23,13 @@ export const optDateTime = z
   .preprocess(blank, z.string().refine((s) => !Number.isNaN(Date.parse(s)), 'invalid date/time').optional())
   .transform((v) => (v ? new Date(v).toISOString() : null));
 /** Converts a wall-clock 'YYYY-MM-DDTHH:mm' in an IANA zone to a UTC ISO string. ISO strings with an offset pass through. */
+/** Field and custody times more than 15 minutes ahead of server time usually mean a wrong device clock or time zone. */
+export const FUTURE_TOLERANCE_MS = 15 * 60_000;
+export function assertNotFuture(label: string, utc: string | null | undefined, local: string, tz: string) {
+  if (utc && Date.parse(utc) > Date.now() + FUTURE_TOLERANCE_MS)
+    throw invalid(`${label} ${local} (${tz}) is in the future by server time. Check the device clock and time zone.`);
+}
+
 export function zonedToUtc(local: string, tz: string): string {
   if (/[zZ]|[+-]\d{2}:?\d{2}$/.test(local)) return new Date(local).toISOString();
   const naive = Date.parse(local + 'Z');

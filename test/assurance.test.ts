@@ -13,6 +13,7 @@ import * as lab from '../src/services/lab.js';
 import * as asmt from '../src/services/assessments.js';
 import * as rep from '../src/services/reports.js';
 import * as ctl from '../src/services/controls.js';
+import * as att from '../src/services/attachments.js';
 import { assertWorkflowActive, methodCapabilities, type Workflow } from '../src/services/assurance.js';
 import { CALCULATIONS } from '../src/calc/engine.js';
 import { sentAlerts, resetAlertDedupe } from '../src/alerts.js';
@@ -91,6 +92,8 @@ describe('pilot gating of calculation methods and reference data', () => {
     const [r] = await field.syncBatch(w.a.tech, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: { ...S.payload, sample_code: `PS-F-${w.tag}`, start_local: tomorrow, end_local: undefined } }]);
     expect(r.outcome).toBe('rejected');
     expect(r.message).toMatch(/in the future/);
+    const later = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 16);
+    await expect(field.recordCustody(w.a.prac, S.sample, { event: 'handed_over', at: later, timezone: 'UTC' })).rejects.toThrow(/Custody time .* in the future/);
   });
 
   it('only a platform operator can move a tenant to pilot; organisation administrators cannot', async () => {
@@ -110,6 +113,8 @@ describe('pilot gating of calculation methods and reference data', () => {
     const calc = await asmt.calculate(w.a.prac, S.rev);
     expect(calc.calc_output.shifts[0].twa8h.lower).toBeCloseTo(0.1, 6); // 96 µg / 960 L
     await expect(asmt.submitForReview(w.a.prac, S.rev)).rejects.toThrow(/not reviewed by a competent occupational hygienist/);
+    // The database refuses the same approval even if the service layer is bypassed.
+    await expect(withActor(w.a.rev, (tx) => tx.query(`update assessment_revisions set status='approved' where id=$1`, [S.rev]))).rejects.toThrow(/pilot approval refused/);
     const caps = await methodCapabilities(w.a.prac);
     expect(caps.rows.find((r) => r.code === 'twa_8h')!.pilotEnabled).toBe(false);
   });
@@ -190,6 +195,9 @@ describe('pilot report issue gate', () => {
     await admin.query(`update tenants set assurance_level='pilot' where id=$1`, [w.A.tenant.id]);
     await admin.end();
     await expect(rep.generateReport(w.a.prac, S.asmtId, id)).rejects.toThrow(/not approved under the pilot controls/);
+    // Direct insert of an issued report through the application role is refused by the database.
+    await expect(withActor(w.a.prac, (tx) => tx.query(`insert into reports (tenant_id,client_id,assessment_id,assessment_revision_id,version,status,content_html,content_hash,generated_by)
+      select tenant_id, client_id, assessment_id, id, 99, 'issued', 'x', 'x', $2 from assessment_revisions where id=$1`, [id, w.a.prac.userId]))).rejects.toThrow(/report issue refused/);
   });
 });
 
@@ -212,6 +220,7 @@ describe('workflow suspension under stop conditions', () => {
     await expect(field.recordCustody(w.b.prac, fake, { event: 'handed_over', at: '2026-03-02T10:00' })).rejects.toThrow(/suspended/);
     await expect(ctl.cancelAction(w.b.admin, fake, { reason: 'Suspension gate check reason' })).rejects.toThrow(/suspended/);
     await expect(lab.receiveSubmission(w.b.prac, fake, { received_at: '2026-03-05T10:00', received_condition: 'Intact' })).rejects.toThrow(/suspended/);
+    await expect(att.saveAttachment(w.b.prac, { entity_type: 'sampling_event', entity_id: fake, filename: 'note.txt', data: Buffer.from('evidence') })).rejects.toThrow(/suspended/);
     await expect(resumeWorkflows(URL_, t, ['field_sync'], 'Op', '')).rejects.toThrow(/evidence/);
     const left = await resumeWorkflows(URL_, t, ['field_sync'], 'Test Operator', 'REVALIDATION-TEST');
     expect(left).not.toContain('field_sync');
@@ -289,7 +298,8 @@ describe('field recovery files', () => {
     const b = (x: ArrayBuffer | Uint8Array) => Buffer.from(x as ArrayBuffer).toString('base64');
     const e = { v: 1 as const, wk: b(wk), iv: b(iv), ct: b(ct) };
     const { createHmac } = await import('node:crypto');
-    const k = attest ?? (await import('../src/services/recovery.js')).recoveryAttestKey(w.A.tenant.id, w.a.tech.userId);
+    const { recoveryAttestKey: rak } = await import('../src/services/recovery.js');
+    const k = attest ?? await withActor(w.a.tech, (tx) => rak(tx, w.A.tenant.id, w.a.tech.userId));
     return { ...e, mac: createHmac('sha256', Buffer.from(k, 'base64')).update(`${e.wk}.${e.iv}.${e.ct}`).digest('base64') };
   }
   it('opens sealed records server-side, rejects other organisations and tampering, and is idempotent', async () => {
@@ -307,7 +317,7 @@ describe('field recovery files', () => {
     await expect(importRecoveryFile(w.a.rev, file([good]))).rejects.toThrow(/permission/);
     // Someone holding only the public key cannot attribute records to another user (no valid attestation MAC).
     const { recoveryAttestKey } = await import('../src/services/recovery.js');
-    const spoofed = await sealFor(spki, { ...rec, client_uuid: randomUUID() }, recoveryAttestKey(w.A.tenant.id, w.a.prac2.userId));
+    const spoofed = await sealFor(spki, { ...rec, client_uuid: randomUUID() }, await withActor(w.a.prac2, (tx) => recoveryAttestKey(tx, w.A.tenant.id, w.a.prac2.userId)));
     const sp = await importRecoveryFile(w.a.prac, file([spoofed]));
     expect(sp.undecryptable).toEqual([1]);
     await expect(importRecoveryFile(w.a.prac, file([good]).replace(w.a.tech.userId, randomUUID()).replace(w.a.tech.userId, randomUUID()))).rejects.toThrow(/not a user of this organisation/);
@@ -324,5 +334,37 @@ describe('field recovery files', () => {
     expect(again.previouslyImportedAt).not.toBeNull();
     expect(sentAlerts.some((a) => a.event === 'field.recovery_imported')).toBe(true);
     await expect(importRecoveryFile(w.a.prac, '{"not":"a file"}')).rejects.toThrow(/not a valid/);
+  });
+});
+
+describe('field recovery key integrity and KEK rotation', () => {
+  it('a recovery key planted through the application role is detected and refused', async () => {
+    const { recoveryPublicKey } = await import('../src/services/recovery.js');
+    const { verifyRecoveryKeys } = await import('../scripts/recovery-keys.js');
+    const admin = new pg.Client({ connectionString: URL_ }); await admin.connect();
+    await admin.query('delete from field_recovery_keys where tenant_id=$1', [w.B.tenant.id]);
+    const { generateKeyPairSync } = await import('node:crypto');
+    const spki = generateKeyPairSync('rsa', { modulusLength: 2048 }).publicKey.export({ type: 'spki', format: 'der' }).toString('base64');
+    await withActor(w.b.admin, (tx) => tx.query('insert into field_recovery_keys (tenant_id, public_key_spki, private_key_enc) values ($1,$2,$3)', [w.B.tenant.id, spki, 'AAAA.AAAA.AAAA']));
+    await expect(withActor(w.b.admin, (tx) => recoveryPublicKey(tx, w.B.tenant.id))).rejects.toThrow(/does not open/);
+    expect((await verifyRecoveryKeys(URL_)).invalid).toContain(w.B.tenant.id);
+    await admin.query('delete from field_recovery_keys where tenant_id=$1', [w.B.tenant.id]);
+    await admin.end();
+  });
+  it('rotates the KEK all-or-nothing and keeps key pairs (so device envelopes stay importable)', async () => {
+    const { rotateRecoveryKek } = await import('../scripts/recovery-keys.js');
+    const { kekFromEnv, keyRowValid } = await import('../src/services/recovery.js');
+    const { randomBytes } = await import('node:crypto');
+    const oldK = kekFromEnv(); const newK = randomBytes(32);
+    const admin = new pg.Client({ connectionString: URL_ }); await admin.connect();
+    const before = (await admin.query('select tenant_id, public_key_spki from field_recovery_keys order by tenant_id')).rows;
+    await expect(rotateRecoveryKek(URL_, oldK, newK, '')).rejects.toThrow(/authorised-by/);
+    const r = await rotateRecoveryKek(URL_, oldK, newK, 'Test Operator');
+    expect(r.rotated).toBe(before.length);
+    const rows = (await admin.query('select tenant_id, public_key_spki, private_key_enc from field_recovery_keys order by tenant_id')).rows;
+    expect(rows.map((x) => x.public_key_spki)).toEqual(before.map((x) => x.public_key_spki));
+    expect(rows.every((x) => keyRowValid(x, newK) && !keyRowValid(x, oldK))).toBe(true);
+    await rotateRecoveryKek(URL_, newK, oldK, 'Test Operator'); // restore for the rest of the suite
+    await admin.end();
   });
 });
