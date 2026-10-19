@@ -27,6 +27,33 @@
 
 ## 1. Method sections
 
+### 1.0 Finding H1-F01, for your disposition
+
+**What it was.** The engine combines the individual results of an assessment (one per worker-shift for `twa_8h`, one per 15-minute period for `stel_15`) into one overall benchmark comparison, the *roll-up*. In `twa_8h` 1.2.0 and `stel_15` 1.1.0, when **no formal result could be calculated at all** (for example, two samples for the same worker overlapped in time, or a short-term sample ran longer than 16 minutes), the roll-up reported *not comparable*. The specification says this case is *indeterminate*: the comparison is open because the evidence is incomplete, not because the result and benchmark are of different kinds. Some explanatory notes also named the wrong cause, for example blaming static or screening results when the real cause was excluded samples or calibration.
+
+**Why it matters.** *Not comparable* reads as "this benchmark does not apply". *Indeterminate* reads as "the result could be on either side of the benchmark; more or better evidence is needed". The earlier wording could understate the need to repeat or complete the monitoring. Neither state allows a favourable conclusion. The database refuses *exposure adequately controlled* unless data quality is complete or qualified **and** the comparison is *below benchmark*, so no favourable conclusion could have been produced by this defect.
+
+**What changed.** Engine 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1):
+- the case is reported as *indeterminate*, with the note "N result(s) could not be calculated";
+- notes name the actual cause.
+
+Tests: `test/calc.test.ts` "engine 1.3.1 roll-up" (five cases, including the short-term method). Worked examples E9, E10a and E14 were regenerated (`validation-examples.json`). No method has ever been professionally approved, so no assessment was approved under an approved version of either method.
+
+**Current convention you are asked to confirm (related, not changed):**
+- When every personal sample is **excluded** (for example a failed flow check without disposition), data quality is *failed* and the comparison is *not comparable*. Exception: if an excluded result is itself at or above the benchmark, the comparison becomes *indeterminate*.
+- When only indicative results exist (screening instrument, expired calibration), the comparison is *not comparable*.
+
+If you consider either case should be *indeterminate*, record it as a methodological finding. The change would be made under a new method version.
+
+| Item | Content |
+|---|---|
+| Affected methods | `twa_8h` (1.2.0 → 1.2.1) and `stel_15` (1.1.0 → 1.1.1); assessment roll-up and report wording |
+| Decision required | Accept the correction as consistent with your intended convention, or require a different treatment. Confirm or change the related convention above. |
+| Responsible reviewer | The appointed competent occupational hygienist (G2), as part of the G3 method decisions |
+| Evidence needed | Your signed disposition in the review pack findings table (§8) and in this section, with any conditions. It is recorded with the method approval (`platform-controls method-review`). |
+| Restrictions while unresolved | Neither method can be approved. Without an approved method, the server and database refuse to submit, approve or issue conclusions at pilot level. Evaluation-level use stays labelled *not professionally approved*. |
+| Disposition | ☐ Accepted ☐ Accepted with conditions ☐ Not accepted · Conditions: ________ · Name, competence, date: ________ |
+
 Each candidate method has the same structure. *Source references* name the convention the engine follows. They were not re-checked against the live publications during the build, so confirming them is part of your review.
 
 ### 1.1 `twa_8h` v1.2.1: personal 8-hour time-weighted average
@@ -41,7 +68,7 @@ Each candidate method has the same structure. *Source references* name the conve
 | Limitations | No temperature/pressure or blank correction; no uncertainty propagation; no statistics or representativeness assessment (see the box above). |
 | Representative outputs | Example report, sections 5–6; `validation-examples.json` E1, E3, E9, E10. |
 | Software verification | `test/calc.test.ts` (TWA cases, the 1.3.1 roll-up); `test/workflow.test.ts` (end-to-end); `test/review-regressions.test.ts`; independent software reviewers' hand calculations matched. |
-| Findings | H1-F01 (roll-up), fixed in 1.2.1. **Your disposition:** ☐ |
+| Findings | H1-F01 (roll-up), fixed in 1.2.1. See §1.0. **Your disposition:** ☐ |
 | Your decision | ☐ Approved ☐ Approved with conditions ☐ Rejected · Permitted scope: ________ · Review/expiry date: ________ |
 
 ### 1.2 `stel_15` v1.1.1: personal 15-minute short-term result
@@ -55,7 +82,7 @@ Each candidate method has the same structure. *Source references* name the conve
 | Failure conditions | Over 16 minutes; elapsed window over 16 minutes; short sample without the assumption. |
 | Limitations | One result per sample; no peak profiling. |
 | Software verification | `test/calc.test.ts` STEL cases; STEL service flow in `review-regressions`. |
-| Findings | None open. **Your disposition:** ☐ |
+| Findings | H1-F01 (roll-up) also applied to this method; fixed in 1.1.1. See §1.0. **Your disposition:** ☐ |
 | Your decision | ☐ Approved ☐ With conditions ☐ Rejected ☐ Not needed for the pilot |
 
 ### 1.3 Unit conversion (engine 1.3.1)

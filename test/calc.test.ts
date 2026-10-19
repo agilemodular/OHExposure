@@ -244,4 +244,21 @@ describe('engine 1.3.1 roll-up (Phase H1 finding H1-F01)', () => {
     expect(r.dataQualityState).toBe('failed');
     expect(r.benchmarkNote).toMatch(/all samples excluded/);
   });
+  it('stel_15 1.1.1: an uncalculable 15-minute result is indeterminate, not "not comparable"', () => {
+    const r = runAssessment({ calc: 'stel_15', parameters: { exposureMinutesPerShift: null, unsampledAssumption: 'none' as const },
+      benchmark: bm({ averagingMinutes: 15, value: 1 }),
+      samples: [s({ startAt: '2026-03-02T10:00:00Z', endAt: '2026-03-02T10:30:00Z', result: { revision: 1, value: 60, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } })] });
+    expect(r.calcVersion).toBe('1.1.1');
+    expect(r.benchmarkState).toBe('indeterminate');
+    expect(r.benchmarkNote).toMatch(/could not be calculated/);
+  });
+  it('records the current convention when every personal sample is excluded (for the reviewer to confirm)', () => {
+    // Excluded result well below the benchmark: no formal result, and nothing excluded is at or above the value.
+    const r = runAssessment({ calc: 'twa_8h', parameters: P, benchmark: bm({ value: 1000 }), samples: [s({ qc: [{ checkType: 'flow', outcome: 'fail', disposition: null }] })] });
+    expect(r.dataQualityState).toBe('failed');
+    expect(r.benchmarkState).toBe('not_comparable');
+    // Excluded result at or above the benchmark: it cannot be ignored.
+    const h = runAssessment({ calc: 'twa_8h', parameters: P, benchmark: bm(), samples: [s({ qc: [{ checkType: 'flow', outcome: 'fail', disposition: null }] })] });
+    expect(h.benchmarkState).toBe('indeterminate');
+  });
 });

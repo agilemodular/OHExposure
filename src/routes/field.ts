@@ -44,7 +44,7 @@ export function fieldRoutes(app: FastifyInstance) {
     requirePerm(c.actor, 'field.capture');
     return {
       title: 'Field sampling',
-      sub: 'Works offline. Records stay on this device until they are synchronised.',
+      sub: 'Record samples in the field. Whether records can be kept on this device depends on your organisation’s settings, shown below.',
       body: html`<div id="field-app" data-user="${c.actor.userId}" data-plan="${c.query.plan ?? ''}"><p class="muted">Loading the field client…</p>
         <noscript><div class="flash err">The field client needs JavaScript. You can still record samples online from a plan page.</div></noscript></div>
         <script src="/static/field.js" defer></script>`,

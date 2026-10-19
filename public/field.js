@@ -363,7 +363,7 @@
       try { await saveRecord(rec); }
       catch (e) { f.prepend(el('div', { class: 'flash err', role: 'alert' }, `Not saved: ${e.message || e}`)); return; }
       render();
-      sync();
+      sync(true);
     });
     return f;
   }
@@ -395,6 +395,11 @@
       const rec = pending.find((p) => p.client_uuid === r.client_uuid);
       if (!rec) continue;
       if (['created', 'updated', 'duplicate'].includes(r.outcome)) Object.assign(rec, { state: 'synced', server_id: r.server_id, version: r.version, base_version: r.version, message: (r.warnings || []).join(' ') || null });
+      else if (r.outcome === 'deferred' && !encrypted()) {
+        // Online-only: the server holds a copy for review; it is not a sample record and is not resent from this page.
+        Object.assign(rec, { state: 'held', message: `${r.message.replace(/ ?A copy is held on the server for review; keep this record on the device\.?/, '')} A copy is held on the server for review; it is not a sample record until a reviewer accepts it. Nothing further is sent from this page.` });
+        await saveRecord(rec); continue;
+      }
       else if (r.outcome === 'deferred') { Object.assign(rec, { state: 'pending', message: r.message }); await saveRecord(rec); continue; }
       else if (r.outcome === 'conflict') Object.assign(rec, { state: 'conflict', server_id: r.server_id, message: r.message });
       else Object.assign(rec, { state: 'rejected', message: r.message });
@@ -402,18 +407,31 @@
       await saveRecord(rec);
     }
   }
-  async function sync() {
+  // manual: started by the user (save, "Send again"). In online-only mode nothing is ever sent without a user action:
+  // reconnection and failures never trigger an automatic resend.
+  async function sync(manual = false) {
     if (syncing || !navigator.onLine || !ref) return render();
+    if (!encrypted() && manual !== true) return render();
     syncing = true;
-    try { await syncNow(); lastError = null; backoff = 0; if (ref) ref.offline = false; }
+    try {
+      await syncNow(); lastError = null; backoff = 0; if (ref) ref.offline = false;
+      if (legacyPending && records.every((r) => ['synced', 'conflict', 'held'].includes(r.state))) { await dropDb(LEGACY_DB); legacyPending = false; }
+    }
     catch (e) {
       lastError = String(e.message || e);
-      backoff = Math.min(300, backoff ? backoff * 2 : 10);
-      setTimeout(sync, backoff * 1000);
+      if (encrypted()) {
+        backoff = Math.min(300, backoff ? backoff * 2 : 10);
+        setTimeout(sync, backoff * 1000);
+      } else {
+        for (const r of records) if (r.state === 'pending') Object.assign(r, { state: 'error', message: 'Not saved: the server did not confirm this record. Check the connection, then press “Send again”.' });
+      }
     } finally { syncing = false; render(); }
   }
+  let legacyPending = false;
 
-  const STATE = { pending: ['Waiting to sync', 'b-warn'], synced: ['Synchronised', 'b-ok'], conflict: ['Conflict — kept for review', 'b-bad'], rejected: ['Rejected — needs correction', 'b-bad'], error: ['Retrying', 'b-warn'], unreadable: ['Cannot be opened', 'b-bad'] };
+  const ONLINE_STATE = { pending: ['Sending — not yet confirmed by the server', 'b-warn'], error: ['Not saved — send again', 'b-bad'], synced: ['Saved on the server', 'b-ok'] };
+  const stateOf = (st) => (!encrypted() && ONLINE_STATE[st]) || STATE[st];
+  const STATE = { held: ['Held on the server for review', 'b-warn'], pending: ['Waiting to sync', 'b-warn'], synced: ['Synchronised', 'b-ok'], conflict: ['Conflict — kept for review', 'b-bad'], rejected: ['Rejected — needs correction', 'b-bad'], error: ['Retrying', 'b-warn'], unreadable: ['Cannot be opened', 'b-bad'] };
 
   async function otherUsersNotice() {
     const others = (await listDbs()).filter((n) => n && n.startsWith('ohea-field-u-') && n !== DB_NAME);
@@ -433,12 +451,12 @@
     }
     const recs = records.slice().sort((a, b) => (b.updatedAt || '').localeCompare(a.updatedAt || ''));
     const pending = recs.filter((r) => r.state === 'pending').length;
-    const unsynced = recs.filter((r) => r.state !== 'synced').length;
+    const unsynced = recs.filter((r) => !['synced', 'held'].includes(r.state)).length;
     root.replaceChildren(
       policy.demo ? el('div', { class: 'flash warn' }, 'Demonstration organisation: use synthetic data only.') : '',
       encrypted() && weakPin ? el('div', { class: 'flash warn' }, `Your device PIN is weaker than now required (at least ${MIN_PIN} characters including a letter or symbol). Choose “Change PIN”.`) : '',
       policy.windingDown ? el('div', { class: 'flash warn' }, 'Offline capture has been switched off for your organisation. Resolve or synchronise the records below (or export a recovery file); new records cannot be saved on this device.') : '',
-      !encrypted() && unsynced ? el('div', { class: 'flash err', role: 'alert' }, `${unsynced} record(s) have not reached the server and are held only in this open page. Do not close or reload it until they are synchronised.`) : '',
+      !encrypted() && unsynced ? el('div', { class: 'flash err', role: 'alert' }, `${unsynced} record(s) have not been saved on the server. They are held only in this open page and will not be sent automatically: when connected, press “Send again”. Closing or reloading this page loses them, so note the details on paper if the connection does not return.`) : '',
       el('div', { class: `flash ${navigator.onLine ? 'ok' : 'warn'}`, role: 'status' },
         encrypted()
           ? (navigator.onLine ? (pending ? `Online — ${pending} record(s) waiting to sync.` : 'Online — all records on this device are synchronised.') : `Offline — ${pending} record(s) are encrypted on this device and will sync when you reconnect.`)
@@ -448,7 +466,8 @@
       await otherUsersNotice(),
       el('div', { class: 'actions-row' },
         el('button', { onclick: () => root.replaceChildren(form(null)), disabled: (!encrypted() && !navigator.onLine) || !!policy.windingDown }, 'New sample'),
-        el('button', { class: 'secondary', onclick: sync, disabled: !navigator.onLine }, 'Sync now'),
+        encrypted() ? el('button', { class: 'secondary', onclick: () => sync(true), disabled: !navigator.onLine }, 'Sync now')
+          : (unsynced ? el('button', { class: 'secondary', onclick: () => sync(true), disabled: !navigator.onLine || syncing }, 'Send again') : ''),
         encrypted() ? el('button', { class: 'secondary', onclick: () => lock('Locked.') }, 'Lock now') : '',
         encrypted() ? el('button', { class: 'secondary', onclick: showChangePin }, 'Change PIN') : '',
         encrypted() && unsynced ? el('button', { class: 'secondary', onclick: () => exportRecovery() }, 'Export recovery file') : ''),
@@ -457,8 +476,8 @@
         el('tbody', {}, ...recs.map((r) => el('tr', {},
           el('td', {}, r.server_id ? el('a', { href: `/samples/${r.server_id}` }, r.payload.sample_code) : (r.payload.sample_code || '—')),
           el('td', {}, r.payload.start_local ? r.payload.start_local.replace('T', ' ') : '—'),
-          el('td', {}, el('span', { class: `badge ${STATE[r.state][1]}` }, STATE[r.state][0]), r.message ? el('div', { class: 'small' }, r.message) : null),
-          el('td', {}, ['conflict', 'unreadable'].includes(r.state) ? el('span', { class: 'small muted' }, r.state === 'conflict' ? 'A reviewer will resolve this' : 'Export a recovery file') : el('button', { class: 'secondary tiny', onclick: () => root.replaceChildren(form(r)) }, 'Edit')))))))
+          el('td', {}, el('span', { class: `badge ${stateOf(r.state)[1]}` }, stateOf(r.state)[0]), r.message ? el('div', { class: 'small' }, r.message) : null),
+          el('td', {}, ['conflict', 'unreadable', 'held'].includes(r.state) ? el('span', { class: 'small muted' }, r.state === 'conflict' || r.state === 'held' ? 'A reviewer will resolve this' : 'Export a recovery file') : el('button', { class: 'secondary tiny', onclick: () => root.replaceChildren(form(r)) }, 'Edit')))))))
         : el('div', { class: 'empty' }, 'No samples on this device yet. Choose “New sample” to start.'),
       el('p', { class: 'small muted' }, encrypted()
         ? `Records are encrypted on this device and locked after ${policy.lockMinutes} minutes without activity. Synchronised copies are removed after ${policy.syncedRetentionHours} hours. Encryption protects records if the device is lost while locked; it does not protect against malware, a compromised browser, someone watching you enter the PIN, or an unlocked unattended device. Withdrawn access takes effect on this device only when it next connects.`
@@ -478,14 +497,24 @@
       const legacy = (await rawRecords(LEGACY_DB)).filter((r) => r.state !== 'synced');
       if (!legacy.length) { await dropDb(LEGACY_DB); return; }
       if (owner !== USER) { lastError = `This device holds ${legacy.length} unsynchronised record(s) from an earlier version belonging to another user. They must sign in here to send them.`; return; }
-      records = legacy.map((r) => ({ ...r, state: 'pending' }));
-      if (navigator.onLine) { await syncNow(); if (records.every((r) => r.state === 'synced' || r.state === 'conflict')) await dropDb(LEGACY_DB); }
+      // Never sent automatically: the user reviews them and presses "Send again".
+      records = legacy.map((r) => ({ ...r, state: 'error', message: 'Saved on this device by an earlier version of the app and never confirmed by the server. Check the details, then press “Send again” to submit it.' }));
+      legacyPending = true;
     } catch (e) { lastError = String(e.message || e); }
   }
 
-  window.addEventListener('online', sync);
+  window.addEventListener('online', () => sync(false));
   window.addEventListener('offline', render);
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js', { scope: '/' }).catch(() => {});
+  // The service worker (which caches the page shell for offline use) is registered only when offline capture is enabled.
+  // In online-only mode any earlier registration and its cached shell are removed, so no page content is kept by design.
+  async function offlineShell(enable) {
+    if (!('serviceWorker' in navigator)) return;
+    try {
+      if (enable) { await navigator.serviceWorker.register('/sw.js', { scope: '/' }); return; }
+      for (const r of await navigator.serviceWorker.getRegistrations()) await r.unregister();
+      if (window.caches) for (const k of await caches.keys()) if (k.startsWith('ohea-field-')) await caches.delete(k);
+    } catch { /* best effort */ }
+  }
 
   (async () => {
     // Policy comes from the server; when offline, the last policy saved for this user on this device is used.
@@ -495,11 +524,12 @@
     if (b) { policy = { ...b.offline, tenantId: b.tenantId }; csrf = b.csrf; }
     else if (known) policy = await getMeta('policy');
     if (!policy) { root.replaceChildren(el('div', { class: 'flash err', role: 'alert' }, lastError || 'You are offline and this device has not been set up for offline capture. Open this page once while online.')); return; }
+    offlineShell(!!policy.enabled || !!known);
     if (!policy.enabled) {
       if (known) { // offline was switched off: unlock once to synchronise and remove local data (saved policy kept)
         return (await getMeta('salt')) ? showUnlock('Offline capture has been switched off for your organisation. Unlock to synchronise and remove the records held on this device.') : (await dropDb(DB_NAME), location.reload());
       }
-      ref = b; records = []; await legacyOnlineOnly(); render(); sync(); return;
+      ref = b; records = []; await legacyOnlineOnly(); render(); return;
     }
     if (b) await setMeta('policy', policy);
     if (await getMeta('salt')) showUnlock(); else showSetup();

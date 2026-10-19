@@ -193,9 +193,10 @@ with sync_playwright() as p:
           db.close();
         }''', legacy_code)
         pg3.goto(BASE + '/field'); pg3.wait_for_selector('text=Online-only capture')
+        pg3.click('button:has-text("Send again")')  # earlier records are never sent without the user's action
         pg3.wait_for_selector('.badge.b-ok', timeout=15000)
         names = pg3.evaluate("async () => (await indexedDB.databases()).map(d => d.name)")
-        check('online-only mode sends the earlier version\'s unencrypted records, then deletes that store', legacy_code in pg3.content() and 'ohea-field' not in names, str(names))
+        check('online-only mode sends the earlier version\'s unencrypted records when the user confirms, then deletes that store', legacy_code in pg3.content() and 'ohea-field' not in names, str(names))
         check('online-only mode creates no browser database', not [n for n in names if n.startswith('ohea-field')], str(names))
         # Unsent record in online-only mode: warning shown while the page holds it.
         pg3.route('**/api/sync', lambda route: route.fulfill(status=503, body='down'))
@@ -203,7 +204,8 @@ with sync_playwright() as p:
         pg3.select_option('select[name=plan_id]', index=1); pg3.select_option('select[name=sample_type]', 'static'); pg3.fill('input[name=start_local]', '2026-10-15T08:00')
         pg3.click('text=Save and send'); pg3.wait_for_selector('text=held only in this open page')
         check('online-only mode warns that an unsent record is held only in the open page', True)
-        pg3.unroute('**/api/sync'); pg3.click('text=Sync now')
+        pg3.wait_for_selector('text=Not saved — send again')
+        pg3.unroute('**/api/sync'); pg3.click('button:has-text("Send again")')
         try: pg3.wait_for_selector('text=held only in this open page', state='detached', timeout=15000)
         except Exception: pass
         check('the unsent record is sent when the server is reachable again', 'held only in this open page' not in pg3.content(), pg3.inner_text('table')[:300].replace('\n', ' | '))

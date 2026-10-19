@@ -511,9 +511,35 @@ describe('independent review R2 re-check (N1–N6)', () => {
 });
 
 describe('R2 final re-check', () => {
+  it('R2-P2/P3: a hold is linked only to its own sample, and a held conflict cannot be repointed (in-conflict case)', async () => {
+    const target = S.samples[0];
+    const cur = (await field.sampleDetail(w.a.prac, target)).event;
+    const changed = { ...S.payload(`H2S-${w.tag}-0`, '2026-03-02'), notes: 'Second offline edit during a later suspension' };
+    await suspendWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'P3 test', 'H2 Operator');
+    const [d] = await field.syncBatch(w.a.tech, [{ client_uuid: cur.client_uuid, server_id: target, base_version: 1, payload: changed }]);
+    expect(d.outcome).toBe('deferred');
+    await resumeWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'H2 Operator', 'P3-REVAL');
+    const id = (await withActor(w.a.tech, (tx) => tx.query(`select id from field_intake_holds where client_uuid=$1 and status='held'`, [cur.client_uuid]))).rows[0].id;
+    const other = S.samples[1];
+    // As the submitter, directly: close or conflict the hold against an unrelated sample.
+    await expect(withActor(w.a.tech, (tx) => tx.query(`update field_intake_holds set status='synchronised', sampling_event_id=$2 where id=$1`, [id, other]))).rejects.toThrow(/its own sample/);
+    await expect(withActor(w.a.tech, (tx) => tx.query(`update field_intake_holds set status='in_conflict', sampling_event_id=$2 where id=$1`, [id, other]))).rejects.toThrow(/its own sample/);
+    // The legitimate path still works: re-sending makes it a conflict on its own sample.
+    const [c] = await field.syncBatch(w.a.tech, [{ client_uuid: cur.client_uuid, server_id: target, base_version: 1, payload: changed }]);
+    expect(c.outcome).toBe('conflict');
+    const h = (await withActor(w.a.prac, (tx) => tx.query('select status, sampling_event_id from field_intake_holds where id=$1', [id]))).rows[0];
+    expect(h).toEqual({ status: 'in_conflict', sampling_event_id: target });
+    // An in-conflict hold cannot be repointed, set to null, or dismissed while changing its sample.
+    await expect(withActor(w.a.prac, (tx) => tx.query('update field_intake_holds set sampling_event_id=$2 where id=$1', [id, other]))).rejects.toThrow(/hold refused/);
+    await expect(withActor(w.a.prac, (tx) => tx.query('update field_intake_holds set sampling_event_id=null where id=$1', [id]))).rejects.toThrow(/hold refused/);
+    await expect(withActor(w.a.prac, (tx) => tx.query(`update field_intake_holds set status='dismissed', resolved_at=now(), resolved_by=$2, resolution_notes='Obsolete held edit', sampling_event_id=$3 where id=$1`, [id, w.a.prac.userId, other]))).rejects.toThrow(/cannot be changed/);
+    await field.dismissHold(w.a.prac, id, { notes: 'Obsolete held edit; the server copy stands' });
+  });
+
   it('a held conflict cannot be repointed to another sample', async () => {
     const c = await admin();
-    const h = (await c.query(`select id, tenant_id from field_intake_holds where status='dismissed' limit 1`)).rows[0];
+    const h = (await c.query(`select id, tenant_id from field_intake_holds where status='dismissed' and tenant_id=$1 limit 1`, [w.A.tenant.id])).rows[0];
+    expect(h).toBeTruthy();
     await c.end();
     // Final holds cannot change at all; same-status changes are refused for any hold.
     await expect(withActor(w.a.prac, (tx) => tx.query(`update field_intake_holds set sampling_event_id=$2 where id=$1`, [h.id, S.samples[1]]))).rejects.toThrow(/hold refused/);
