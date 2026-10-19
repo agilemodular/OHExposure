@@ -14,23 +14,23 @@ How an assessment can be approved and a report issued, what each path must satis
 | Operator CLI (`platform-controls`, `import-reference-data`, `recovery-keys`, `backup`, `restore-verify`) | **No command approves or issues.** Method reviews and pilot authorisations are records consulted by the gates, not approvals of assessments. | No | — |
 | Organisation administrator tools | No: administrators hold neither `assess.approve` nor `reports.generate` | No | Service + database |
 | **Direct SQL with the application credentials** (`ohea_app`, e.g. a compromised application process or a mistaken maintenance script using the application role) | Refused unless every database rule below holds | Refused unless every database rule below holds | **Database triggers** |
-| Owner or superuser connection | Possible | Possible | Not protected; see §4 |
+| Owner connection (`ohea_owner`: not superuser, BYPASSRLS, owns the tables) or a superuser | Triggers still apply to ordinary writes, but the owner can alter or disable them | Same | Not protected; see §4 |
 
 ## 2. Prerequisites and where each is enforced
 
 | Prerequisite | Approval | Report issue |
 |---|---|---|
 | Tenant and client scope | RLS on every table, plus service checks. Trigger requires the reviewer to belong to the revision's organisation. | RLS. Trigger requires the revision to belong to the same assessment and client, and the issuer to the same organisation. |
-| Authorised actor | Service: `assess.approve`. Trigger: reviewer is an **active technical reviewer** of the organisation. | Service: `reports.generate`. Trigger: issuer is an active practitioner or technical reviewer. |
-| Separation of duties | Service and trigger: reviewer is not the author or submitter. Service only: reviewer did not record a QC disposition on the samples. | — |
-| State transition | Trigger: only `in_review` → `approved`. Approved revisions are immutable (trigger from the build phase). | Trigger: the revision must be `approved` at issue time; read with a share lock. |
+| Authorised actor | Service: `assess.approve`. Trigger: the reviewer recorded is **the signed-in user** (`app_user()`) and an **active technical reviewer** of the organisation. The submitter recorded at submission must also be the signed-in user. | Service: `reports.generate`. Trigger: the issuer recorded is the signed-in user and an active practitioner or technical reviewer. |
+| Separation of duties | Service and trigger: reviewer is not the author or submitter. The trigger compares against the stored author and submitter, which must exist and cannot be changed. Service only: reviewer did not record a QC disposition on the samples. | — |
+| State transition | Trigger: new revisions are inserted only as drafts with an author and no review or approval data. Only `in_review` → `approved`. Once in review, the content is frozen; only the review outcome may change. Approved revisions are immutable (trigger from the build phase). | Trigger: the revision must be `approved` at issue time; read with a share lock. |
 | Approved method and version | Pilot organisations: service and trigger. Effective status from `method_status_effective()`, so expired or withdrawn approvals don't count. Status is frozen on the revision. | Pilot: the revision must have been approved at pilot level with an approved method. Refused if that method version has since been withdrawn or rejected. |
 | Suitable verified reference data | Pilot: service and trigger. `professional_reference` and `verified`; provenance frozen. | Pilot: frozen provenance must be `professional_reference`. |
 | Matching averaging period | Pilot: service and trigger | Covered at approval |
 | Current calculation inputs | **Service only, transactional.** Input hash recomputed against current evidence, with that evidence share-locked against concurrent amendment, void or QC change. | Not needed: the report is generated from the frozen approved snapshot. |
 | Required professional review | Approval itself is the professional review: scope, limitations and confirmation are required by the service. | Only approved revisions can be issued (trigger). |
-| Samples received during a suspension | Service and trigger: refused until cleared | — |
-| No applicable suspension or hold | Service (tenant row share-locked) and trigger | Service and trigger |
+| Samples received during a suspension | Service and trigger: refused while a sample is flagged and not cleared, or has a held update or a held conflict | — |
+| No applicable suspension or hold | Service and trigger. The tenant row and the assessment row are share-locked, so a suspension or hold cannot be committed between the check and the write. | Service and trigger (same locks) |
 | Immutable approved evidence | Approved revisions, issued reports, audit, custody, lab revisions and action events are append-only or immutable (triggers and revoked grants) | Same |
 
 ## 3. Why this boundary
@@ -44,13 +44,23 @@ How an assessment can be approved and a report issued, what each path must satis
 | Race | Control |
 |---|---|
 | Suspension between check and write | Share lock on the tenant row |
-| Evidence change during approval | Share lock on the evidence rows, against writers' update locks |
+| Evidence change during approval | Share locks on the sampling events, the instruments they used and the benchmark version, against writers' update locks (results, QC, void, calibration, instrument status, benchmark verification) |
 | Approval status changing during report issue | Share lock on the revision row in the issue trigger |
 | Method withdrawal | A withdrawal committed after an approval doesn't alter it (history kept); later issue is refused |
 
 ## 4. Privileged maintenance access
 
-The owner connection (`DATABASE_ADMIN_URL`) and any superuser can disable triggers, alter tables or write directly. **The platform does not claim protection against an unrestricted database administrator.** Requirements, to be confirmed with the hosting owner (G5):
+Production uses three database identities:
+
+| Identity | Rights | Used by |
+|---|---|---|
+| `ohea_app` | No RLS bypass; column grants; every trigger applies | The running application, and nothing else |
+| `ohea_owner` | Owns the tables; BYPASSRLS; not superuser | The one-shot release job (migrations, pre-migration backup, recovery-key check), backup and restore-verification jobs, operator scripts |
+| Cluster superuser | Everything | Database initialisation only; credentials sealed (break-glass) |
+
+The running application never holds owner credentials: the server refuses to start in production if `DATABASE_ADMIN_URL` is present.
+
+As table owner, `ohea_owner` can alter or disable triggers and write directly, and a superuser can do anything. **The platform does not claim protection against an unrestricted database administrator.** Requirements, to be confirmed with the hosting owner (G5):
 
 - Owner credentials are held in the secrets manager. They are used only by the deployment entrypoint, backups, restore verification and operator scripts, never by the running application.
 - Operator scripts write `platform.*` audit events. Any manual SQL with owner credentials must be:

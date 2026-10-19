@@ -15,7 +15,7 @@ Status labels: **Implemented and tested** (automated tests in this repository) Â
 | Security monitoring and alerting | Implemented and tested (delivery is hosting owner) | `src/alerts.ts` writes every alert to the structured log and, when `ALERT_WEBHOOK_URL` is set, POSTs JSON signed with `x-ohea-signature: sha256=<HMAC>`; 10-minute de-duplication. Events: account locked, MFA lockout, IP throttled, integration dead letter, backup failed/succeeded, restore verification failed, workflow suspended, field recovery imported. The hosting owner routes the webhook to named people and tests it (G5) |
 | Health checks | Implemented | `GET /healthz` (process up); `GET /readyz` (database reachable and the latest migration applied) for load balancers. Administrator **System health** panel |
 | Database-level pilot gates | Implemented and tested | Migration 018: on approval the database records method status, benchmark provenance and assurance level from the authoritative tables and refuses non-compliant approvals in pilot organisations; an issued report is refused unless its revision is approved (and, in pilot organisations, pilot-approved and its method not since rejected) |
-| Field recovery keys | Implemented and tested | `scripts/recovery-keys.ts verify` (run by `scripts/start.ts`; production start refused on failure) and `rotate` (re-seals every private key under `FIELD_RECOVERY_KEK_NEW` in one transaction; key pairs unchanged). Rotation procedure: run `rotate`, replace the secret, restart, run `verify`. Rotate at least annually and immediately if the KEK may be exposed |
+| Field recovery keys | Implemented and tested | `scripts/recovery-keys.ts verify` (run by the release job `scripts/release.ts`; release refused on failure) and `rotate` (re-seals every private key under `FIELD_RECOVERY_KEK_NEW` in one transaction; key pairs unchanged). Rotation procedure: run `rotate`, replace the secret, restart, run `verify`. Rotate at least annually and immediately if the KEK may be exposed |
 | Platform operator controls | Implemented and tested | `scripts/platform-controls.ts` (assurance level, offline enablement, workflow suspension/resumption, method review records) uses the owner connection; organisation administrators cannot change these. Every change writes a `platform.*` audit event |
 | Penetration test | Not done | Hosting owner / SHEQ Experts decision (G5, D8) |
 
@@ -65,7 +65,7 @@ Checks manifest checksums **before** restoring; restores into a scratch database
 1. Declare the incident; if records may be affected, suspend workflows (`platform-controls.ts suspend`) so nobody writes to a database that will be replaced.
 2. Restore the database to the chosen point, and the attachment store to the same or a later point.
 3. Run `restore-verify.ts` against the restored backup (or the equivalent checks against the restored database).
-4. Start the application (`scripts/start.ts` applies migrations idempotently).
+4. Run the release job (`scripts/release.ts`: migrations are idempotent), then start the application.
 5. Re-run integration delivery: idempotency keys prevent duplicates downstream.
 6. Field devices re-sync: records created after the restore point are recreated from device queues (the server treats them as new; duplicates are recognised by client UUID). Devices whose users cannot sign in can export recovery files.
 7. Resume workflows with a revalidation reference.
@@ -77,7 +77,7 @@ Checks manifest checksums **before** restoring; restores into a scratch database
 3. Database migrations are forward-only. If the defective release applied a migration, **do not** hand-edit the schema: restore the pre-deployment backup (taken by the deployment process immediately before migrating) into a new database, verify it, and repoint the application; or, where the migration is additive and the previous release tolerates it, run the previous release against the current schema after confirming in staging.
 4. Record what was rolled back, the data window affected, and revalidation before resuming.
 
-The deployment process must therefore take a backup immediately before `scripts/start.ts` applies migrations (hosting owner).
+The release job takes this backup automatically before applying pending migrations (`PRE_MIGRATION_BACKUP_DIR`; required in production), and the production compose profile runs it before the application starts.
 
 ## Monitoring
 
@@ -88,6 +88,10 @@ Hosting owner to provide: delivery of alerts to people; uptime and error-rate al
 ## Deployment
 
 - `Dockerfile` and `docker-compose.yml` (app + PostgreSQL 16, named volumes, health checks). The image has not been built in the development workspace (Docker Hub unreachable) â€” build once in the hosting environment.
-- `scripts/start.ts` applies migrations with the owner connection, sets the `ohea_app` password from `APP_DB_PASSWORD`, then starts the server on the least-privilege connection.
+- **Production (`deploy/docker-compose.prod.yml`):**
+  - A one-shot `migrate` job runs `scripts/release.ts` with the owner credentials. It runs the configuration checks, takes the pre-migration backup, applies migrations, sets the app-role password and verifies the recovery keys.
+  - The application then starts with **only** the application credentials. The server refuses to start in production if owner credentials are present.
+  - The database owner `ohea_owner` is created at first start as a non-superuser with BYPASSRLS (`deploy/db-init`). The cluster superuser is not used by the platform.
+- **Single process (development, or the simple `docker-compose.yml`):** `scripts/start.ts` runs the same release steps, removes the owner URL from its environment, then starts the server.
 - `scripts/provision-tenant.ts` creates a real organisation (evaluation level, offline capture off, MFA enforced) with a first administrator who must change a one-time password; it refuses to run against a database holding the demo tenant.
 - The demo tenant must not be present in the pilot environment.

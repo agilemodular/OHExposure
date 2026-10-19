@@ -20,14 +20,15 @@ Reading never stops. Every record stays readable and exportable, so the investig
 |---|---|---|---|
 | Read, search, export, view audit trail | ● | ● | ● |
 | Create or edit field samples (online) | ✕ `field_sync` | ✕ | ● (samples are not part of an assessment until selected) |
-| Offline synchronisation | **H**: each item is stored in `field_intake_holds` and the device keeps it pending (`deferred`). When it later synchronises it is flagged for review and cannot support a submission or approval until someone other than the submitter clears it. | H | ● |
+| Offline synchronisation | **H**: each item is stored in `field_intake_holds` and the device keeps it pending (`deferred`). When it later synchronises it is flagged for review, in the same transaction. If it arrives as a conflict, the hold is tracked, and applying the device copy flags the sample. Until someone other than the capturer, the recovered-from user or any hold submitter clears it, it cannot support a submission or approval. Clearing is enforced in the service and by a database trigger. | H | ● |
 | Custody, void, QC checks and dispositions | ✕ `field_sync` | ✕ | ● |
+| Calibrations and instrument status (they feed calculations) | ✕ `field_sync` | ✕ | ● |
 | Apply a device copy to resolve a sync conflict | ✕ `field_sync` | ✕ | ● |
 | Recovery-file import | **H**: items are processed as offline synchronisation | H | ● |
 | Lab dispatch, receipt, manual results, amendments, CSV commit | ✕ `lab_import` | ✕ | ● |
-| Ordinary attachment upload | ✕ for sampling events (`field_sync`); lab submissions, results and imports (`lab_import`); inspections and actions (`action_closure`); assessments (`assessment_approval`). Calibration, instrument and control files: ● | ✕ for those record types | ● |
+| Ordinary attachment upload | ✕ for sampling events, calibrations and instruments (`field_sync`); lab submissions, results and imports (`lab_import`); inspections and actions (`action_closure`); assessments (`assessment_approval`). Enforced in the service and by a database trigger. Control files: ● | ✕ for those record types | ● |
 | Remediation evidence intake | **Q**: practitioners and technical reviewers only, with a reason. The file is quarantined: readable, but not admitted and not linkable as evidence. | Q | ● |
-| Admit quarantined evidence | ✕ until the workflow is resumed. Then a technical reviewer other than the uploader, with notes. | ✕ | ● |
+| Admit quarantined evidence | ✕ until the workflow is resumed. Then a technical reviewer other than the uploader, with notes. Quarantine cannot be removed, and admission is recorded once. Both are enforced by a database trigger. | ✕ | ● |
 | Link an attachment as evidence (e.g. lab certificate) | Quarantined, unadmitted files are refused at linking and again at CSV commit | same | same |
 | Edit draft assessment, recalculate | ● (drafts only; nothing is approved) | ● | ✕ |
 | Submit for review | ● | ● | ✕ |
@@ -37,7 +38,8 @@ Reading never stops. Every record stays readable and exportable, so the investig
 | Issue report | ✕ `report_issue`, service and database | ✕ | ✕ (service and database) |
 | Corrective action effectiveness review, closure, cancellation | ✕ `action_closure` | ✕ | ● |
 | Raise or assign actions, record implementation | ● (no verification decision is made) | ● | ● |
-| Outbound integration delivery (background job) | Held, left pending, while `assessment_approval` or `report_issue` is suspended | Held | ● |
+| Outbound integration delivery (background job) | Held, left pending, while `assessment_approval` or `report_issue` is suspended | Held | Messages about the held assessment are held |
+| Apply an AI-assisted draft suggestion | ● (drafts only) | ● | ✕ |
 | Disposal requests and decisions | ✕ while **any** workflow of the organisation is suspended (evidence must be preserved) | ✕ | ● |
 | User administration (add, suspend, reset two-step) | ● (needed for containment) | ● | ● |
 | Retention settings | ● (no records are deleted by changing them) | ● | ● |
