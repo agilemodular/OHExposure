@@ -116,7 +116,9 @@ The reviewer confirmed R2-P1, R2-P2, R-L4, R-L5, R-L7 and the R2-M7 residual as 
 
 | ID | Finding | Remediation | Verification | Acceptance |
 |---|---|---|---|---|
-| R2-Q1 | The new name normalisation removed every non-Latin character, so any two non-Latin names (e.g. two Chinese names) compared as the same person and the separation check refused legitimate records | Unicode letters and digits are kept; if normalisation leaves nothing, the trimmed lower-case names are compared | `h2.test.ts` (`王伟` ≠ `李娜`; `王伟` = ` 王伟 `) | Fixed, awaiting acceptance (not re-reviewed) |
+| R2-Q1 | The new name normalisation removed every non-Latin character, so any two non-Latin names (e.g. two Chinese names) compared as the same person and the separation check refused legitimate records | Unicode letters and digits are kept; if normalisation leaves nothing, the trimmed lower-case names are compared | `h2.test.ts` (`王伟` ≠ `李娜`; `王伟` = ` 王伟 `) | **Closed (R2 re-check)** |
+| R2-Q2 | Medium (fails closed). The fix for R2-Q1 removed combining marks from every script, so distinct names in Devanagari, Thai or Japanese kana collided (सुनील = सोनल, मीना = मोना, ジロウ = シロウ). Legitimate reviewers or authorisers could have been refused | Marks are removed only after Latin, Greek, Cyrillic, Arabic and Hebrew letters (optional accents and vowel points) and are kept elsewhere | `h2.test.ts` (Hindi, Thai and Japanese pairs; accented Latin, Greek and Hangul equivalents) | Fixed; re-check pending |
+| R2-Q3 | Low: a space inside a CJK name hid a match (`王伟` vs `王 伟`) | Whitespace between Han, kana and Hangul characters is ignored | `h2.test.ts` | Fixed; re-check pending |
 
 ## 4. Open findings summary (19 Oct 2026, after the acceptance check)
 
@@ -135,7 +137,7 @@ Closed in the acceptance check and removed from this table: R-L4, R-L5, R-L7, R2
 | R2-H3 | Low (residual) | Owner role remains privileged (BYPASSRLS, table owner) | Documented privileged access | Hosting owner (G5) |
 | R2-N7 | Low | Open | Existing deployments need role and volume changes | Hosting owner on first deployment (G5) |
 | R2-N9 | Low | Open (documented boundary) | Inputs-hash check is service-only | Accept, or add a database check before production |
-| R2-Q1 | Low | Fixed, awaiting acceptance | Name check regression for non-Latin names | Next independent review |
+| R2-Q2, R2-Q3 | Medium (fails closed), Low | Fixed; re-check pending | Name check for scripts where marks are significant; CJK spacing | Independent re-check |
 | Image tags | Low | Partial | Pin digests at deployment | Hosting owner (G5) |
 
 **No Critical, High or Medium software finding is open.** The one open Medium item, H1-F01, is fixed in software and awaits the hygienist's professional disposition.

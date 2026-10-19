@@ -44,7 +44,7 @@ The authoritative record is `findings-register.md`.
 | R-M8 | Low (residual) | PIN strength is the main protection for offline data; the controller must accept the residual risk within G8 |
 | R-M5, R-M6 | — | Fixed; still to be exercised on real devices (G9) |
 | R-L1, R-H2a, R-X1 (mitigated, accepted), R2-N7, R2-N9, R2-H3 residual, image digests | Low | See `findings-register.md` §4. None blocks a pilot by itself; G5 and G8 reviewers should accept or require them. |
-| R2-Q1 | Low | Fixed (test); awaiting independent acceptance |
+| R2-Q2, R2-Q3 | Medium (fails closed), Low | Fixed (tests); re-check pending |
 
 No Critical, High or Medium software finding is open.
 
@@ -119,7 +119,7 @@ Everything else follows from these. **Next actions and owners:**
 
 ## 9a. Addendum — remaining low findings (19 Oct 2026)
 
-Commit `9199a11` and the R2-Q1 fix closed the low findings software could address. The independent reviewer's acceptance check confirmed R-L4, R-L5, R-L7, R2-M7 residual, R2-P1 and R2-P2 as closed and accepted R-X1 as mitigated. It raised one regression (R2-Q1: non-Latin names compared as equal), which is fixed and tested but not re-reviewed. Tests: 159 passing. No gate status changed. Remaining open items are external or deployment-time (`findings-register.md` §4).
+Commit `9199a11` and the R2-Q1 fix closed the low findings software could address. The independent reviewer's acceptance check confirmed R-L4, R-L5, R-L7, R2-M7 residual, R2-P1 and R2-P2 as closed and accepted R-X1 as mitigated. It raised one regression (R2-Q1: non-Latin names compared as equal). The fix was re-checked and closed. That re-check raised R2-Q2 (names in scripts where vowel marks matter, such as Hindi, Thai and Japanese, could collide; this fails closed by refusing legitimate users) and R2-Q3 (spacing in CJK names); both are fixed and tested. Tests: 159 passing. No gate status changed. Remaining open items are external or deployment-time (`findings-register.md` §4).
 
 ## 10. Pilot authorisation (G11)
 

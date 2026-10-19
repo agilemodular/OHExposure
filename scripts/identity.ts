@@ -5,9 +5,15 @@
 import { hostname, userInfo } from 'node:os';
 
 export function normaliseName(n: string): string {
-  // Unicode letters and digits are kept (non-Latin names compare correctly); accents, apostrophes, other punctuation,
+  // Unicode letters and digits are kept (non-Latin names compare correctly); optional accents, apostrophes, other punctuation,
   // case, spacing and word order are ignored.
-  return n.normalize('NFKD').replace(/\p{M}/gu, '').toLowerCase().replace(/['\u2019`]/g, '').replace(/[^\p{L}\p{N}\s]/gu, ' ')
+  // Marks are removed only where they are optional accents (Latin, Greek, Cyrillic, Arabic and Hebrew vowel points).
+  // In scripts such as Devanagari, Thai or Japanese kana they distinguish names, so they are kept (R2-Q2).
+  return n.normalize('NFKD').replace(/([\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Hebrew}])\p{M}+/gu, '$1')
+    .normalize('NFC')
+    // Spacing inside CJK names is not significant (王 伟 = 王伟).
+    .replace(/(?<=[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}])\s+(?=[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}])/gu, '')
+    .toLowerCase().replace(/['\u2019`]/g, '').replace(/[^\p{L}\p{M}\p{N}\s]/gu, ' ')
     .split(/\s+/).filter(Boolean).sort().join(' ');
 }
 export const samePerson = (a?: string | null, b?: string | null) => {

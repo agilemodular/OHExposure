@@ -526,6 +526,16 @@ describe('remaining low findings (19 Oct, evening)', () => {
     expect(samePerson('Smith, Jane', 'jane  SMITH')).toBe(true);
     expect(samePerson('王伟', '李娜')).toBe(false);
     expect(samePerson('王伟', ' 王伟 ')).toBe(true);
+    expect(samePerson('王伟', '王 伟')).toBe(true);
+    expect(samePerson('सुनील', 'सोनल')).toBe(false);
+    expect(samePerson('मीना', 'मोना')).toBe(false);
+    expect(samePerson('ปิติ', 'ปต')).toBe(false);
+    expect(samePerson('मीना', 'मीना')).toBe(true);
+    expect(samePerson('ジロウ', 'シロウ')).toBe(false);
+    expect(samePerson('ゆうこ', 'ゆうご')).toBe(false);
+    expect(samePerson('José Álvarez', 'alvarez jose')).toBe(true);
+    expect(samePerson('Ελένη', 'ελενη')).toBe(true);
+    expect(samePerson('한국', '\u1112\u1161\u11ab\u1100\u116e\u11a8')).toBe(true);
     expect(samePerson('Zoë O’Brien', 'zoe obrien')).toBe(true);
     expect(samePerson('Jane Smith', 'J. Smith')).toBe(false); // different spellings are not detected (documented)
     expect(samePerson('Zoë Brien', 'zoe brien')).toBe(true);
