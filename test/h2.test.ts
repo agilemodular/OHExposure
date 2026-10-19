@@ -509,3 +509,13 @@ describe('independent review R2 re-check (N1–N6)', () => {
     expect(other).toBe(true);
   });
 });
+
+describe('R2 final re-check', () => {
+  it('a held conflict cannot be repointed to another sample', async () => {
+    const c = await admin();
+    const h = (await c.query(`select id, tenant_id from field_intake_holds where status='dismissed' limit 1`)).rows[0];
+    await c.end();
+    // Final holds cannot change at all; same-status changes are refused for any hold.
+    await expect(withActor(w.a.prac, (tx) => tx.query(`update field_intake_holds set sampling_event_id=$2 where id=$1`, [h.id, S.samples[1]]))).rejects.toThrow(/hold refused/);
+  });
+});

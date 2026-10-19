@@ -353,6 +353,11 @@ export async function resolveConflict(a: Actor, id: string, input: unknown) {
       // If the device copy was first received during a suspension, the sample must now be reviewed before use.
       await releaseHolds(tx, c.client_uuid, cur.id, ['held', 'in_conflict']);
     } else {
+      // The device copy was not applied: a held copy of it is dismissed by the person resolving the conflict, who must not
+      // be the person who submitted it, and only while field synchronisation is active.
+      const mine = await one(tx, `select 1 from field_intake_holds where client_uuid=$1 and status in ('held','in_conflict') and submitted_by=$2`, [c.client_uuid, a.userId]);
+      if (mine) throw forbidden('You submitted this record while field synchronisation was suspended; someone else must resolve the conflict');
+      if (await one(tx, `select 1 from field_intake_holds where client_uuid=$1 and status in ('held','in_conflict')`, [c.client_uuid])) await assertWorkflowActive(tx, 'field_sync', 'resolve conflict');
       // The device copy was not applied: a held copy of it is dismissed by the person resolving the conflict.
       await tx.query(`update field_intake_holds set status='dismissed', resolved_at=now(), resolved_by=$2, resolution_notes=$3 where client_uuid=$1 and status in ('held','in_conflict')`,
         [c.client_uuid, a.userId, `Conflict resolved by keeping the server copy: ${d.notes}`]);

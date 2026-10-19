@@ -95,3 +95,17 @@ Hosting owner to provide: delivery of alerts to people; uptime and error-rate al
 - **Single process (development, or the simple `docker-compose.yml`):** `scripts/start.ts` runs the same release steps, removes the owner URL from its environment, then starts the server.
 - `scripts/provision-tenant.ts` creates a real organisation (evaluation level, offline capture off, MFA enforced) with a first administrator who must change a one-time password; it refuses to run against a database holding the demo tenant.
 - The demo tenant must not be present in the pilot environment.
+
+## Release notes for existing deployments (finding R2-N7)
+
+The production profile assumes fresh volumes. On a database or backup volume created by an earlier version:
+
+1. As the cluster superuser:
+   ```sql
+   alter role ohea_owner nosuperuser bypassrls createdb createrole;
+   grant ohea_app to ohea_owner with admin option;
+   ```
+   The grant is needed only if `ohea_app` was created by another role.
+2. On the host: `docker run --rm -v ohea_backups:/b alpine chown -R 1000:1000 /b`, where 1000 is the `node` user in the image.
+3. Remove `DATABASE_ADMIN_URL` from the application's environment; the server refuses to start in production with it present.
+4. Pin `postgres` and `caddy` images to digests and record them in the G5 evidence.

@@ -1,16 +1,43 @@
 # Test evidence
 
-Latest run: **18 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**, commit range `0d8dab4..` (Phase H1). Command: `npm test` (Vitest). The test database schema is dropped and migrated from scratch (18 migrations), and tests run as the least-privilege application role, so row-level security is active throughout. Environment: development workspace (Linux container), not the hosting environment.
+Latest run: **19 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**, 22 migrations, reviewed commit range `1fce123..` (Phase H2). Command: `npm test` (Vitest, files run sequentially). The test schema is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security and every trigger are active. Environment: development workspace (Linux container). **Not the hosting environment.**
 
-**Result: 129 passed, 0 failed, across 5 suites** (baseline before Phase H1: 105 on commit 0d8dab4, re-verified 18 Oct 2026 and green in CI).
+**Result: 156 passed, 0 failed, across 6 suites.** Phase H1 ended at 129. A count is not evidence of suitability: the findings register maps each closed finding to the behaviour it verifies.
 
 | Suite | Tests | Covers |
 |---|---|---|
-| `calc.test.ts` | 40 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values; 1.3.1 roll-up (finding H1-F01) |
-| `workflow.test.ts` | 22 | End-to-end workflow, tenant/client isolation, attachments, append-only evidence, governance, integrations |
-| `http.test.ts` | 13 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, sign-out, proxy trust, headers, every page for every role, provisioning, readiness, shared throttle |
-| `review-regressions.test.ts` | 33 | Regression tests for every defect found in the independent review rounds; STEL service flow; tenant controls not writable by the application role |
-| `assurance.test.ts` | 21 | **Phase H1:** database-level approval and issue gates; attachment upload and future custody times under the new checks; planted recovery key detected; KEK rotation all-or-nothing preserving key pairs; report issue gate (pilot-approved only; method later rejected; evaluation-approved revision); benchmark averaging gate; deferred sync and newly gated paths under suspension; recovery attestation, importer permissions and unknown user; pilot method gating; reference provenance (synthetic, organisation-entered, professional); method review recording rules; frozen status after approval; workflow suspension of all five workflows with alerts and resumption; MFA on pre-existing sessions; idle timeout; future capture times and device clock offset; reference import validation, immutability and DB constraint; recovery files (permission, cross-organisation, forged and tampered envelopes, idempotency, attribution, alert) |
+| `calc.test.ts` | 40 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values; 1.3.1 roll-up |
+| `workflow.test.ts` | 22 | End-to-end workflow, tenant and client isolation, attachments, append-only evidence, governance, integrations |
+| `http.test.ts` | 13 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, headers, every page for every role, provisioning, readiness, shared throttle |
+| `review-regressions.test.ts` | 33 | Regression tests for the build-phase review findings; STEL flow; tenant controls not writable |
+| `assurance.test.ts` | 21 | Phase H1: pilot gating, provenance, report gate, suspension, MFA, idle timeout, clock, reference import, recovery, key verification and KEK rotation, direct-write refusals |
+| `h2.test.ts` | 27 | Phase H2, mapped to the brief's verification list (below) |
+
+### Phase H2 verification list
+
+| Brief item | Tests (`h2.test.ts` unless stated) |
+|---|---|
+| Suspension bypasses | Ordinary upload refused; refused attempts audited; disposal refused; integration delivery held; calibration and quarantined link refused; direct inserts during suspension refused (C2) |
+| In-flight uploads | Suspension waits for a finalising transaction's lock, then the upload is refused. Note: this shows the locking mechanism with a held tenant-row lock; it does not run `saveAttachment` concurrently. |
+| Offline replay after suspension | Held server-side, deduplicated, flagged on arrival, blocked from submission until cleared by another person (M2); held update and held conflict block use (H2/M3); stale holds dismissed (N1/N3); holds immutable (N1, final re-check) |
+| Alternative report-issue paths | Direct inserts of issued reports refused (wrong revision, wrong issuer, other assessment); pilot issue gate (`assurance.test.ts`) |
+| Concurrent approval and evidence changes | Laboratory amendment waits for the approval lock, then approval refuses stale inputs; hold placement waits for an approval check (M4) |
+| Unsupported assurance upgrades | Pilot level refused without authorisation, also on the owner connection; approval without scope or signed evidence refused, also in the database; pilot authorisations append-only |
+| Withdrawn method approvals | New use blocked; report issue refused; approved revision and provenance unchanged; staleness notice; impact listing; expiry; ordering within one transaction |
+| Key replacement and recovery | Interrupted replacement changes nothing; old version still imports; unknown or wrong-version envelopes reported; revocation; MAC binds the version. Browser: device re-seals to the new version and recovers. |
+| Cross-tenant and worker-record access | New tables invisible to other organisations; operator-only tables not writable; field technicians cannot read names; other organisations' suspension state unreadable (N6) |
+| Direct writes through application credentials | Insert as approved or in review refused (C1); reviewer and submitter must be the signed-in user; content frozen in review; approval time forced; transitions fixed (N5); flags, quarantine and attachments immutable (C2, N2); calibrations not updatable (N4) |
+
+## Phase H2 targeted evidence
+
+| Evidence | Environment | Result |
+|---|---|---|
+| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, development server, demo data | 24/24 (adds key replacement re-seal and recovery). **Not mobile-device evidence.** |
+| Release step on a database one migration behind | Development PostgreSQL | Pre-migration backup taken, then the migration applied |
+| Non-superuser BYPASSRLS owner: migrations, backup, restore verification, key verification | Development PostgreSQL | All succeeded (restore 0.6 s). Confirms the production role model. **Development evidence.** |
+| `docker compose config` for the production profile | Development | Valid. The image was **not built** (registry unreachable). |
+| Engine outputs for validation examples | Development | `docs/examples/validation-examples.json` regenerated |
+| Independent review R2, re-check and final re-check | Rolled-back probes as the application role | See `findings-register.md` §3 |
 
 ## Phase H1 targeted evidence
 
