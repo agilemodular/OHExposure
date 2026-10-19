@@ -85,6 +85,15 @@ Implemented: structured JSON request logs (cookies and authorisation headers red
 
 Hosting owner to provide: delivery of alerts to people; uptime and error-rate alerting; log shipping and retention; database metrics; backup staleness monitoring.
 
+**Issued-report check (monthly; findings R2-P4 residual and R2-N9).** Every issued report should have a matching `report.issued` audit event written by the application. Run as the owner role; any row returned is investigated as a possible direct write:
+
+```sql
+select r.id, r.tenant_id, r.generated_at, r.generated_by
+from reports r
+where r.status = 'issued'
+  and not exists (select 1 from audit_events e where e.action = 'report.issued' and e.entity_type = 'report' and e.entity_id = r.id::text);
+```
+
 ## Deployment
 
 - `Dockerfile` and `docker-compose.yml` (app + PostgreSQL 16, named volumes, health checks). The image has not been built in the development workspace (Docker Hub unreachable) — build once in the hosting environment.

@@ -8,14 +8,14 @@ Generated: 2026-10-19 · Engine: `twa_8h` 1.2.1 · Regenerate: `WRITE_DEMONSTRAT
 |---|---|---|---|
 | 1 | Synthetic data presented as a professional reference benchmark (missing benchmark approval) | Platform operator | **Refused (expected)** — Validation failed; nothing imported: row 1: row — a professional_reference row cannot describe a synthetic substance or source |
 | 2 | Demonstration reference data | — | *Note* — Benchmark 0.5 mg/m³ (8 h) for "Demo Dust Q (DEMONSTRATION ONLY)": an invented value, imported only into the disposable test database. |
-| 3 | Environment | — | *Note* — Disposable test database; organisation "Consultancy 663b8bef" created for this run at evaluation level. All values synthetic. |
+| 3 | Environment | — | *Note* — Disposable test database; organisation "Consultancy ad203ae2" created for this run at evaluation level. All values synthetic. |
 | 4 | Register | Practitioner | Site → work area → process → task → hazard (Demo Dust Q, demonstration only) → similar exposure group with written rationale → worker (reference code). |
 | 5 | Instrument | Practitioner | Sampling pump with a passing calibration valid at the time of sampling. |
 | 6 | Plan review by its author (unauthorised) | Practitioner | **Refused (expected)** — Requires permission: plans.review |
 | 7 | Monitoring plan | Practitioner → Technical reviewer | Plan with target (group, substance, method, 2 planned samples) reviewed by someone other than its author, scheduled and started. |
-| 8 | Sample records | Field technician | DQ-663b8bef-1: 08:00–16:00 at 2.0 L/min (960 L). DQ-663b8bef-2: finish time and post-sampling flow not recorded (kept as an incomplete record). |
+| 8 | Sample records | Field technician | DQ-ad203ae2-1: 08:00–16:00 at 2.0 L/min (960 L). DQ-ad203ae2-2: finish time and post-sampling flow not recorded (kept as an incomplete record). |
 | 9 | Laboratory file with an unknown sample code (invalid evidence) | Practitioner | **Refused (expected)** — Whole file rejected at validation; nothing imported. |
-| 10 | Laboratory result | Practitioner | Chain of custody (dispatch, receipt in good condition); result file validated and committed: DQ-663b8bef-1 = 288 µg. |
+| 10 | Laboratory result | Practitioner | Chain of custody (dispatch, receipt in good condition); result file validated and committed: DQ-ad203ae2-1 = 288 µg. |
 | 11 | Calculation with incomplete evidence | — | *Note* — Data quality incomplete; comparison indeterminate. |
 | 12 | Favourable conclusion on incomplete evidence | Practitioner | **Refused (expected)** — "Exposure adequately controlled" cannot be concluded when data quality is incomplete |
 | 13 | Calculation | Practitioner | twa_8h 1.2.1: 288 µg ÷ 960 L = 0.30 mg/m³ over 480 min → 8-h TWA 0.30 mg/m³; data quality complete; comparison with the demonstration-only 0.5 mg/m³ benchmark: below_benchmark. "Calculated outputs and benchmark comparisons are not a compliance conclusion. Professional interpretation by a competent person is required." |
@@ -33,10 +33,10 @@ Generated: 2026-10-19 · Engine: `twa_8h` 1.2.1 · Regenerate: `WRITE_DEMONSTRAT
 | 25 | Direct database approval with the application credentials (unauthorised) | Practitioner (direct SQL) | **Refused (expected)** — approval refused: reviewer must be an active technical reviewer of this organisation |
 | 26 | Approval while assessment approval is suspended (suspension) | Technical reviewer | **Refused (expected)** — Assessment approval is suspended for this organisation: SYNTHETIC DEMONSTRATION: stop condition exercise. Existing records are preserved and remain readable. |
 | 27 | Suspension and resumption | Platform operator | Assessment approval suspended (refusal shown above), then resumed with a revalidation reference. |
-| 28 | Review and approval | Technical reviewer | Approved by someone other than the submitter; frozen with method status "approved", benchmark provenance "professional_reference", assurance level "pilot" and snapshot hash dcd3586379fd… |
+| 28 | Review and approval | Technical reviewer | Approved by someone other than the submitter; frozen with method status "approved", benchmark provenance "professional_reference", assurance level "pilot" and snapshot hash 45625103613e… |
 | 29 | Direct insert of an issued report with fabricated content (unauthorised report issue) | Practitioner (direct SQL) | **Refused (expected)** — report refused: content hash does not match the report content |
 | 30 | Direct insert of an issued report not bound to its approval record (unauthorised report issue) | Practitioner (direct SQL) | **Refused (expected)** — report issue refused: the report does not carry the approval record hash of its revision |
-| 31 | Direct insert of an issued report by a field technician (unauthorised report issue) | Field technician (direct SQL) | **Refused (expected)** — report issue refused: issuer must be an active practitioner or technical reviewer of this organisation |
+| 31 | Direct insert of an issued report by a field technician (unauthorised report issue) | Field technician (direct SQL) | **Refused (expected)** — report refused: reports are generated by an active practitioner or technical reviewer, as the signed-in user |
 | 32 | Residual (finding R2-P4) | — | *Note* — The database checks the content hash, the approval record hash, the issuer and every approval prerequisite. It cannot check that the rest of a report was rendered by the application: a practitioner or reviewer (who may issue reports anyway) writing directly to the database could store other text carrying the correct approval hash. Such a report has no matching report.issued audit event and differs from a re-rendered report. |
 | 33 | Report issue by a client read-only user (unauthorised report issue) | Client (read-only) | **Refused (expected)** — Requires permission: reports.generate |
 | 34 | Report issue | Technical reviewer → Client | Report issued from the approved revision; the client can read it; the substance and benchmark source are labelled DEMONSTRATION ONLY, and it carries the statement that a comparison is not a compliance conclusion. |

@@ -14,6 +14,9 @@
 Reviewer key:
 - **R1** — independent software reviewer, Phase H1 (18 Oct 2026; re-check of commit `40693c4`).
 - **R2** — independent software reviewer, Phase H2 (19 Oct 2026). Its results are added in §3.
+- **R3** — post-H2 targeted reviews (19 Oct 2026, evening): R2-P1/P2 re-review and the online-only configuration. Results in §5.
+
+**Nature of these reviews.** R1–R3 were carried out by separate AI review agents that had no part in writing the code and worked from the repository, the running demonstration server and their own tests. They are independent of the code author in that sense. They are **not** human reviewers and **not** the external security review that G8 and G5 require; their results are software verification evidence only.
 
 ## 1. Reconciled from Phase H1
 
@@ -121,24 +124,91 @@ The reviewer confirmed R2-P1, R2-P2, R-L4, R-L5, R-L7 and the R2-M7 residual as 
 | R2-Q3 | Low: a space inside a CJK name hid a match (`王伟` vs `王 伟`) | Whitespace between Han, kana and Hangul characters is ignored | `h2.test.ts` | **Closed (R2 re-check)** |
 | R2-Q4 | Low: an invisible joiner, variation selector or detached mark added to a name hid a match (`王伟` vs `王伟` + U+034F) | Invisible joiners, variation selectors, zero-width characters and marks not attached to a letter are ignored, as the reviewer suggested | `h2.test.ts` (five cases) | Fixed (tests); not re-reviewed. Name-based by design (R-X1): the signed document remains the control |
 
-## 4. Open findings summary (19 Oct 2026, after the acceptance check)
+## 4. Open findings summary (19 Oct 2026, post-H2)
 
-Closed in the acceptance check and removed from this table: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2.
+Closed since the H2 report: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2, R2-P3, R2-P4, R2-Q1–Q3, R2-P5, OO-R1–OO-R5. Treatment of every remaining Low finding is proposed in §6.
 
-| ID | Severity | Status | Implication | Next action / owner |
-|---|---|---|---|---|
-| H1-F01 | Medium (calculation) | Fixed; **professional disposition pending** | Blocks G3 until dispositioned | Appointed hygienist (G2/G3) |
-| R-H2a | Low | Open | Only devices that ran pre-H1 builds (demo) | None for pilot devices |
-| R-M5 | Low | Fixed, awaiting device evidence | Exercise in device test F21 before enabling offline | Pilot site (G9) |
-| R-M6 | — | Fixed, awaiting device evidence (F17) | — | Pilot site (G9) |
-| R-M8 | Low | Mitigated; **accepted-risk decision needed** | PIN strength is the main defence | Controller, within G8 |
-| R-L1 | Low | Mitigated | Cached page may persist if the user never reaches the sign-in page | Accept within G8 |
-| R-X1 | Low | Mitigated (accepted by R2) | Separation checks are name-based by design | Gate reviewers check signed documents (hashes stored) |
-| R-X2 | — | Closed by R2-M7 (instruments locked during approval) | — | — |
-| R2-H3 | Low (residual) | Owner role remains privileged (BYPASSRLS, table owner) | Documented privileged access | Hosting owner (G5) |
-| R2-N7 | Low | Open | Existing deployments need role and volume changes | Hosting owner on first deployment (G5) |
-| R2-N9 | Low | Open (documented boundary) | Inputs-hash check is service-only | Accept, or add a database check before production |
-| R2-Q4 | Low | Fixed (tests), not re-reviewed | Invisible characters in names | Next independent review; R-X1 control applies |
-| Image tags | Low | Partial | Pin digests at deployment | Hosting owner (G5) |
+| ID | Severity | Status | Proposed treatment (§6) |
+|---|---|---|---|
+| H1-F01 | Medium (calculation) | Fixed in software; **professional disposition pending** | Not a software decision: appointed hygienist (G2/G3); brief in `professional-review-handover.md` §1.0 |
+| R2-P6, OO-R6 | Low | Fixed (tests); not re-reviewed | Next independent review |
+| R-H2a, R-M5, R-M6, R-M8, R-L1, OO-R7 | Low | Open / mitigated (offline capability) | Defer while offline capture is off |
+| R-X1 (with R2-Q4) | Low | Mitigated | Accept for the pilot with controls |
+| R2-H3 | Low (residual) | Owner role privileged | Accept for the pilot with controls |
+| R2-N9 | Low | Documented boundary | Accept for the pilot with controls |
+| R2-P3a | Low | Open | Accept |
+| R2-P4 residual | Low | Open | Accept for the pilot with controls |
+| R2-N7 | Low | Open | Fix before pilot if any existing volume is reused |
+| Image tags | Low | Partial | Fix before pilot (pin digests) |
 
-**No Critical, High or Medium software finding is open.** The one open Medium item, H1-F01, is fixed in software and awaits the hygienist's professional disposition.
+**No Critical or High software finding is open.** H1-F01 is fixed in software and awaits the hygienist's disposition.
+
+## 5. Post-H2 targeted reviews (R3, 19 Oct 2026)
+
+### 5.1 R2-P1 and R2-P2 (targeted re-review)
+
+Fix commit `cb24083` (migration 022 and `src/services/field.ts`). The reviewer reproduced each original failure on `cb24083^` and re-ran it on the fixed code, each against its own database.
+
+| ID | Original defect | Reproduction before the fix | After the fix | Alternative and failure paths checked | Result |
+|---|---|---|---|---|---|
+| R2-P1 | A practitioner who had submitted a held copy chose *keep server copy*; the database refused the dismissal (submitter cannot dismiss) and the user saw a raw database error | Submitter: `P0001 hold refused: dismissal needs … other than the submitter`; other user during a suspension: `P0001 … field synchronisation is suspended` | Submitter: 403 with a clear message (someone else must resolve); other user during a suspension: 423 *suspended* | No partial state after refusal (hold, sample, conflict unchanged); another practitioner and a technical reviewer can keep the server copy; the submitter can apply the device copy (sample flagged, submitter cannot clear the flag); all suspended-sync paths refused and work after resumption; other organisation 404; field technician 403; an ordinary conflict without a hold is still resolvable by its submitter | **Closed (R3)** |
+| R2-P2 | An `in_conflict` hold could be repointed to a different sample (same-status update, or a transition that also changed the sample) | Repoint, set to null and dismiss-while-repointing all succeeded as the application role | All refused | `held` repoint refused; same-status edits of notes, resolution fields, status and payload refused; legitimate transitions work (held→in_conflict, replay of an existing conflict, held→synchronised by replay and directly once flagged, in_conflict→dismissed by another person); submitter dismissal refused; deletes refused | **Closed (R3)** |
+
+### 5.2 New findings from the post-H2 work
+
+| ID | Finding | Severity | Remediation | Verification | Status |
+|---|---|---|---|---|---|
+| R2-P3 | A hold could be closed (*synchronised*) or put *in conflict* against an unrelated sample, bypassing dismissal rules | Medium | Migration 023: a hold can only be linked to its own sample (the sample it updates, or the sample created from it) | `h2.test.ts` "R2-P2/P3"; reviewer's attack refused | **Closed (R3)** |
+| R2-P3a | The hold's client identifier and server id are taken from the submitter and not checked against each other, so a submitter can open a conflict on another sample by mixing them | Low | None: the normal sync call already lets the same user open a conflict on that sample; nothing is gained and nothing is lost silently | Reviewer analysis | Open (Low); proposed *accept* (§6) |
+| R2-P4 | A report inserted directly with the application credentials could carry content and a content hash unrelated to each other or to the approved revision (found while building the demonstration) | Medium | Migration 024: the stored hash must match the content; an issued report must state its revision's approval record hash; existing issuer, approval and pilot checks unchanged | `demonstration.test.ts` rows 29–31; full suite | **Closed (R3)** |
+| R2-P4 residual | An authorised issuer (practitioner or reviewer) writing directly with the application credentials could still store other text that carries the correct approval hash | Low | Application credentials are held only by the application process (privileged-access rules); the service writes a `report.issued` audit event and a re-rendered report would differ | — | Open (Low); proposed *accept with controls* (§6) |
+| R2-P5 | The R2-P2 regression test picked any dismissed hold across organisations and could fail by chance; it did not exercise an in-conflict hold | Low (test) | Test restricted to the organisation; new in-conflict test added | `h2.test.ts` | Fixed |
+| OO-R1 | Online-only: a connection drop replaced a half-completed form with the record list, losing what had been typed | Medium | The form stays on screen; Save is disabled with a notice while offline | Browser check OO-4 (form kept) | **Closed (R3)** |
+| OO-R2 | Online-only: a record held during a suspension said it would become a sample once accepted, but reviewers can only dismiss holds and the page never resent it | Low | Shown as *Not saved* with an explanation; the user sends again after resumption, when the hold synchronises and the sample is flagged | Code; reviewer's suspension run | **Closed (R3)** |
+| OO-R3 | Online-only: the session-expiry message referred to *Sync now*, but the button is *Send again* | Low | Wording | Code | **Closed (R3)** |
+| OO-R4 | Online-only: Save was not disabled while sending; two instant submits produced two page rows (the second rejected by the unique sample code) | Low | One submission at a time | Browser check OO-6 (double submission) | **Closed (R3)** |
+| OO-R5 | `offline-field-capture.md` online-only row out of date | Low (documentation) | Updated | — | **Closed (R3)** |
+| OO-R6 | The test database setup ignored the configured database and could wipe `ohea_test` from a copy pointed elsewhere | Low (test) | Shared settings module `test/test-env.ts` | Full suite | Fixed after re-check (see §5.3); not re-reviewed |
+| OO-R7 | A device winding down an earlier offline store keeps its page-shell cache until the next page load | Low | None needed for pilot devices that never had offline on | Reviewer | Open (Low); proposed *defer* (§6) |
+
+### 5.3 Re-check of the fixes in `3ac4474` and migration 024
+
+Reviewer re-check (R3) against `3ac4474` and migration 024:
+
+| Item | Re-check result |
+|---|---|
+| OO-R1 form kept on connection loss | **Closed (R3)**: form survives offline with Save disabled and the notice; on reconnection nothing is sent |
+| OO-R2 suspension shown as *Not saved* | **Closed (R3)**: during the suspension a resend leaves one hold; after resumption the sample is created, the hold synchronises and the sample is flagged |
+| OO-R3 wording | **Closed (R3)** |
+| OO-R4 single submission | **Closed (R3)**: double-click and simultaneous submits give one record and one row |
+| OO-R5 documentation | **Closed (R3)** |
+| OO-R6 test database | **Not closed**: the configured environment did not reach the global setup. Fixed afterwards: one shared settings module (`test/test-env.ts`) is used by both; full suite passes. Not re-reviewed |
+| R2-P4 (migration 024) | **Closed (R3)**: wrong or upper-case hash, and content without the approval record hash, refused; client insert refused by row security; normal issue works. The stated residual was confirmed (approval hash placed in an HTML comment is accepted) |
+
+New from the re-check:
+
+| ID | Finding | Severity | Remediation | Verification | Status |
+|---|---|---|---|---|---|
+| R2-P6 | Any role (e.g. a field technician) could insert a *draft* report with made-up content directly; drafts only had to match their content hash. Clients cannot read drafts | Low | Migration 025: every report, draft or issued, must be generated by the signed-in user holding a practitioner or technical reviewer role | `h2.test.ts` (technician draft insert refused); demonstration row 31 | Fixed (test); not re-reviewed |
+| OO-R7 | (confirmed) shell cache kept during offline wind-down until the next page load | Low | — | Reviewer | Open (Low); proposed *defer* (§6) |
+
+## 6. Proposed treatment of the remaining Low findings (for the pilot defined in `pilot-decision-pack.md`)
+
+Basis: an online-only pilot (offline capture off), one organisation and site, airborne-contaminant personal exposure only, fresh managed pilot devices, a fresh hosting deployment, application database credentials held only by the application process. Severity alone did not decide the treatment. **Every row is a proposal**: it takes effect only when the named owner records acceptance (name and date) in the *Accepted* column; until then the finding stays open.
+
+| ID | Finding (short) | Treatment | Justification for this pilot | Owner who accepts | Evidence / conditions | Review trigger | Accepted |
+|---|---|---|---|---|---|---|---|
+| R-H2a | Legacy plaintext records rejected by the server stay on the device | Defer — capability disabled | Only devices that ran pre-H1 builds hold such a store; pilot devices start from a clean profile. In online-only mode the store is shown for review and sent only on the user's action | Platform owner | Device test O1 shows empty site storage on each pilot device | A device that ran an earlier build is used | |
+| R-M5 | Wind-down after offline is switched off not exercised on a device | Defer — capability disabled | Offline is never switched on for the pilot organisation | Platform owner + controller (G8) | Offline stays off (audit shows no `platform.offline_enabled` for the organisation) | Offline enabled for any pilot organisation (reopens G8, G9; run F21) | |
+| R-M6 | Unlock could sync under another user's session (fixed; device test outstanding) | Defer — capability disabled | Unlock exists only with offline storage; the online shared-device case is covered by retained F17 and O9 | Platform owner | F17 and O9 pass on pilot devices | Offline enabled | |
+| R-M8 | PIN strength is the main protection for offline data | Defer — capability disabled | No PIN-protected store exists in online-only mode | Controller | — | Offline enabled: controller's accepted-risk decision becomes a G8 condition | |
+| R-L1 | Cached page shell may persist if the user never reaches the sign-in page | Defer — capability disabled | Online-only mode registers no service worker and removes earlier shell caches (OO-2) | Platform owner | OO-2 on pilot devices (O1) | Offline enabled | |
+| OO-R7 | Shell cache kept until next page load on a device winding down offline | Defer — capability disabled | Applies only to devices that had offline on | Platform owner | As R-H2a | As R-H2a | |
+| R-X1 (with R2-Q4) | Separation between reviewer and recording operator is a name comparison | Accept with controls | Names are normalised across scripts; operator OS user and host are recorded; signed documents are hashed and stored, so the gate reviewer can check the signed document against each record | SHEQ Experts director (G11) | Gate reviewer checks each method approval and the pilot authorisation against the signed documents (hash match) before acceptance | Any doubt over who recorded or signed a record; change of platform operators | |
+| R2-H3 | Database owner role is privileged (bypasses row security; owns tables) | Accept with controls | Needed for migrations, backups and restores; the running application never holds it | Hosting owner (G5) | Owner credentials only in the secrets manager and the release job; named holders listed; database audit logging enabled (`approval-and-issue-controls.md` §4) | Change of hosting, operators or secret holders | |
+| R2-N9 | A direct approval with the application credentials does not re-verify the inputs hash | Accept with controls | Direct writes must still meet every database rule (eligible reviewer, submitter ≠ reviewer, pilot rules, evidence locks); the application credentials are held only by the application process | Platform owner + hosting owner | Privileged-access rules applied; no person holds the application database password | Any person given the application credentials; before production use, add a database check | |
+| R2-P3a | Hold identifiers not cross-checked | Accept | No gain over the normal sync call; nothing is lost silently | Platform owner | — | Change to sync or hold logic | |
+| R2-P4 residual | An authorised issuer writing directly could store other text that carries the approval hash | Accept with controls | Same credential control as R2-N9; issue through the service writes a `report.issued` audit event and a re-rendered report would differ | Platform owner + hosting owner | Monthly check that every issued report has a matching `report.issued` audit event (`operations.md` §Monitoring) | As R2-N9 | |
+| R2-N7 | Existing deployments need role and volume changes | Fix before pilot (if applicable) | Not applicable to a fresh deployment; required if any earlier volume is reused | Hosting owner (G5) | Deployment record states fresh volumes, or the release-note steps were applied | Reuse of volumes | |
+| Image tags | Base images not pinned to digests | Fix before pilot | Pinning is a deployment step that removes the risk outright | Hosting owner (G5) | Digests recorded in the G5 evidence | Any image update | |
+

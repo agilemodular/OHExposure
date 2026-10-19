@@ -1,17 +1,18 @@
 # Test evidence
 
-Latest run: **19 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**, 22 migrations, reviewed commit range `1fce123..` (Phase H2). Command: `npm test` (Vitest, files run sequentially). The test schema is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security and every trigger are active. Environment: development workspace (Linux container). **Not the hosting environment.**
+Latest run: **19 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**, 25 migrations, reviewed commit range `1fce123..` (Phase H2 and post-H2). Command: `npm test` (Vitest, files run sequentially). The test schema is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security and every trigger are active. Environment: development workspace (Linux container). **Not the hosting environment.**
 
-**Result: 159 passed, 0 failed, across 6 suites** (156 at the H2 report; 3 added when the remaining low findings were closed, commit `9199a11` and the R2-Q1 fix). Phase H1 ended at 129. A count is not evidence of suitability: the findings register maps each closed finding to the behaviour it verifies.
+**Result: 169 passed, 0 failed, across 7 suites** (156 at the H2 report; 159 after the remaining low findings were closed; post-H2: H1-F01 short-term roll-up and convention tests, R2-P3, the synthetic demonstration). Phase H1 ended at 129. A count is not evidence of suitability: the findings register maps each closed finding to the behaviour it verifies.
 
 | Suite | Tests | Covers |
 |---|---|---|
-| `calc.test.ts` | 40 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values; 1.3.1 roll-up |
+| `calc.test.ts` | 42 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values; 1.3.1 roll-up |
 | `workflow.test.ts` | 22 | End-to-end workflow, tenant and client isolation, attachments, append-only evidence, governance, integrations |
 | `http.test.ts` | 13 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, headers, every page for every role, provisioning, readiness, shared throttle |
 | `review-regressions.test.ts` | 33 | Regression tests for the build-phase review findings; STEL flow; tenant controls not writable |
 | `assurance.test.ts` | 21 | Phase H1: pilot gating, provenance, report gate, suspension, MFA, idle timeout, clock, reference import, recovery, key verification and KEK rotation, direct-write refusals |
-| `h2.test.ts` | 30 | Phase H2, mapped to the brief's verification list (below) |
+| `h2.test.ts` | 31 | Phase H2, mapped to the brief's verification list (below); post-H2 R2-P2/P3 |
+| `demonstration.test.ts` | 7 | **Synthetic demonstration** (`docs/examples/demonstration-walkthrough.synthetic.md`): plan → sample → laboratory → calculation → review → control action → follow-up evidence → verification, with the six failure cases. Not field-validation evidence |
 
 ### Phase H2 verification list
 
@@ -32,7 +33,8 @@ Latest run: **19 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.3.1**,
 
 | Evidence | Environment | Result |
 |---|---|---|
-| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, development server, demo data | 24/24 (adds key replacement re-seal and recovery). **Not mobile-device evidence.** |
+| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, development server, demo data | 24/24 (adds key replacement re-seal and recovery; post-H2: online-only part uses *Send again*). **Not mobile-device evidence.** |
+| `test/browser/field_online_only.py` (post-H2) | Desktop Chromium 141 headless, development server, demo organisation switched to online-only for the run | 17/17: the eight online-only requirements (`online-only-pilot-configuration.md` §2). **Not mobile-device evidence.** |
 | Release step on a database one migration behind | Development PostgreSQL | Pre-migration backup taken, then the migration applied |
 | Non-superuser BYPASSRLS owner: migrations, backup, restore verification, key verification | Development PostgreSQL | All succeeded (restore 0.6 s). Confirms the production role model. **Development evidence.** |
 | `docker compose config` for the production profile | Development | Valid. The image was **not built** (registry unreachable). |

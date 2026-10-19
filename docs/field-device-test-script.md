@@ -44,6 +44,10 @@ Device make and model · operating system and version · browser and version · 
 | F22 | Usability | Use in direct sunlight and with gloves | Text, buttons and inputs usable |
 | F23 | Change PIN | While unlocked offline choose *Change PIN*, set a new PIN, lock, then try the old PIN and the new PIN | Old PIN refused; new PIN opens the same records; nothing lost |
 
+## Online-only pilot configuration (proposed)
+
+If the pilot runs with offline capture off, the proposed G9 test list is in `online-only-pilot-configuration.md` §5: F1–F3, F6–F8, F16 and F18–F20, F23 are excluded (no on-device store), F21 applies only to devices that ran with offline on, F9–F11 are replaced by O3–O6, and O1–O10 are added. The proposal must be accepted by the G9 owners before it is used. Record O-test results in the same way as the F tests.
+
 ## Known limits to brief users on
 
 - Records are encrypted with your PIN. Anyone who knows your PIN and has your unlocked device can read them. Encryption does not protect against malware or a compromised device.

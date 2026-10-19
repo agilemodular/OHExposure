@@ -1,12 +1,12 @@
 # Release readiness report
 
-**Updated:** 19 October 2026 (after Phase H2) · **Scope:** airborne contaminants · **Engine:** 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1) · **Migrations:** 22
+**Updated:** 19 October 2026 (post-H2 evidence closure) · **Scope:** airborne contaminants · **Engine:** 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1) · **Migrations:** 24
 
 ## Classification
 
 **Internal prototype — pilot gates remain open.**
 
-No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is tracked only in `pilot-gate-register.md`. Technical findings are tracked only in `findings-register.md`. Phase details: `phase-h1-completion-report.md`, `phase-h2-completion-report.md`.
+No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is tracked only in `pilot-gate-register.md`. Technical findings are tracked only in `findings-register.md`. Phase details: `phase-h1-completion-report.md`, `phase-h2-completion-report.md`, `post-h2-handover.md`.
 
 ## Completed and verified in software (development environment)
 
@@ -24,7 +24,15 @@ No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is t
   - **Professional authority records.** These carry permitted scope, hashed signed evidence, expiry and withdrawal. A recorded pilot authorisation is required before pilot level can be set.
   - **Field recovery keys.** These are versioned, with replacement and revocation.
   - **Production deployment profile.** The running application never holds owner credentials.
-- **Automated evidence:** 159 tests, all passing. Desktop browser check 24/24. A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
+- **Post-H2 evidence closure:**
+  - R2-P1 and R2-P2 re-reviewed against the original failure: closed.
+  - Two further Medium findings found, fixed and closed on re-check: a hold could be linked to an unrelated sample (R2-P3), and a directly inserted report was not bound to its content or approval record (R2-P4). One Low found on re-check (R2-P6, draft reports by any role) is fixed and tested.
+  - The reviews (R1–R3) were made by separate AI review agents, not by people or an external security firm; G8 and G5 still require external review.
+  - **Online-only pilot configuration** defined and verified on desktop Chromium (17/17), with a proposed G8/G9 scope for the gate owners.
+  - Every remaining Low finding has a proposed treatment awaiting its owner's acceptance (`findings-register.md` §6).
+  - H1-F01 brief written for the hygienist.
+  - Synthetic demonstration walkthrough with the six failure cases.
+- **Automated evidence:** 169 tests, all passing. Desktop browser checks 24/24 (offline) and 17/17 (online-only). A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
 - **Independent software review (R2).** R2 reviewed the Phase H2 controls, re-checked the fixes, then re-checked the final fixes.
   - The first review found 2 critical, 4 high, 8 medium and 9 low findings, plus 9 more from the re-checks.
   - **All Critical, High and Medium software findings are closed.**
@@ -41,7 +49,7 @@ The 18 October report listed attachment upload during suspension among "low" res
 |---|---|---|
 | Hosting, TLS, secrets, alert routing, monitoring, log retention, image build and digests | G5 | `hosting-decision-sheet.md`, `deploy/` |
 | Scheduled backups with failure alerts; restore in the hosting environment against agreed RPO/RTO; rollback rehearsal | G6 | Release job with pre-migration backup; jobs and timers |
-| Field-device tests F1–F23 on the pilot devices | G9 | `field-device-test-script.md` |
+| Field-device tests on the pilot devices (online-only: retained F tests and O1–O10, if the proposed scope is accepted) | G9 | `field-device-test-script.md`; `online-only-pilot-configuration.md` §5 |
 
 ## Decisions outstanding (outside software)
 
@@ -63,7 +71,7 @@ All decisions are listed with owners in `pilot-decision-pack.md`:
 | Status | Gates |
 |---|---|
 | Accepted | none |
-| Ready for review | G8 (needs an external security review and a controller decision on PIN-strength residual risk) |
+| Ready for review | G8 (needs an external security review; for an online-only pilot, a scope decision by the platform owner and controller is proposed instead of the offline-specific requirements) |
 | Awaiting external evidence | G3, G4, G5, G6, G7 |
 | In progress | G10 (materials ready; no one trained) |
 | Not started | G1, G2, G9, G11 |
@@ -75,7 +83,7 @@ All decisions are listed with owners in `pilot-decision-pack.md`:
 - airborne-contaminant personal exposure assessment, for one organisation and one site;
 - the calculation versions the hygienist approves (candidates: `twa_8h` 1.2.1 and `stel_15` 1.1.1, with unit conversion if needed);
 - the professional reference benchmarks imported for the substances the organisation names;
-- online-only field capture, unless G8 and G9 are accepted for the named devices;
+- online-only field capture (configuration in `online-only-pilot-configuration.md`), unless G8 and G9 are accepted in full for the named devices;
 - the hosting environment verified under G5 and G6.
 
 Out of scope: noise, vibration, thermal exposure, statistical compliance testing, AI assistance and live integrations.
@@ -88,7 +96,8 @@ Out of scope: noise, vibration, thermal exposure, statistical compliance testing
 | No real reference data | High for pilot | G4. Template and controlled import are ready |
 | No hosting, alert delivery, penetration test or hosting restore | High for pilot | G5/G6. Decision sheet is ready |
 | Privacy roles and retention undecided | High for pilot | G7. PIA re-verified against the code |
-| Offline protection depends on PIN strength and device management | Medium | Off by default; G8/G9 |
+| Offline protection depends on PIN strength and device management | Medium | Off by default; proposed online-only pilot; G8/G9 |
+| Online-only operation loses unsent records if the page closes | Medium | Paper field-sheet procedure; warnings; device tests O3–O10 |
 | Owner role is privileged (BYPASSRLS, table owner) | Medium | Privileged-access rules (`approval-and-issue-controls.md` §4); database audit logging (G5) |
 | Representativeness and statistics not assessed by the software | Medium | Professional interpretation; flagged prominently in the review handover |
 | Open Low software findings | Low | `findings-register.md` §4 |
