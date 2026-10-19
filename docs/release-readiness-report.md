@@ -29,7 +29,7 @@ No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is t
   - The first review found 2 critical, 4 high, 8 medium and 9 low findings, plus 9 more from the re-checks.
   - **All Critical, High and Medium software findings are closed.**
   - The open Low findings are listed in `findings-register.md` §4.
-  - An acceptance check closed the remaining software low findings (R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2) and accepted R-X1 as mitigated. The follow-on name-check findings (R2-Q1 to R2-Q3) are fixed and tested; see `findings-register.md` §3.4.
+  - An acceptance check closed the remaining software low findings (R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2) and accepted R-X1 as mitigated. The follow-on name-check findings (R2-Q1 to R2-Q4) are fixed and tested; Q1–Q3 closed on re-check; see `findings-register.md` §3.4.
 
 ## Correction to the 18 October report
 

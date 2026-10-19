@@ -531,6 +531,11 @@ describe('remaining low findings (19 Oct, evening)', () => {
     expect(samePerson('मीना', 'मोना')).toBe(false);
     expect(samePerson('ปิติ', 'ปต')).toBe(false);
     expect(samePerson('मीना', 'मीना')).toBe(true);
+    expect(samePerson('王伟', '王伟\u034F')).toBe(true);
+    expect(samePerson('王伟', '王伟\uFE00')).toBe(true);
+    expect(samePerson('सुनील', 'सुनील\u034F')).toBe(true);
+    expect(samePerson('Jane Smith', 'Jane \u0301Smith')).toBe(true);
+    expect(samePerson('Jane Smith', 'Ja\u200Bne Smith')).toBe(true);
     expect(samePerson('ジロウ', 'シロウ')).toBe(false);
     expect(samePerson('ゆうこ', 'ゆうご')).toBe(false);
     expect(samePerson('José Álvarez', 'alvarez jose')).toBe(true);

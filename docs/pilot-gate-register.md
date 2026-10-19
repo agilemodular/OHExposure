@@ -43,7 +43,7 @@ Findings are recorded in `findings-register.md`. Open or unaccepted findings tha
 | Gate | Findings |
 |---|---|
 | G3 | H1-F01: awaiting professional disposition |
-| G5 | R-X1 (name-based separation checks, mitigated and accepted by R2), R2-Q1 to R2-Q3 (name check; see findings register §3.4); privileged-access controls in `approval-and-issue-controls.md` §4 to be confirmed with the hosting owner |
+| G5 | R-X1 (name-based separation checks, mitigated and accepted by R2), R2-Q1 to R2-Q4 (name check; see findings register §3.4); privileged-access controls in `approval-and-issue-controls.md` §4 to be confirmed with the hosting owner |
 | G6 | H2-A7 (pre-migration backup): rehearsal in hosting needed |
 | G8 | R-M5 (wind-down not exercised on a device), R-M8 (PIN-strength residual risk needs a controller decision), R-L1 residual, R-H2a |
 | G9 | R-M5, R-M6: to be exercised in device tests F17 and F21 |
