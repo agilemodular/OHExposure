@@ -108,6 +108,21 @@ try:
         check('OO-6', 'a repeated submission after a lost response creates exactly one record', saved_once == 1 and n == 1, f'after first send {saved_once}, after second {n}')
         pg.unroute_all(behavior='ignoreErrors')
 
+        # A form being filled in survives a connection drop; it cannot be sent while offline.
+        pg.click('text=New sample'); keep = 'OO-KEEP-' + os.urandom(2).hex().upper(); pg.fill('input[name=sample_code]', keep)
+        ctx.set_offline(True); pg.evaluate("window.dispatchEvent(new Event('offline'))"); pg.wait_for_timeout(500)
+        survived = pg.locator('input[name=sample_code]').count() == 1 and pg.input_value('input[name=sample_code]') == keep
+        check('OO-4', 'a half-completed form is kept when the connection drops, and cannot be sent while offline', survived and pg.locator('button:has-text("Save and send")').is_disabled() and 'cannot be sent until the connection returns' in pg.inner_text('#field-app'))
+        ctx.set_offline(False); pg.evaluate("window.dispatchEvent(new Event('online'))"); pg.wait_for_timeout(500)
+        check('OO-7', 'reconnecting re-enables the form without sending anything', pg.input_value('input[name=sample_code]') == keep and not pg.locator('button:has-text("Save and send")').is_disabled())
+        # Double submission from the page: one request, one record.
+        pg.select_option('select[name=plan_id]', index=1); pg.select_option('select[name=sample_type]', 'static'); pg.fill('input[name=start_local]', '2026-10-16T08:00')
+        sync_posts.clear()
+        pg.evaluate("() => { const f = document.querySelector('#field-app form'); f.requestSubmit(); f.requestSubmit(); }")
+        pg.wait_for_selector(f'tr:has-text("{keep}") .badge:has-text("Saved on the server")', timeout=15000)
+        rows = pg.locator(f'tr:has-text("{keep}")').count()
+        check('OO-6', 'a double submission from the page sends once and lists one record', rows == 1 and len(sync_posts) == 1 and int(sql(f"select count(*) from sampling_events where sample_code='{keep}'")) == 1, f'{rows} row(s), {len(sync_posts)} request(s)')
+
         # Offline: new records cannot be started.
         ctx.set_offline(True); pg.evaluate("window.dispatchEvent(new Event('offline'))")
         pg.wait_for_selector('text=new records cannot be saved')

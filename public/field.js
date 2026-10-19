@@ -305,14 +305,18 @@
   function select(name, items, value, blank = '— select —') {
     return el('select', { name }, el('option', { value: '' }, blank), ...items.map((i) => el('option', { value: i.id, selected: i.id === value }, i.label)));
   }
+  let openForm = null; // the capture form currently on screen, if any
   function form(existing) {
     const p = existing ? existing.payload : { plan_id: PRESET_PLAN, timezone: tzDefault, sample_type: 'personal', interruptions: [] };
     const f = el('form', { class: 'stack panel' });
     const v = (k) => (p[k] ?? '');
     const saveBtn = el('button', {}, encrypted() ? 'Save on this device' : 'Save and send');
-    if (!encrypted() && !navigator.onLine) saveBtn.disabled = true;
+    const netNote = el('div', { class: 'flash warn', role: 'status', hidden: true }, 'Offline — this form is kept on screen, but it cannot be sent until the connection returns. Write the details on the paper sheet if the connection does not come back.');
+    const netState = () => { const off = !encrypted() && !navigator.onLine; saveBtn.disabled = off || f.dataset.sending === '1'; netNote.hidden = !off; };
+    f.netState = netState;
     f.append(
       el('h2', {}, existing ? `Edit ${p.sample_code}` : 'New sample'),
+      netNote,
       !encrypted() ? el('p', { class: 'small' }, 'Online-only capture: this record is sent straight to the server and is not stored on this device. Saving is unavailable while offline.') : null,
       el('div', { class: 'row' },
         fieldEl('Plan', (() => { const s = select('plan_id', ref.plans.map((x) => ({ id: x.id, label: `${x.title} (${x.site_name})` })), v('plan_id')); s.required = true; return s; })(), ref.plans.length ? null : 'No plans are scheduled or in progress'),
@@ -345,11 +349,14 @@
         fieldEl('Handed over to', el('input', { name: 'handover_to', value: v('handover_to') })),
         fieldEl('Handover time', el('input', { type: 'datetime-local', name: 'handover_local', value: v('handover_local') }))),
       el('p', { class: 'small muted' }, 'Photographs and other attachments are added online from the sample page; they are never stored by the offline client.'),
-      el('div', { class: 'actions-row' }, saveBtn, el('button', { type: 'button', class: 'secondary', onclick: render }, 'Cancel')),
+      el('div', { class: 'actions-row' }, saveBtn, el('button', { type: 'button', class: 'secondary', onclick: () => { openForm = null; render(); } }, 'Cancel')),
     );
+    openForm = f;
+    netState();
     f.addEventListener('submit', async (ev) => {
       ev.preventDefault();
-      if (!encrypted() && !navigator.onLine) return;
+      if ((!encrypted() && !navigator.onLine) || f.dataset.sending === '1') return;
+      f.dataset.sending = '1'; netState(); // one submission at a time
       const fd = new FormData(f);
       const payload = {};
       for (const [k, val] of fd.entries()) if (k !== 'interruptions_text') payload[k] = typeof val === 'string' ? val.trim() : val;
@@ -361,7 +368,8 @@
         ? { ...existing, payload, state: 'pending', base_version: existing.version ?? existing.base_version ?? null, message: null, updatedAt: now }
         : { client_uuid: uuid(), payload, state: 'pending', server_id: null, version: null, base_version: null, createdAt: now, updatedAt: now };
       try { await saveRecord(rec); }
-      catch (e) { f.prepend(el('div', { class: 'flash err', role: 'alert' }, `Not saved: ${e.message || e}`)); return; }
+      catch (e) { f.dataset.sending = ''; netState(); f.prepend(el('div', { class: 'flash err', role: 'alert' }, `Not saved: ${e.message || e}`)); return; }
+      openForm = null;
       render();
       sync(true);
     });
@@ -388,7 +396,7 @@
     }
     if (res.status === 401 || res.status === 403) throw new Error(encrypted()
       ? 'Your session has ended or your access has been withdrawn. Records stay encrypted on this device; sign in again, or ask a reviewer to recover them from an exported recovery file.'
-      : 'Your session has ended. Unsent records are held only in this open page: sign in again in another tab, then press “Sync now” here. Closing or reloading this page loses them.');
+      : 'Your session has ended. Unsent records are held only in this open page: sign in again in another tab, then press “Send again” here. Closing or reloading this page loses them.');
     if (!res.ok) throw new Error(`Server responded ${res.status}`);
     const { results } = await res.json();
     for (const r of results) {
@@ -397,7 +405,7 @@
       if (['created', 'updated', 'duplicate'].includes(r.outcome)) Object.assign(rec, { state: 'synced', server_id: r.server_id, version: r.version, base_version: r.version, message: (r.warnings || []).join(' ') || null });
       else if (r.outcome === 'deferred' && !encrypted()) {
         // Online-only: the server holds a copy for review; it is not a sample record and is not resent from this page.
-        Object.assign(rec, { state: 'held', message: `${r.message.replace(/ ?A copy is held on the server for review; keep this record on the device\.?/, '')} A copy is held on the server for review; it is not a sample record until a reviewer accepts it. Nothing further is sent from this page.` });
+        Object.assign(rec, { state: 'error', message: `Not saved: ${r.message.replace(/ ?A copy is held on the server for review; keep this record on the device\.?/, '')} A copy is held on the server for review, but it is not a sample record. Keep this page open (or keep the paper record) and press “Send again” once synchronisation is resumed.` });
         await saveRecord(rec); continue;
       }
       else if (r.outcome === 'deferred') { Object.assign(rec, { state: 'pending', message: r.message }); await saveRecord(rec); continue; }
@@ -503,8 +511,9 @@
     } catch (e) { lastError = String(e.message || e); }
   }
 
-  window.addEventListener('online', () => sync(false));
-  window.addEventListener('offline', render);
+  // A form being filled in is never replaced by a connectivity change; only its send button and notice change.
+  window.addEventListener('online', () => (openForm && openForm.isConnected ? openForm.netState() : sync(false)));
+  window.addEventListener('offline', () => (openForm && openForm.isConnected ? openForm.netState() : render()));
   // The service worker (which caches the page shell for offline use) is registered only when offline capture is enabled.
   // In online-only mode any earlier registration and its cached shell are removed, so no page content is kept by design.
   async function offlineShell(enable) {

@@ -79,15 +79,25 @@ You capture samples on site, including offline if your organisation has offline 
    - *Synchronised*
    - *Conflict — kept for review*: someone changed the record on the server; a reviewer will decide.
    - *Rejected — needs correction*: read the message, then **Edit**.
-6. **Online-only mode.** If your organisation hasn't switched offline capture on, nothing is stored on the device. A record that can't be sent shows a red warning that it is *held only in this open page*. Don't close or reload the page. Sign in again in another tab if asked, then press **Sync now**.
-7. **Instruments.** A pump whose calibration has expired or failed can still be recorded. The result is then only indicative and can't support a formal comparison, and the sync warning tells you this.
-8. **Attachments and photographs** are added online from the sample's page (**Upload**), never in the field client.
-9. **Shared devices.** Each person has a separate, encrypted store. If you see a notice that another user has unsynchronised records, don't try to open them. Use **Export recovery file** next to the notice and give the file to a practitioner.
-10. **Forgotten PIN, lost access or leaving the pilot.**
+6. **Online-only mode (the pilot configuration unless offline capture is accepted).** Nothing is stored on the device.
+   - **Save and send** sends the record straight away. Only *Saved on the server* means the server has it.
+   - *Sending — not yet confirmed* means wait. *Not saved — send again* means the server did not confirm it: the record is held **only in this open page**.
+   - Nothing is ever resent automatically, even when the connection comes back. When you are connected, press **Send again**. Sending twice is safe: the server recognises a record it already has.
+   - Don't close or reload the page while a record is not saved. If your session ended, sign in again in another tab, then press **Send again** here.
+   - *Held on the server for review* means field synchronisation was suspended: the server kept a copy, but it is not a sample record until a reviewer accepts it. Do not re-enter it.
+7. **When the connection drops during fieldwork (online-only).**
+   - Before going to site, check signal at the sampling locations. Carry the paper field sheet (sample code, worker reference, pump, start and finish times, flows, interruptions, tasks, control status).
+   - If you cannot save, keep sampling as planned and write the details on the paper sheet at the time they happen. Do not rely on the open page holding unsent records: a flat battery, a crash or a closed tab loses them.
+   - When back in signal, press **Send again** for any *Not saved* record, then enter any records that exist only on paper with **New sample**, using the times from the sheet.
+   - Hand the paper sheet to the practitioner with the samples. Note in *Deviations* that the record was entered from a paper sheet after a connection loss.
+8. **Instruments.** A pump whose calibration has expired or failed can still be recorded. The result is then only indicative and can't support a formal comparison, and the sync warning tells you this.
+9. **Attachments and photographs** are added online from the sample's page (**Upload**), never in the field client.
+10. **Shared devices.** Each person has a separate, encrypted store. If you see a notice that another user has unsynchronised records, don't try to open them. Use **Export recovery file** next to the notice and give the file to a practitioner.
+11. **Forgotten PIN, lost access or leaving the pilot.**
     - On the lock screen choose *Forgotten your PIN?* → **Export recovery file** and give the file to a practitioner.
     - The file is encrypted and can only be opened by the server for your organisation. Delete your copy once it has been imported.
     - Only then use **Reset this device**.
-11. **Custody.** Record hand-over and dispatch as they happen. Once a sample is dispatched, its field record is locked.
+12. **Custody.** Record hand-over and dispatch as they happen. Once a sample is dispatched, its field record is locked.
 
 ## Practitioner
 
