@@ -69,3 +69,6 @@ Configuration is by environment variable (`src/config.ts`): `PORT`, `COOKIE_SECU
 17. [Reference data workflow](docs/reference-data-workflow.md)
 18. [Privacy impact assessment (draft)](docs/privacy-impact-assessment.md)
 19. [Phase H1 completion report](docs/phase-h1-completion-report.md)
+20. [Pilot user guides](docs/pilot-user-guides.md)
+21. [Training record (template)](docs/training-record.md)
+22. [Support and incident procedure (template)](docs/support-and-incident-procedure.md)

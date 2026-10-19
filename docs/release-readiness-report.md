@@ -54,7 +54,8 @@ The evidence does not yet support a controlled pilot or a production release. Pi
 | Accepted | none |
 | Ready for review | G8 |
 | Awaiting external evidence | G3, G4, G5, G6, G7 |
-| Not started | G1, G2, G9, G10, G11 |
+| In progress | G10 (materials prepared; no one trained) |
+| Not started | G1, G2, G9, G11 |
 
 ## Remaining risks
 

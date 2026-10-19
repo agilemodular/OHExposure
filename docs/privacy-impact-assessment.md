@@ -68,8 +68,8 @@ Administrators can export the organisation's data (audit-logged). Access request
 | **Offline device lost or shared** | Online-only by default; offline only when enabled per organisation after gate G8; AES-256-GCM encryption under a device PIN; inactivity lock; per-user stores; 24 h purge; recovery without PIN via server-sealed envelopes | Does not protect against malware, an unlocked device or weak PINs (see `offline-field-capture.md`); requires managed devices |
 | **Revoked user keeps access on an offline device** | Revocation enforced at next connection; reference expiry 7 days | Inherent to offline use; device management and procedures |
 | Recovery file mislaid | Contains ciphertext only; opened only server-side for that organisation; import audited and alerted | Instruct users to delete after hand-over |
-| Support access to customer data | Platform operators use the owner connection outside the application; actions are scripted and audited (`platform.*` events) | **Support access procedure to be written and agreed** (who, when, approval, logging) — *to be confirmed* |
-| Incident (breach, lost device, wrong disclosure) | Alerts for lockouts, throttling, suspensions; audit trail; workflow suspension under stop conditions | **Incident procedure and contacts to be confirmed** (pilot protocol §8), including notification timelines under applicable law |
+| Support access to customer data | Platform operators use the owner connection outside the application; actions are scripted and audited (`platform.*` events) | Draft procedure in `support-and-incident-procedure.md` §4 — *to be agreed* |
+| Incident (breach, lost device, wrong disclosure) | Alerts for lockouts, throttling, suspensions; audit trail; workflow suspension under stop conditions | Draft procedure in `support-and-incident-procedure.md` §3; contacts and notification timelines *to be confirmed* |
 | Backups and offline copies outlive deletion | Documented above | Retention decision for backups |
 | Free text containing health or third-party data | On-screen reminders | Training (gate G10) |
 

@@ -43,7 +43,7 @@ Pilot hosting environment (G5/G6). Field devices: *To be confirmed* — make/mod
 
 ## 5. Training
 
-Before first use (G10): field capture and PIN/recovery; review and approval workflow; meaning of the three assessment states, method review status and benchmark provenance; limitations; stop conditions and how to report a problem.
+Before first use (G10), using `pilot-user-guides.md` and recorded in `training-record.md`: field capture and PIN/recovery; review and approval workflow; meaning of the three assessment states, method review status and benchmark provenance; limitations; stop conditions and how to report a problem.
 
 ## 6. Workflow to be exercised (in full, in parallel with the hygienist's usual method)
 
@@ -62,6 +62,8 @@ Parallel running: the reviewer produces their usual assessment independently; di
 The acceptance tests P1–P14 in `pilot-acceptance-checklist.md` pass, plus: no stop condition triggered without resolution; zero unexplained calculation discrepancies; users complete the workflow without workarounds that bypass controls; reviewer confirms the reports are usable.
 
 ## 8. Support and incidents
+
+Procedure: `support-and-incident-procedure.md`.
 
 | Item | Value |
 |---|---|
