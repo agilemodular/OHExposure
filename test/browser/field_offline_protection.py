@@ -24,6 +24,17 @@ def login(pg, email):
     pg.goto(BASE + '/login'); pg.fill('input[name=email]', email); pg.fill('input[name=password]', 'demo-password-2026'); pg.click('button')
     pg.wait_for_load_state('networkidle')
 
+KV_JS = """async () => {
+  const names = (await indexedDB.databases()).map(d => d.name).filter(n => n.startsWith('ohea-field-u-'));
+  const out = [];
+  for (const n of names) {
+    const db = await new Promise(r => { const q = indexedDB.open(n); q.onsuccess = () => r(q.result); });
+    const rows = await new Promise(r => { const t = db.transaction('records'); const a = t.objectStore('records').getAll(); t.oncomplete = () => r(a.result); });
+    db.close();
+    for (const x of rows) if (x.env) out.push(x.env.kv || 1);
+  }
+  return out;
+}"""
 DUMP_IDB = """async () => {
   const names = (await indexedDB.databases()).map(d => d.name);
   const out = {};
@@ -121,6 +132,34 @@ with sync_playwright() as p:
     pg.fill('input[name=pin]', PIN); pg.click('button:has-text("Unlock")')
     pg.wait_for_selector('.badge.b-ok', timeout=15000)
     check('device sync after recovery is a duplicate, not a second sample', 'Synchronised' in pg.inner_text('table'))
+
+    # Key replacement: a record left unsynchronised on the device is re-sealed to the new key version at the next
+    # online unlock, and still recovers if the device never syncs.
+    admin_url0 = os.environ.get('DATABASE_ADMIN_URL', 'postgres://postgres:postgres_dev@localhost:5432/ohea')
+    tid0 = subprocess.check_output(['psql', admin_url0, '-tAc', "select id from tenants where is_demo limit 1"]).decode().strip()
+    ctx.set_offline(True)
+    pg.click('text=New sample')
+    REKEY = 'NF-RK-' + os.urandom(2).hex().upper()
+    pg.fill('input[name=sample_code]', REKEY); pg.select_option('select[name=plan_id]', index=1); pg.select_option('select[name=sample_type]', 'static')
+    pg.fill('input[name=start_local]', '2026-10-16T08:00'); pg.fill('input[name=end_local]', '2026-10-16T12:00')
+    pg.click('text=Save on this device'); pg.wait_for_selector('text=Waiting to sync')
+    kv_before = pg.evaluate(KV_JS)
+    subprocess.run(['npx', 'tsx', 'scripts/recovery-keys.ts', 'replace', '--tenant', tid0, '--authorised-by', 'Browser check', '--reason', 'browser re-key test'],
+                   env={**os.environ, 'DATABASE_ADMIN_URL': admin_url0}, check=True, capture_output=True)
+    pg.route('**/api/sync', lambda route: route.fulfill(status=503, body='down'))   # keep the record unsynchronised
+    ctx.set_offline(False)
+    pg.reload(); pg.wait_for_selector('text=Unlock field records')
+    pg.fill('input[name=pin]', PIN); pg.click('button:has-text("Unlock")'); pg.wait_for_selector('text=New sample')
+    pg.wait_for_timeout(800)
+    kv_after = pg.evaluate(KV_JS)
+    check('after a key replacement, unsynchronised records are re-sealed to the new key version on reconnect', kv_before and kv_after and max(kv_after) > max(kv_before), f'{kv_before} -> {kv_after}')
+    pg.click('text=Lock now'); pg.wait_for_selector('text=Unlock field records'); pg.click('text=Forgotten your PIN?')
+    with pg.expect_download() as d2:
+        pg.click('text=Export recovery file')
+    path2 = os.path.join(tempfile.mkdtemp(), 'recovery2.json'); d2.value.save_as(path2)
+    pg2.goto(BASE + '/field/recovery'); pg2.set_input_files('input[name=file]', path2); pg2.click('button:has-text("Import")'); pg2.wait_for_selector('.flash')
+    check('a re-sealed record recovers through the server after key replacement', '1 created' in pg2.inner_text('.flash'), pg2.inner_text('.flash'))
+    pg.unroute('**/api/sync')
 
     # Shared device: a second user on the same browser profile gets a separate store and cannot read the first.
     ctx.clear_cookies()

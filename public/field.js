@@ -101,7 +101,7 @@
   async function loadRecords() {
     const out = [];
     for (const raw of await rawRecords()) {
-      try { out.push({ ...raw, ...(await decJSON(key, raw.enc)), enc: undefined, env: undefined }); }
+      try { out.push({ ...raw, ...(await decJSON(key, raw.enc)), enc: undefined, env: undefined, envKv: raw.env ? (raw.env.kv || 1) : null }); }
       catch { out.push({ client_uuid: raw.client_uuid, state: 'unreadable', updatedAt: raw.updatedAt, payload: {} }); }
     }
     return out;
@@ -201,7 +201,6 @@
 
   async function afterUnlock() {
     lastActivity = Date.now();
-    let rekey = false;
     const saved = await getMeta('policy');
     const enc = await getMeta('refEnc');
     const cached = enc ? await decJSON(key, enc).catch(() => null) : null;
@@ -219,8 +218,7 @@
       // Keep the saved recovery key while winding down, so records that cannot be synchronised remain recoverable.
       policy = { ...b.offline, enabled: true, windingDown: !b.offline.enabled, recoveryKey: b.offline.recoveryKey || (saved && saved.recoveryKey),
         recoveryKeyVersion: b.offline.recoveryKeyVersion || (saved && saved.recoveryKeyVersion) || 1, tenantId: b.tenantId };
-      // The organisation's recovery key was replaced: re-seal unsynchronised records to the new version below.
-      rekey = !!(saved && saved.recoveryKeyVersion && b.offline.recoveryKeyVersion && saved.recoveryKeyVersion !== b.offline.recoveryKeyVersion);
+
       if (policy.windingDown) { await disableOffline(); return; }
       await setMeta('policy', policy);
       await setMeta('refEnc', await encJSON(key, b));
@@ -235,10 +233,13 @@
     }
     await purgeSynced();
     records = await loadRecords();
-    if (rekey) {
-      // Each record is re-sealed in its own write: an interruption leaves the rest on the older version, which the
-      // server still accepts, so nothing becomes unrecoverable.
-      for (const r of records.filter((x) => x.state !== 'synced' && x.state !== 'unreadable')) await saveRecord(r);
+    if (!policy.windingDown && attestKey) {
+      // Records sealed to an older recovery key version (the organisation's key was replaced) are re-sealed to the
+      // current one. Each record is re-sealed in its own write: an interruption leaves the rest on the older version,
+      // which the server still accepts, so nothing becomes unrecoverable.
+      for (const r of records.filter((x) => x.state !== 'synced' && x.state !== 'unreadable' && x.envKv && x.envKv !== policy.recoveryKeyVersion)) {
+        try { await saveRecord(r); r.envKv = policy.recoveryKeyVersion; } catch { /* keep the older envelope */ }
+      }
     }
     await migrateLegacy();
     render(); sync();
