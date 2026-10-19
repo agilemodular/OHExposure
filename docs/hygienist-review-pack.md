@@ -1,5 +1,7 @@
 # Professional validation pack — occupational hygiene review
 
+**Start with** `professional-review-handover.md`, which indexes this pack and the supporting material.
+
 **For:** the competent occupational hygienist appointed to review the platform before a controlled pilot (pilot gates **G2** and **G3**, dependency D1).
 **Engine:** 1.3.1 — `sample_concentration` (engine-level), `twa_8h` **v1.2.1**, `stel_15` **v1.1.1**, ppm ↔ mg/m³ conversion. **Prepared:** 18 October 2026.
 **No code inspection is needed.** Every number in this pack was produced by running the engine on the stated inputs (generator kept with the test evidence), not typed in.
@@ -173,7 +175,7 @@ Any convention marked *conditions* or *reject* becomes a finding, is corrected u
 
 Sign-off is by a named competent person, with a statement of competence. It is recorded by a platform operator from this signed document; it is not given by any software role.
 
-| Item | Decision | Conditions | Name and competence | Signature | Date |
+| Item | Decision | Conditions, permitted scope, review/expiry date | Name and competence | Signature | Date |
 |---|---|---|---|---|---|
 | Conventions C1–C19 | | | | | |
 | Worked examples E1–E14 checked | | | | | |

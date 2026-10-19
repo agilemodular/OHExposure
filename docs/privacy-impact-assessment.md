@@ -1,6 +1,6 @@
 # Privacy impact assessment — draft for the pilot
 
-**Status:** DRAFT prepared by the development team, 18 Oct 2026. **Not reviewed** by a data-protection adviser, the controller (pilot organisation) or SHEQ Experts. It does not by itself close pilot gate **G7 (privacy and retention)**; the decisions marked *To be confirmed* must be made and recorded by the people named. This is not legal advice.
+**Status:** DRAFT prepared by the development team, 18 Oct 2026; data flows re-verified against the code on 19 Oct 2026 (§3a). Ready for review by the people named in §8. **Not reviewed** by a data-protection adviser, the controller (pilot organisation) or SHEQ Experts. It does not by itself close pilot gate **G7 (privacy and retention)**; the decisions marked *To be confirmed* must be made and recorded by the people named. This is not legal advice.
 
 ## 1. Processing in scope
 
@@ -34,6 +34,23 @@ No AI provider, e-mail provider, analytics or advertising service is used. Integ
 | Recovery files | Encrypted field records exported from a device | Field user | User's download; imported server-side | Opened only by the server for that organisation; importer needs `conflicts.resolve` |
 
 Flow: field device ⇄ application (HTTPS) ⇄ PostgreSQL + attachment store → backups. Laboratory files uploaded by users. Reports generated server-side and downloaded/printed by users.
+
+### 3a. Actual worker-data flows (verified against the code, 19 Oct 2026)
+
+| Flow | Who and how | Control |
+|---|---|---|
+| Entry of worker identities (name, employee number) | Organisation administrators and practitioners (`worker.identity.write`) on the register pages | Separate table; RLS requires the identifiable-data flag, set only for roles with `worker.identity.read` (administrator, practitioner, technical reviewer) |
+| Use in fieldwork | Field devices receive **reference codes only**; names never leave the server for the field client | `/api/field/bootstrap` sends reference codes only (browser-checked) |
+| Offline copies on devices | Only when offline capture is enabled (off by default): encrypted records and reference cache; recovery envelopes; purge after 24 h of sync; reference expiry after 7 days | `offline-field-capture.md` (key management summary) |
+| Records held during a suspension | Payloads of field records submitted while sync is suspended, kept in `field_intake_holds` (reference codes, not names) | Tenant RLS; reviewer access only (`conflicts.resolve`) |
+| Recovery files | Ciphertext only; opened server-side by practitioners for the same organisation; imports audited | `/field/recovery` |
+| Reports | Worker reference codes; names are not printed | Report generator |
+| Exports | Full JSON export by roles with `export.data`; **identities are included only if the exporting user may read them**; every export audited (`export.full`, with `includes_identities`) | Administrator, practitioner, reviewer |
+| Integrations | Disabled or mock only; contracts carry reference codes (`worker_ref`), never names | `integration-contracts.md` |
+| Support access | Platform operators via the owner connection, on a ticket, two-person rule for manual SQL | `support-and-incident-procedure.md` §4; `approval-and-issue-controls.md` §4 |
+| Backups | Contain everything, including identities and sealed recovery keys; retention to be decided (§5); disposal in live data is not propagated to existing backups | `hosting-decision-sheet.md` |
+| Audit trail | Records who viewed, changed, exported or downloaded what; IP addresses kept | Retention to be decided |
+| Incidents | `support-and-incident-procedure.md` §3, including lost devices and misdirected recovery files | Contacts to be confirmed |
 
 ## 4. Purposes and lawful basis (*to be confirmed* by the controller and DP adviser)
 

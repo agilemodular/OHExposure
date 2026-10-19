@@ -13,6 +13,7 @@
 | T5 Controls and verification | Action owner guide; reviewer guide §5; why "installed" is not "effective" | Action owner, practitioner, reviewer | 30 min |
 | T6 Administration | Administrator guide; user lifecycle, two-step reset, retention, disposal, System health | Organisation administrator | 45 min |
 | T7 Operator controls | Platform operator section; stop-condition drill (suspend and resume in a test organisation) | Platform operator | 45 min |
+| T8 Data quality, suspension and escalation | *Data-quality flags* and *When something is suspended or on hold* in `pilot-user-guides.md`; reading a report; remediation intake and admission; held field records | All (field technicians: flags, suspension and escalation only) | 45 min |
 
 ## 2. Competence check (practical, observed by the trainer)
 
@@ -28,6 +29,8 @@
 | C8 | Record a not-effective review and explain what happens to the action | Reviewer | Correct |
 | C9 | Suspend and later reactivate a user; reset two-step after an identity check | Administrator | Correct |
 | C10 | Suspend and resume a workflow in a test organisation, with references | Operator | Audit events present |
+| C11 | Explain three data-quality flags and an *indeterminate* comparison on a sample report | Practitioner, reviewer, client | Correct |
+| C12 | During a test suspension: upload through remediation intake, then (as a different reviewer, after resumption) admit it; clear a held field record | Practitioner, reviewer | Done; audit shows intake, admission and clearance |
 
 ## 3. Individual record
 
@@ -36,8 +39,8 @@
 | Name | |
 | Organisation and role | |
 | Platform role | |
-| Sessions attended (T1–T7) and dates | |
-| Competence checks passed (C1–C10) | |
+| Sessions attended (T1–T8) and dates | |
+| Competence checks passed (C1–C12) | |
 | Device used for T2 (make, model, OS, browser) | |
 | Has read: user guide for role, support and incident procedure, stop conditions | ☐ ☐ ☐ |
 | Trainer name and signature | |

@@ -327,6 +327,23 @@ describe('field recovery key versions', () => {
   });
 });
 
+describe('future-time checks on every field and custody time (finding R-L7)', () => {
+  it('refuses future interruption, handover, dispatch and receipt times', async () => {
+    const later = new Date(Date.now() + 2 * 86_400_000).toISOString().slice(0, 16);
+    const base = S.payload(`H2T-${w.tag}`, '2026-03-10');
+    const [i] = await field.syncBatch(w.a.tech, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: { ...base, interruptions: [{ start: '2026-03-10T10:00', end: later, reason: 'x' }] } }]);
+    expect(i.outcome).toBe('rejected'); expect(i.message).toMatch(/end|future/i);
+    const [h] = await field.syncBatch(w.a.tech, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: { ...base, sample_code: `H2T2-${w.tag}`, handover_to: 'Lab courier', handover_local: later } }]);
+    expect(h.outcome).toBe('rejected'); expect(h.message).toMatch(/Handover time .* future/);
+    const [fresh] = await field.syncBatch(w.a.tech, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: { ...base, sample_code: `H2T3-${w.tag}` } }]);
+    expect(fresh.outcome).toBe('created');
+    await expect(lab.createSubmission(w.a.prac, { laboratory_id: S.lab.id, reference: `H2F-${w.tag}`, sample_ids: [fresh.server_id], dispatched_at: later })).rejects.toThrow(/Dispatch time .* future/);
+    await lab.createSubmission(w.a.prac, { laboratory_id: S.lab.id, reference: `H2F-${w.tag}`, sample_ids: [fresh.server_id], dispatched_at: '2026-03-11T09:00' });
+    const sub = (await lab.listSubmissions(w.a.prac)).find((x) => x.reference === `H2F-${w.tag}`);
+    await expect(lab.receiveSubmission(w.a.prac, sub.id, { received_at: later, received_condition: 'Intact' })).rejects.toThrow(/Receipt time .* future/);
+  });
+});
+
 describe('cross-tenant and worker-record access remain closed for the new tables', () => {
   it('another organisation sees none of the holds, intake records or authorisations', async () => {
     const q = (sql: string) => withActor(w.b.prac, (tx) => tx.query(sql)).then((r) => r.rowCount);

@@ -31,6 +31,28 @@
 
 **If something looks wrong**, for example a number that doesn't match your own calculation or a record you shouldn't see: stop, don't try to fix it, and report it at once (support procedure §3). Some problems are stop conditions.
 
+## Data-quality flags (everyone who reads results)
+
+| Flag or label | Meaning | What to do |
+|---|---|---|
+| *Data: complete* | No issues found | Still read the interpretation |
+| *Data: qualified* | Results are usable with a caveat (e.g. flow drift above tolerance, volume below the method minimum, a QC failure accepted with justification, an interruption) | Read each flag; the interpretation must explain it |
+| *Data: incomplete* | A required input is missing (times, flows, limits) or a rule stops the calculation (unsampled time without a justified assumption, overlapping samples, exposure period too short) | Fix the input or record the assumption; never estimate around it |
+| *Data: failed* | No usable personal results (all excluded) | Investigate; resample if needed |
+| *indicative* | Screening-only instrument, method not for formal assessment, or calibration missing, expired or failed on the sampling date | Not used for formal comparison; if it is at or above the benchmark the comparison becomes *indeterminate* |
+| *range 0–x* / *interval* | A non-detect or below-LOQ result: the true value lies in the range | Never read the upper value as the measured value or the lower as zero exposure |
+| *Benchmark: indeterminate* | The range straddles the benchmark, a result could not be calculated, or a high indicative or excluded result exists | Not favourable; explain or obtain better evidence |
+| *Needs suspension review* | The record reached the server during a suspension | A reviewer other than the submitter must clear it before use |
+| *Quarantined remediation evidence* | A file accepted during a suspension | Not evidence until a technical reviewer admits it |
+
+## When something is suspended or on hold (everyone)
+
+- **What you will see.** A red banner names the suspended work and the reason. Actions in it are refused with *suspended*; an assessment on hold says *on hold*. Everything stays readable.
+- **What to do.** Do not look for a way round. Note what you were doing and tell the pilot lead (`support-and-incident-procedure.md`).
+- **Field technicians.** Keep capturing only if told to; records you send while field sync is suspended stay on your device and a copy is held on the server for review.
+- **Practitioners and reviewers.** Evidence needed for the investigation can be uploaded through **Remediation intake** with a reason. It stays quarantined until a technical reviewer admits it after the work is resumed.
+- **Escalation.** A suspension is released only by a platform operator, quoting the revalidation record. Do not ask administrators to release it; they can't.
+
 ## Field technician
 
 You capture samples on site, including offline if your organisation has offline capture switched on.
@@ -114,6 +136,21 @@ You independently review plans and assessments, and judge whether actions were e
    - **Close as verified** is only possible after an *effective* review.
 6. **Never record a calculation-method approval in the software yourself.** Method approvals come from the named hygienist's signed review and are recorded by a platform operator (gate G3).
 
+### Validating results and reading a report (practitioners and reviewers)
+
+- **Result validation before calculation.** Check each result against the laboratory certificate (sample code, analyte, value, unit, qualifier, LOD/LOQ). Check custody is complete and QC failures have dispositions. Check calibration is valid on the sampling date and flows are within the method's tolerance.
+- **Interpreting a report.** Read it in order:
+  1. Scope and question.
+  2. Group and grouping basis.
+  3. Method review status and whether the conclusion was approved under an authorised pilot.
+  4. Data-quality findings.
+  5. Results (intervals, indicative tags).
+  6. Benchmark with its source and provenance.
+  7. Limitations.
+  8. The interpretation and conclusion category.
+
+  *Below benchmark* for the samples taken is not proof of adequate control: representativeness and day-to-day variation are judged by the competent person, not the software.
+
 ## Action owner / site contact
 
 1. Open **Corrective actions** to see what is assigned to you and when it's due.
@@ -143,10 +180,14 @@ You act outside the application using the owner connection, and **only on a reco
 
 | Task | Command |
 |---|---|
-| Move an organisation to pilot (only after G11) | `platform-controls.ts tenant-level --level pilot --authorised-by … --evidence G11-…` |
+| Record the G11 authorisation from the signed document (you are not an authoriser) | `platform-controls.ts pilot-authorise --tenant … --provider … --organisation … --document … --document-file …` |
+| Move an organisation to pilot (refused without a recorded authorisation, an approved method and reference data) | `platform-controls.ts tenant-level --level pilot --authorised-by … --evidence G11-…` |
+| Withdraw a pilot authorisation (returns the organisation to evaluation) | `platform-controls.ts pilot-withdraw …` |
 | Switch offline capture on or off (on only after G8 and G9) | `platform-controls.ts offline --offline on\|off …` |
 | Suspend or resume workflows (stop conditions) | `platform-controls.ts suspend …` / `resume … --evidence <revalidation>` |
-| Record a method review from the signed pack | `platform-controls.ts method-review …`. You are not the reviewer. |
+| Hold or release one assessment | `platform-controls.ts hold --assessment … --reason …` / `release … --evidence …` |
+| List approved assessments affected by a method withdrawal | `platform-controls.ts method-impact --method … --version …` |
+| Record a method review from the signed pack (scope and signed file required for approvals) | `platform-controls.ts method-review … --evidence-file … --scope …`. You are not the reviewer. |
 | Import professional reference data | `import-reference-data.ts file.json --dry-run`, then without `--dry-run` |
 | Backups and restore checks | `backup.ts`, `restore-verify.ts --evidence-label …` |
-| Recovery keys | `recovery-keys.ts verify` / `rotate` |
+| Recovery keys | `recovery-keys.ts verify` / `rotate` (new KEK) / `replace` (new key pair for one organisation) |

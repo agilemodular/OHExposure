@@ -1,0 +1,28 @@
+[
+  {
+    "_instructions": "Copy one object per benchmark for the substances confirmed by the pilot organisation (decision P4). Replace every TO BE CONFIRMED value from the current authoritative source, have a competent reviewer who is not the preparer check each row, then dry-run: npx tsx scripts/import-reference-data.ts <file> --dry-run --imported-by \"<operator>\". This template is rejected by the importer as it stands: do not import it.",
+    "substance": {
+      "name": "TO BE CONFIRMED (substance name as published)",
+      "cas_number": "TO BE CONFIRMED",
+      "ec_number": null,
+      "molecular_weight": null,
+      "molecular_weight_source": null
+    },
+    "jurisdiction": "TO BE CONFIRMED",
+    "benchmark_type": "TO BE CONFIRMED (e.g. LTEL or STEL as published)",
+    "averaging_minutes": 0,
+    "value": 0,
+    "unit": "TO BE CONFIRMED (mg/m3, ppm or f/ml)",
+    "annotations": [],
+    "source_title": "TO BE CONFIRMED (publication title)",
+    "source_version": "TO BE CONFIRMED (edition)",
+    "source_url": "TO BE CONFIRMED",
+    "effective_from": "TO BE CONFIRMED (YYYY-MM-DD)",
+    "effective_to": null,
+    "provenance": "professional_reference",
+    "reviewer_name": "TO BE CONFIRMED (competent reviewer, not the preparer or importer)",
+    "verified_on": "TO BE CONFIRMED (YYYY-MM-DD)",
+    "permitted_use": "TO BE CONFIRMED (e.g. comparison within this platform for the named pilot organisation)",
+    "licence_note": "TO BE CONFIRMED (reproduction rights checked: by whom, on what basis)"
+  }
+]
