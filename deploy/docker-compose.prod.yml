@@ -9,7 +9,7 @@ x-logging: &logging
   options: { max-size: "20m", max-file: "10" }   # local retention only; ship logs to the agreed log service
 services:
   proxy:
-    image: caddy:2.8
+    image: caddy:2.8   # pin to a digest at deployment
     restart: unless-stopped
     ports: ["80:80", "443:443"]
     environment:
@@ -23,29 +23,51 @@ services:
       app: { condition: service_healthy }
     logging: *logging
   db:
-    image: postgres:16
+    image: postgres:16   # pin to a digest at deployment (record it in the G5 evidence)
     restart: unless-stopped
     environment:
       POSTGRES_DB: ohea
-      POSTGRES_USER: ohea_owner
-      POSTGRES_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD}
-    volumes: [dbdata:/var/lib/postgresql/data]
+      # Cluster superuser: used only by the database image's first-start initialisation, never by the platform.
+      POSTGRES_USER: postgres_admin
+      POSTGRES_PASSWORD: ${DB_SUPERUSER_PASSWORD:?set DB_SUPERUSER_PASSWORD}
+      # Non-superuser owner of the ohea database (migrations, backups, operator scripts) — created by db-init.
+      OHEA_OWNER_PASSWORD: ${DB_OWNER_PASSWORD:?set DB_OWNER_PASSWORD}
+    volumes:
+      - dbdata:/var/lib/postgresql/data
+      - ./db-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ohea_owner -d ohea"]
       interval: 5s
       retries: 10
     logging: *logging
+  # One-shot release job: pre-migration backup, migrations, app-role password, recovery-key check. Runs with the owner
+  # connection and exits; the long-running app never receives owner credentials.
+  migrate:
+    build: ..
+    depends_on:
+      db: { condition: service_healthy }
+    environment:
+      NODE_ENV: production
+      DATABASE_ADMIN_URL: postgres://ohea_owner:${DB_OWNER_PASSWORD}@${DATABASE_HOST:-db}:${DATABASE_PORT:-5432}/ohea
+      APP_DB_PASSWORD: ${APP_DB_PASSWORD:?set APP_DB_PASSWORD}
+      FIELD_RECOVERY_KEK: ${FIELD_RECOVERY_KEK:?set FIELD_RECOVERY_KEK}
+      STORAGE_DIR: /data/attachments/
+      PRE_MIGRATION_BACKUP_DIR: /backups/pre-migration
+      ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL}
+      ALERT_WEBHOOK_SECRET: ${ALERT_WEBHOOK_SECRET}
+    volumes: [attachments:/data/attachments:ro, backups:/backups]
+    command: ["npx", "tsx", "scripts/release.ts"]
+    logging: *logging
   app:
     build: ..
     restart: unless-stopped
     depends_on:
-      db: { condition: service_healthy }
+      migrate: { condition: service_completed_successfully }
     expose: ["3000"]
+    command: ["npx", "tsx", "src/server.ts"]
     environment:
       NODE_ENV: production
-      DATABASE_ADMIN_URL: postgres://ohea_owner:${DB_OWNER_PASSWORD}@${DATABASE_HOST:-db}:${DATABASE_PORT:-5432}/ohea
       DATABASE_URL: postgres://ohea_app:${APP_DB_PASSWORD:?set APP_DB_PASSWORD}@${DATABASE_HOST:-db}:${DATABASE_PORT:-5432}/ohea
-      APP_DB_PASSWORD: ${APP_DB_PASSWORD}
       COOKIE_SECURE: "true"
       TRUST_PROXY: "1"                               # exactly one proxy hop (Caddy)
       FIELD_RECOVERY_KEK: ${FIELD_RECOVERY_KEK:?set FIELD_RECOVERY_KEK}
@@ -54,10 +76,8 @@ services:
       SESSION_IDLE_MINUTES: ${SESSION_IDLE_MINUTES:-120}
       LOGIN_IP_LIMIT: ${LOGIN_IP_LIMIT:-20}
       BRAND_DOMAIN: ${OHEA_DOMAIN}
-      PRE_MIGRATION_BACKUP_DIR: /backups/pre-migration
     volumes:
       - attachments:/data/attachments
-      - backups:/backups
     logging: *logging
   # One-shot jobs run by the host scheduler (deploy/systemd/*.timer); they reuse the application image.
   backup:
@@ -70,7 +90,6 @@ services:
       BACKUP_RETAIN_DAYS: ${BACKUP_RETAIN_DAYS:-35}
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL}
       ALERT_WEBHOOK_SECRET: ${ALERT_WEBHOOK_SECRET}
-      FIELD_RECOVERY_KEK: ${FIELD_RECOVERY_KEK}
     volumes: [attachments:/data/attachments:ro, backups:/backups]
     command: ["npx", "tsx", "scripts/backup.ts"]
     logging: *logging
@@ -81,7 +100,6 @@ services:
       DATABASE_ADMIN_URL: postgres://ohea_owner:${DB_OWNER_PASSWORD}@${DATABASE_HOST:-db}:${DATABASE_PORT:-5432}/ohea
       ALERT_WEBHOOK_URL: ${ALERT_WEBHOOK_URL}
       ALERT_WEBHOOK_SECRET: ${ALERT_WEBHOOK_SECRET}
-      FIELD_RECOVERY_KEK: ${FIELD_RECOVERY_KEK}
     volumes: [backups:/backups]
     entrypoint: ["sh", "-c", "npx tsx scripts/restore-verify.ts \"$$(ls -d /backups/daily/ohea-* | tail -1)\" --evidence-label \"$${EVIDENCE_LABEL:-hosting environment}\""]
     logging: *logging

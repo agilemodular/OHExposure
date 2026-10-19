@@ -124,7 +124,7 @@ export async function recordMethodReview(url: string, i: MethodReviewInput) {
 export async function holdAssessment(url: string, assessmentId: string, reason: string, placedBy: string) {
   if (!reason?.trim() || reason.trim().length < 5 || !placedBy?.trim()) throw new Error('--reason and --placed-by are required');
   return withAdmin(url, async (c) => {
-    const a = (await c.query('select tenant_id from assessments where id=$1', [assessmentId])).rows[0];
+    const a = (await c.query('select tenant_id from assessments where id=$1 for update', [assessmentId])).rows[0];
     if (!a) throw new Error('Assessment not found');
     await c.query('insert into assessment_holds (tenant_id, assessment_id, reason, placed_by) values ($1,$2,$3,$4)', [a.tenant_id, assessmentId, reason, placedBy]);
     await auditEvent(c, a.tenant_id, 'platform.assessment_hold', { assessment_id: assessmentId, reason, placed_by: placedBy });

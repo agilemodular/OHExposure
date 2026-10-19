@@ -14,6 +14,7 @@ services:
       retries: 10
   app:
     build: .
+    command: ["npx", "tsx", "scripts/start.ts"]   # single process: release steps, then server (drops owner URL)
     depends_on:
       db: { condition: service_healthy }
     environment:

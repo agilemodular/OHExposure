@@ -24,6 +24,7 @@ const ENTITY: Record<string, { table: string; perm: Parameters<typeof can>[1][] 
 const WORKFLOW_OF: Record<string, Workflow> = {
   sampling_event: 'field_sync', lab_submission: 'lab_import', lab_result: 'lab_import', import_batch: 'lab_import',
   control_inspection: 'action_closure', action: 'action_closure', assessment: 'assessment_approval',
+  calibration: 'field_sync', instrument: 'field_sync',   // calibration evidence feeds the calculation
 };
 
 /** Detects type from content (not the client-supplied name or MIME) and accepts only an allowlist. */

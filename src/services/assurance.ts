@@ -1,5 +1,11 @@
 import { CALCULATIONS, type CalcCode } from '../calc/engine.js';
-import { getPool, many, one, withActor, type Actor, type Tx } from '../db.js';
+import pg from 'pg';
+import { config } from '../config.js';
+import { many, one, withActor, type Actor, type Tx } from '../db.js';
+
+let _auditPool: pg.Pool | null = null;
+const auditPool = () => (_auditPool ??= new pg.Pool({ connectionString: config.databaseUrl, max: 2, connectionTimeoutMillis: 2000 }));
+export const closeAuditPool = async () => { if (_auditPool) { await _auditPool.end(); _auditPool = null; } };
 import { AppError } from '../errors.js';
 
 /**
@@ -48,6 +54,9 @@ export async function assertWorkflowActive(tx: Tx, w: Workflow, action = 'write'
 
 /** Refuses changes to an assessment placed on hold by a platform operator. */
 export async function assertAssessmentNotOnHold(tx: Tx, assessmentId: string, action = 'write') {
+  // Share-lock the assessment row: placing a hold takes an update lock on it, so a hold cannot be committed between
+  // this check and the dependent write.
+  await tx.query('select 1 from assessments where id=$1 for share', [assessmentId]);
   const h = await one(tx, 'select reason from assessment_holds where assessment_id=$1 and released_at is null', [assessmentId]);
   if (h) {
     await recordBlocked(tx, 'assessment.blocked', { assessment_id: assessmentId, action, reason: h.reason });
@@ -61,7 +70,9 @@ export async function assertAssessmentNotOnHold(tx: Tx, assessmentId: string, ac
  */
 async function recordBlocked(tx: Tx, action: string, detail: Record<string, unknown>) {
   const ctx = await one(tx, `select current_setting('app.tenant_id', true) t, current_setting('app.user_id', true) u`);
-  const c = await getPool().connect();
+  // A small dedicated pool with a short connection timeout: refused requests must never exhaust the main pool.
+  let c: pg.PoolClient;
+  try { c = await auditPool().connect(); } catch { console.error(JSON.stringify({ level: 'error', msg: 'blocked-attempt audit unavailable', action })); return; }
   try {
     await c.query('begin');
     await c.query(`select set_config('app.tenant_id',$1,true), set_config('app.client_id','',true), set_config('app.user_id',$2,true)`, [ctx.t, ctx.u]);

@@ -76,7 +76,9 @@ export async function deliverPending(a: Actor, transport: Transport = mockTransp
       return { mock: 0, delivered: 0, failed: 0, held: n.n };
     }
     const due = await many(tx, `select o.*, l.mode from integration_outbox o join integration_links l on l.target=o.target and l.tenant_id=o.tenant_id
-      where o.status in ('pending','failed') and o.next_attempt_at <= now() order by o.created_at limit 50 for update of o skip locked`);
+      where o.status in ('pending','failed') and o.next_attempt_at <= now()
+        and not exists (select 1 from assessment_holds h where h.released_at is null and h.assessment_id::text = o.payload->>'assessment_id')
+      order by o.created_at limit 50 for update of o skip locked`);
     const res = { mock: 0, delivered: 0, failed: 0, held: 0 };
     for (const m of due) {
       try {

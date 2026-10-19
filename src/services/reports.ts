@@ -35,7 +35,7 @@ export async function generateReport(a: Actor, assessmentId: string, revisionId:
       // A pilot organisation can only issue reports for conclusions approved under the pilot gate.
       if (levelAtApproval !== 'pilot' || !methodOk || rev.benchmark_provenance !== 'professional_reference')
         throw new AppError(422, 'not_pilot_approved', 'This revision was not approved under the pilot controls (approved method and professional reference benchmark). Create a new revision and have it approved before issuing a report.');
-      if (current.status === 'rejected' || current.status === 'withdrawn')
+      if (current.status === 'rejected' || current.status === 'withdrawn' || current.status === 'expired')
         throw new AppError(422, 'method_rejected', `The professional approval of the calculation method used by this revision has since been ${current.status}. Reassess before issuing a report.`);
     }
     const plan = as.plan_id ? await one(tx, 'select * from monitoring_plans where id=$1', [as.plan_id]) : null;

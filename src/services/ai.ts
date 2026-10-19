@@ -1,3 +1,4 @@
+import { assertAssessmentNotOnHold } from './assurance.js';
 import { z } from 'zod';
 import { config } from '../config.js';
 import { audit, many, one, requirePerm, withActor, type Actor } from '../db.js';
@@ -44,8 +45,9 @@ export async function decideSuggestion(a: Actor, id: string, input: unknown) {
     const s = await one(tx, 'select * from ai_suggestions where id=$1 for update', [id]);
     if (!s || s.status !== 'pending') throw notFound('Pending suggestion');
     if (d.decision === 'accepted' && s.kind === 'narrative_draft') {
-      const r = await one(tx, 'select status from assessment_revisions where id=$1', [s.entity_id]);
+      const r = await one(tx, 'select status, assessment_id from assessment_revisions where id=$1 for update', [s.entity_id]);
       if (r.status !== 'draft') throw invalid('Suggestions can only be applied to a draft revision');
+      await assertAssessmentNotOnHold(tx, r.assessment_id, 'apply suggestion');
       await tx.query(`update assessment_revisions set interpretation = $2 where id=$1`, [s.entity_id, `[AI-assisted draft, accepted by ${a.name}] ${s.content.text}`]);
     }
     await tx.query('update ai_suggestions set status=$2, decided_by=$3, decided_at=now() where id=$1', [id, d.decision, a.userId]);

@@ -22,7 +22,7 @@ const parseKek = (v: string | undefined, name: string) => {
 export async function verifyRecoveryKeys(url: string) {
   const c = new pg.Client({ connectionString: url }); await c.connect();
   try {
-    const rows = (await c.query('select tenant_id, key_version, public_key_spki, private_key_enc from field_recovery_keys')).rows;
+    const rows = (await c.query('select tenant_id, key_version, public_key_spki, private_key_enc, attest_secret_enc from field_recovery_keys')).rows;
     const k = kekFromEnv();
     const bad = rows.filter((r) => !keyRowValid(r, k)).map((r) => `${r.tenant_id} v${r.key_version}`);
     return { total: rows.length, invalid: bad };
@@ -35,12 +35,13 @@ export async function rotateRecoveryKek(url: string, oldKek: Buffer, newKek: Buf
   const c = new pg.Client({ connectionString: url }); await c.connect();
   try {
     await c.query('begin');
-    const rows = (await c.query('select tenant_id, key_version, public_key_spki, private_key_enc from field_recovery_keys for update')).rows;
+    const rows = (await c.query('select tenant_id, key_version, public_key_spki, private_key_enc, attest_secret_enc from field_recovery_keys for update')).rows;
     for (const r of rows) {
       if (!keyRowValid(r, oldKek)) throw new Error(`Key for organisation ${r.tenant_id} (v${r.key_version}) does not open with the current KEK; nothing rotated`);
       const enc = sealWith(newKek, unsealWith(oldKek, r.private_key_enc));
-      await c.query('update field_recovery_keys set private_key_enc=$3 where tenant_id=$1 and key_version=$2', [r.tenant_id, r.key_version, enc]);
-      if (!keyRowValid({ ...r, private_key_enc: enc }, newKek)) throw new Error('Re-sealed key failed verification; nothing rotated');
+      const att = r.attest_secret_enc ? sealWith(newKek, unsealWith(oldKek, r.attest_secret_enc)) : null;
+      await c.query('update field_recovery_keys set private_key_enc=$3, attest_secret_enc=$4 where tenant_id=$1 and key_version=$2', [r.tenant_id, r.key_version, enc, att]);
+      if (!keyRowValid({ ...r, private_key_enc: enc, attest_secret_enc: att }, newKek)) throw new Error('Re-sealed key failed verification; nothing rotated');
     }
     await c.query(`insert into audit_events (tenant_id, user_id, action, entity_type, entity_id, detail) values (null, null, 'platform.recovery_kek_rotated', 'field_recovery_keys', null, $1)`,
       [{ keys: rows.length, authorised_by: authorisedBy }]);
@@ -55,20 +56,22 @@ export async function rotateRecoveryKek(url: string, oldKek: Buffer, newKek: Buf
  * deleted, so envelopes on devices that have not yet reconnected remain importable; devices re-seal their
  * unsynchronised records to the new version at their next online unlock.
  */
-export async function replaceRecoveryKey(url: string, tenantId: string, authorisedBy: string, reason: string, opts: { simulateFailureAfterDeactivate?: boolean } = {}) {
+export async function replaceRecoveryKey(url: string, tenantId: string, authorisedBy: string, reason: string, opts: { simulateFailureAfterDeactivate?: boolean; revokePrevious?: boolean } = {}) {
   if (!authorisedBy?.trim() || !reason?.trim()) throw new Error('--authorised-by and --reason are required');
   const c = new pg.Client({ connectionString: url }); await c.connect();
   try {
     await c.query('begin');
-    const cur = (await c.query('select tenant_id, key_version, public_key_spki, private_key_enc from field_recovery_keys where tenant_id=$1 and active for update', [tenantId])).rows[0];
+    const cur = (await c.query('select tenant_id, key_version, public_key_spki, private_key_enc, attest_secret_enc from field_recovery_keys where tenant_id=$1 and active for update', [tenantId])).rows[0];
     if (cur && !keyRowValid(cur)) throw new Error('The current key does not open with the configured KEK; resolve that first (verify)');
     const next = ((await c.query('select coalesce(max(key_version),0)+1 v from field_recovery_keys where tenant_id=$1', [tenantId])).rows[0].v) as number;
     await c.query('update field_recovery_keys set active=false where tenant_id=$1 and active', [tenantId]);
+    // Suspected compromise: earlier versions stop opening recovery files at once (devices re-seal at their next online unlock).
+    if (opts.revokePrevious) await c.query('update field_recovery_keys set revoked_at=now() where tenant_id=$1 and revoked_at is null', [tenantId]);
     if (opts.simulateFailureAfterDeactivate) throw new Error('simulated failure (test)');
     const m = newKeyMaterial();
-    await c.query('insert into field_recovery_keys (tenant_id, key_version, public_key_spki, private_key_enc, active) values ($1,$2,$3,$4,true)', [tenantId, next, m.public_key_spki, m.private_key_enc]);
+    await c.query('insert into field_recovery_keys (tenant_id, key_version, public_key_spki, private_key_enc, attest_secret_enc, active) values ($1,$2,$3,$4,$5,true)', [tenantId, next, m.public_key_spki, m.private_key_enc, m.attest_secret_enc]);
     await c.query(`insert into audit_events (tenant_id, user_id, action, entity_type, entity_id, detail) values ($1, null, 'platform.recovery_key_replaced', 'field_recovery_keys', $2, $3)`,
-      [tenantId, tenantId, { from_version: cur?.key_version ?? null, to_version: next, authorised_by: authorisedBy, reason }]);
+      [tenantId, tenantId, { from_version: cur?.key_version ?? null, to_version: next, revoked_previous: !!opts.revokePrevious, authorised_by: authorisedBy, reason }]);
     await c.query('commit');
     return { tenantId, version: next };
   } catch (e) { await c.query('rollback').catch(() => {}); throw e; } finally { await c.end(); }
@@ -81,7 +84,7 @@ if (process.argv[1]?.endsWith('recovery-keys.ts')) {
   const run = async () => {
     if (a[0] === 'verify') { const r = await verifyRecoveryKeys(url); if (r.invalid.length) throw new Error(`${r.invalid.length} of ${r.total} recovery keys invalid: ${r.invalid.join(', ')}`); return r; }
     if (a[0] === 'rotate') { const i = a.indexOf('--authorised-by'); return rotateRecoveryKek(url, parseKek(process.env.FIELD_RECOVERY_KEK, 'FIELD_RECOVERY_KEK'), parseKek(process.env.FIELD_RECOVERY_KEK_NEW, 'FIELD_RECOVERY_KEK_NEW'), i >= 0 ? a[i + 1] : ''); }
-    if (a[0] === 'replace') { const g = (k: string) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : ''; }; return replaceRecoveryKey(url, g('--tenant'), g('--authorised-by'), g('--reason')); }
+    if (a[0] === 'replace') { const g = (k: string) => { const i = a.indexOf(k); return i >= 0 ? a[i + 1] : ''; }; return replaceRecoveryKey(url, g('--tenant'), g('--authorised-by'), g('--reason'), { revokePrevious: a.includes('--revoke-previous') }); }
     throw new Error('Commands: verify, rotate, replace');
   };
   run().then((r) => { console.log(JSON.stringify(r)); process.exit(0); }, (e) => { console.error(`Refused: ${e.message}`); process.exit(1); });

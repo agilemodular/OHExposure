@@ -180,7 +180,11 @@ async function assertCurrent(tx: Tx, r: any) {
   // Share-lock the evidence so that no result amendment, QC disposition or void can commit between this check and the
   // end of the transaction (writers take FOR UPDATE on the same sampling-event rows).
   await tx.query('select id from sampling_events where id = any($1) order by id for share', [r.sample_ids ?? []]);
-  const pending = await one(tx, 'select sample_code from sampling_events where id = any($1) and suspension_review_required and suspension_reviewed_at is null limit 1', [r.sample_ids ?? []]);
+  // Calibration evidence and the benchmark version also feed the calculation: lock them against concurrent change.
+  await tx.query('select i.id from instruments i join sampling_events e on e.instrument_id = i.id where e.id = any($1) order by i.id for share of i', [r.sample_ids ?? []]);
+  if (r.benchmark_version_id) await tx.query('select id from benchmark_versions where id=$1 for share', [r.benchmark_version_id]);
+  const pending = await one(tx, `select e.sample_code from sampling_events e where e.id = any($1) and ((e.suspension_review_required and e.suspension_reviewed_at is null)
+      or exists (select 1 from field_intake_holds h where h.status in ('held','in_conflict') and (h.server_id = e.id or h.sampling_event_id = e.id))) limit 1`, [r.sample_ids ?? []]);
   if (pending) throw invalid(`Sample ${pending.sample_code} reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.`);
   const snap = await buildSnapshot(tx, r, r.substance_id);
   if (hashOf(snap, r.calc_code) !== r.inputs_hash) throw conflict('Underlying evidence has changed since the calculation was run (e.g. an amended laboratory result or QC disposition). Recalculate before continuing.');

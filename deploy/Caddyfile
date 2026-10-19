@@ -3,7 +3,7 @@
 	email {$ACME_EMAIL}
 }
 {$OHEA_DOMAIN} {
-	encode gzip
+	# No response compression: pages carry form tokens (avoids BREACH-style attacks).
 	reverse_proxy app:3000 {
 		header_up X-Forwarded-For {remote_host}
 	}

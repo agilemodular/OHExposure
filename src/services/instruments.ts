@@ -1,3 +1,5 @@
+import { assertWorkflowActive } from './assurance.js';
+import { assertLinkableAttachment } from './attachments.js';
 import { z } from 'zod';
 import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { invalid, notFound } from '../errors.js';
@@ -26,6 +28,7 @@ export async function setInstrumentStatus(a: Actor, id: string, input: unknown) 
   requirePerm(a, 'instruments.write');
   const d = parse(z.object({ status: z.enum(['in_service', 'out_of_service', 'retired']), reason: reqStr(3) }), input);
   return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync', 'change instrument status');
     const r = await one(tx, 'update instruments set status=$2 where id=$1 returning *', [id, d.status]);
     if (!r) throw notFound('Instrument');
     await tx.query('insert into instrument_maintenance (tenant_id,instrument_id,at,kind,notes,recorded_by) values ($1,$2,current_date,$3,$4,$5)', [a.tenantId, id, `status:${d.status}`, d.reason, a.userId]);
@@ -39,7 +42,11 @@ export async function recordCalibration(a: Actor, instrumentId: string, input: u
   const d = parse(z.object({ performed_at: date, valid_until: date, provider: optStr, certificate_ref: optStr, outcome: z.enum(['pass', 'fail', 'adjusted_pass']), attachment_id: optUuid }), input);
   if (d.valid_until < d.performed_at) throw invalid('Valid-until date must not be before the calibration date');
   return withActor(a, async (tx) => {
-    if (!(await one(tx, 'select 1 from instruments where id=$1', [instrumentId]))) throw notFound('Instrument');
+    // Calibration evidence is field evidence: refused while field synchronisation is suspended, and the instrument row
+    // is locked so the change cannot interleave with an approval that relies on it.
+    await assertWorkflowActive(tx, 'field_sync', 'record calibration');
+    if (!(await one(tx, 'select 1 from instruments where id=$1 for update', [instrumentId]))) throw notFound('Instrument');
+    await assertLinkableAttachment(tx, d.attachment_id);
     const r = await one(tx, `insert into calibrations (tenant_id,instrument_id,performed_at,valid_until,provider,certificate_ref,outcome,attachment_id,recorded_by)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`, [a.tenantId, instrumentId, d.performed_at, d.valid_until, d.provider, d.certificate_ref, d.outcome, d.attachment_id, a.userId]);
     await audit(tx, a, 'instrument.calibration', 'instrument', instrumentId, d);

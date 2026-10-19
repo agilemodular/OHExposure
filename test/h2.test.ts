@@ -145,7 +145,10 @@ describe('suspension policy — records, attachments, intake, background jobs, a
     await suspendWorkflows(URL_, w.A.tenant.id, ['report_issue'], 'SC5 H2', 'H2 Operator');
     const r = await integ.deliverPending(w.a.admin);
     expect(r).toMatchObject({ delivered: 0, mock: 0 });
-    expect(r.held).toBeGreaterThanOrEqual(0);
+    const c0 = await admin();
+    const held = (await c0.query(`select count(*)::int n from audit_events where tenant_id=$1 and action='integration.delivery_held'`, [w.A.tenant.id])).rows[0].n;
+    await c0.end();
+    expect(held).toBeGreaterThan(0);
     await expect(adm.requestDisposal(w.a.admin, { record_class: 'attachment', entity_id: randomUUID(), reason: 'Retention period has expired for this file' })).rejects.toThrow(/cannot be disposed of while workflows are suspended/);
     await resumeWorkflows(URL_, w.A.tenant.id, ['report_issue'], 'H2 Operator', 'H2-REVAL');
   });
@@ -192,9 +195,17 @@ describe('approval and report-issue prerequisites on every write path', () => {
     const { revId } = await inReview([S.samples[0]]);
     S.revA = revId;
     const direct = (actor: any, sql: string, params: unknown[]) => withActor(actor, (tx) => tx.query(sql, params));
-    await expect(direct(w.a.prac, `update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [revId, w.a.prac.userId])).rejects.toThrow(/active technical reviewer|author or submitter/);
-    await expect(direct(w.a.rev, `update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [revId, w.a.prac.userId])).rejects.toThrow(/technical reviewer/);
-    await expect(direct(w.a.rev, `update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [revId, w.b.prac.userId])).rejects.toThrow(/technical reviewer of this organisation|0 rows|technical reviewer/);
+    await expect(direct(w.a.prac, `update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [revId, w.a.prac.userId])).rejects.toThrow(/active technical reviewer/);
+    await expect(direct(w.a.rev, `update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [revId, w.a.prac.userId])).rejects.toThrow(/reviewer must be the signed-in user/);
+    await expect(direct(w.a.rev, `update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [revId, w.b.prac.userId])).rejects.toThrow(/reviewer must be the signed-in user/);
+    // Content cannot be changed after submission, not even in the approving statement.
+    await expect(direct(w.a.rev, `update assessment_revisions set status='approved', reviewer_id=$2, interpretation='changed by reviewer' where id=$1`, [revId, w.a.rev.userId])).rejects.toThrow(/cannot be edited/);
+    await expect(direct(w.a.prac, `update assessment_revisions set sample_ids=$2 where id=$1`, [revId, [S.samples[1]]])).rejects.toThrow(/cannot be edited/);
+    // Nothing can be inserted already approved or in review (finding R2-C1).
+    await expect(direct(w.a.prac, `insert into assessment_revisions (tenant_id,client_id,assessment_id,revision,sample_ids,calc_code,calc_version,parameters,created_by,status,reviewer_id,approved_at,method_review_status,benchmark_provenance,assurance_level_at_approval)
+      select tenant_id, client_id, assessment_id, 99, sample_ids, calc_code, calc_version, parameters, created_by, 'approved', $2, now(), 'approved', 'professional_reference', 'pilot' from assessment_revisions where id=$1`, [revId, w.a.rev.userId])).rejects.toThrow(/new revisions must be drafts/);
+    await expect(direct(w.a.prac, `insert into assessment_revisions (tenant_id,client_id,assessment_id,revision,sample_ids,calc_code,calc_version,parameters,created_by,status,submitted_by)
+      select tenant_id, client_id, assessment_id, 98, sample_ids, calc_code, calc_version, parameters, null, 'in_review', null from assessment_revisions where id=$1`, [revId])).rejects.toThrow(/new revisions must be drafts/);
     await suspendWorkflows(URL_, w.A.tenant.id, ['assessment_approval'], 'SC2 H2', 'H2 Operator');
     await expect(direct(w.a.rev, `update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [revId, w.a.rev.userId])).rejects.toThrow(/approval is suspended/);
     await resumeWorkflows(URL_, w.A.tenant.id, ['assessment_approval'], 'H2 Operator', 'H2-REVAL');
@@ -301,15 +312,15 @@ describe('field recovery key versions', () => {
     const wk = await subtle.encrypt({ name: 'RSA-OAEP' }, pub, await subtle.exportKey('raw', rk));
     const b = (x: ArrayBuffer | Uint8Array) => Buffer.from(x as ArrayBuffer).toString('base64');
     const e = { v: 1, kv, wk: b(wk), iv: b(iv), ct: b(ct) };
-    return { ...e, mac: createHmac('sha256', Buffer.from(attest, 'base64')).update(`${e.wk}.${e.iv}.${e.ct}`).digest('base64') };
+    return { ...e, mac: createHmac('sha256', Buffer.from(attest, 'base64')).update(`${e.kv}.${e.wk}.${e.iv}.${e.ct}`).digest('base64') };
   }
   const fileOf = (records: any[]) => JSON.stringify({ format: 'ohea-field-recovery', version: 1, tenant_id: w.A.tenant.id, user_id: w.a.tech.userId, exported_at: new Date().toISOString(), records });
   it('replacement is all-or-nothing, keeps old versions importable, and rejects unknown versions without loss', async () => {
-    const { activeRecoveryKey, attestKeyFrom, importRecoveryFile } = await import('../src/services/recovery.js');
+    const { activeRecoveryKey, attestKeyFor, importRecoveryFile } = await import('../src/services/recovery.js');
     const v1 = await withActor(w.a.tech, (tx) => activeRecoveryKey(tx, w.A.tenant.id));
     const rec = (code: string) => ({ tenant_id: w.A.tenant.id, user_id: w.a.tech.userId, client_uuid: randomUUID(), server_id: null, base_version: null, payload: S.payload(code, '2026-03-09') });
     // A device that never reconnects keeps an envelope sealed to v1.
-    const oldEnv = await seal(v1.spki, attestKeyFrom(v1.privateKeyEnc, w.A.tenant.id, w.a.tech.userId), v1.version, rec(`H2K1-${w.tag}`));
+    const oldEnv = await seal(v1.spki, attestKeyFor(v1, w.A.tenant.id, w.a.tech.userId), v1.version, rec(`H2K1-${w.tag}`));
     // Interrupted replacement: nothing changes.
     await expect(replaceRecoveryKey(URL_, w.A.tenant.id, 'H2 Operator', 'test', { simulateFailureAfterDeactivate: true })).rejects.toThrow(/simulated/);
     expect((await withActor(w.a.tech, (tx) => activeRecoveryKey(tx, w.A.tenant.id))).version).toBe(v1.version);
@@ -318,9 +329,9 @@ describe('field recovery key versions', () => {
     const v2 = await withActor(w.a.tech, (tx) => activeRecoveryKey(tx, w.A.tenant.id));
     expect(v2.version).toBe(r.version);
     expect(v2.spki).not.toBe(v1.spki);
-    const newEnv = await seal(v2.spki, attestKeyFrom(v2.privateKeyEnc, w.A.tenant.id, w.a.tech.userId), v2.version, rec(`H2K2-${w.tag}`));
+    const newEnv = await seal(v2.spki, attestKeyFor(v2, w.A.tenant.id, w.a.tech.userId), v2.version, rec(`H2K2-${w.tag}`));
     const unknown = { ...newEnv, kv: 99 };
-    const crossed = await seal(v2.spki, attestKeyFrom(v1.privateKeyEnc, w.A.tenant.id, w.a.tech.userId), v2.version, rec(`H2K3-${w.tag}`)); // attested with the wrong version
+    const crossed = await seal(v2.spki, attestKeyFor(v1, w.A.tenant.id, w.a.tech.userId), v2.version, rec(`H2K3-${w.tag}`)); // attested with the wrong version
     const out = await importRecoveryFile(w.a.prac, fileOf([oldEnv, newEnv, unknown, crossed]));
     expect(out.results.map((x) => x.outcome)).toEqual(['created', 'created']);
     expect(out.undecryptable).toEqual([3, 4]);
@@ -357,5 +368,109 @@ describe('cross-tenant and worker-record access remain closed for the new tables
   it('field technicians still cannot read worker names in holds or samples', async () => {
     const r = await withActor(w.a.tech, (tx) => tx.query('select full_name from worker_identities'));
     expect(r.rowCount).toBe(0);
+  });
+});
+
+describe('independent review R2 findings', () => {
+  it('C2: the application role cannot clear a suspension flag, self-admit, or un-quarantine', async () => {
+    // A flagged sample (from the replay test) — direct clearing by the capturer, or removing the flag, is refused.
+    const c = await admin();
+    await c.query('update sampling_events set suspension_review_required=true where id=$1', [S.samples[1]]); // owner sets a fresh flag for the test
+    await c.end();
+    const direct = (actor: any, sql: string, p: unknown[]) => withActor(actor, (tx) => tx.query(sql, p));
+    await expect(direct(w.a.prac, 'update sampling_events set suspension_review_required=false where id=$1', [S.samples[1]])).rejects.toThrow(/cannot be removed/);
+    await expect(direct(w.a.tech, 'update sampling_events set suspension_reviewed_by=$2, suspension_reviewed_at=now() where id=$1', [S.samples[1], w.a.tech.userId])).rejects.toThrow(/practitioner or technical reviewer|someone other/);
+    await expect(direct(w.a.prac, 'update sampling_events set suspension_reviewed_by=$2, suspension_reviewed_at=now() where id=$1', [S.samples[1], w.a.rev.userId])).rejects.toThrow(/signed-in user/);
+    await field.clearSuspensionReview(w.a.prac, S.samples[1], { notes: 'Checked for the review-finding test' });
+    await expect(direct(w.a.rev, 'update sampling_events set suspension_reviewed_at=now() + interval \'1 day\' where id=$1', [S.samples[1]])).rejects.toThrow(/recorded once/);
+    // Attachments: quarantine flip and self-admission refused; inserting an ordinary row while suspended refused.
+    await suspendWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'SC3 C2 test', 'H2 Operator');
+    const q = await att.saveAttachment(w.a.prac, { entity_type: 'sampling_event', entity_id: S.samples[0], filename: 'c2.txt', data: Buffer.from('c2'), intake: { reason: 'Evidence for the C2 test case' } });
+    await expect(direct(w.a.prac, 'update attachments set quarantined=false where id=$1', [q.id])).rejects.toThrow(/cannot be changed/);
+    await expect(direct(w.a.prac, `insert into attachments (tenant_id,client_id,entity_type,entity_id,filename,mime_type,size_bytes,sha256,storage_key,uploaded_by)
+      select tenant_id, client_id, 'sampling_event', $1, 'x.txt', 'text/plain', 1, 'x', 'k', $2 from sampling_events where id=$1`, [S.samples[0], w.a.prac.userId])).rejects.toThrow(/is suspended/);
+    await resumeWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'H2 Operator', 'H2-REVAL');
+    await expect(direct(w.a.prac, 'update attachments set admitted_by=$2, admitted_at=now() where id=$1', [q.id, w.a.prac.userId])).rejects.toThrow(/technical reviewer other than the uploader/);
+    // A quarantined file cannot be linked as calibration evidence either.
+    await expect(inst.recordCalibration(w.a.prac, S.pump.id, { performed_at: '2026-02-01', valid_until: '2027-02-01', outcome: 'pass', attachment_id: q.id })).rejects.toThrow(/quarantined/);
+  });
+
+  it('M2: neither the submitter of a held record nor the original capturer can clear it', async () => {
+    await suspendWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'SC3 M2 test', 'H2 Operator');
+    const cu = randomUUID();
+    const payload = S.payload(`H2M2-${w.tag}`, '2026-03-12');
+    await field.syncBatch(w.a.prac, [{ client_uuid: cu, server_id: null, base_version: null, payload }]); // practitioner submits during suspension
+    await resumeWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'H2 Operator', 'H2-REVAL');
+    const [r] = await field.syncBatch(w.a.prac, [{ client_uuid: cu, server_id: null, base_version: null, payload }]);
+    expect(r.outcome).toBe('created');
+    await expect(field.clearSuspensionReview(w.a.prac, r.server_id!, { notes: 'Clearing my own record' })).rejects.toThrow(/[Ss]omeone other than/);
+    await expect(withActor(w.a.prac, (tx) => tx.query('update sampling_events set suspension_reviewed_by=$2, suspension_reviewed_at=now() where id=$1', [r.server_id, w.a.prac.userId]))).rejects.toThrow(/[Ss]omeone other than/);
+    await field.clearSuspensionReview(w.a.rev, r.server_id!, { notes: 'Checked by the reviewer' });
+  });
+
+  it('H2/M3: a held update that becomes a conflict, and a pending held update, both block approval until reviewed', async () => {
+    // Held update to an existing sample.
+    const target = S.samples[0];
+    const cur = (await field.sampleDetail(w.a.prac, target)).event;
+    await suspendWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'SC3 H2 test', 'H2 Operator');
+    const changed = { ...S.payload(`H2S-${w.tag}-0`, '2026-03-02'), notes: 'Edited offline during suspension' };
+    await field.syncBatch(w.a.tech, [{ client_uuid: cur.client_uuid, server_id: target, base_version: 1, payload: changed }]);
+    await resumeWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'H2 Operator', 'H2-REVAL');
+    // While the hold is pending, an assessment using the sample cannot be submitted.
+    const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: S.sub, plan_id: S.plan.id, title: 'H2 held update', assessment_question: 'Does a held update block use?' });
+    await asmt.updateDraft(w.a.prac, revision.id, { ...S.draft, sample_ids: [target] });
+    await asmt.calculate(w.a.prac, revision.id);
+    await expect(asmt.submitForReview(w.a.prac, revision.id)).rejects.toThrow(/during a suspension/);
+    // On reconnect it becomes a conflict (sample already analysed); applying the device copy flags the sample.
+    const [cr] = await field.syncBatch(w.a.tech, [{ client_uuid: cur.client_uuid, server_id: target, base_version: 1, payload: changed }]);
+    expect(cr.outcome).toBe('conflict');
+    const holds = await field.listSuspensionHolds(w.a.prac);
+    expect(holds.held.find((h) => h.client_uuid === cur.client_uuid)?.status).toBe('in_conflict');
+  });
+
+  it('M4: placing a hold waits for an in-flight approval check (assessment row share-locked)', async () => {
+    const app = new pg.Client({ connectionString: process.env.DATABASE_URL }); await app.connect();
+    await app.query('begin');
+    await app.query(`select set_config('app.tenant_id',$1,true), set_config('app.client_id','',true), set_config('app.user_id',$2,true)`, [w.A.tenant.id, w.a.rev.userId]);
+    await app.query('select 1 from assessments where id=$1 for share', [S.asA]);
+    let placed = false;
+    const p = holdAssessment(URL_, S.asA, 'M4 race test hold', 'H2 Operator').then(() => { placed = true; });
+    await new Promise((r) => setTimeout(r, 400));
+    expect(placed).toBe(false);
+    await app.query('commit'); await app.end();
+    await p;
+    await releaseAssessment(URL_, S.asA, 'H2 Operator', 'M4-REVAL');
+  });
+
+  it('M6: a revoked key version stops opening recovery files; MAC binds the version', async () => {
+    const { activeRecoveryKey, attestKeyFor, importRecoveryFile, envelopeMac } = await import('../src/services/recovery.js');
+    const k = await withActor(w.a.tech, (tx) => activeRecoveryKey(tx, w.A.tenant.id));
+    const subtle = globalThis.crypto.subtle;
+    const pub = await subtle.importKey('spki', Buffer.from(k.spki, 'base64'), { name: 'RSA-OAEP', hash: 'SHA-256' }, false, ['encrypt']);
+    const rk = await subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt']);
+    const iv = globalThis.crypto.getRandomValues(new Uint8Array(12));
+    const rec = { tenant_id: w.A.tenant.id, user_id: w.a.tech.userId, client_uuid: randomUUID(), server_id: null, base_version: null, payload: S.payload(`H2M6-${w.tag}`, '2026-03-13') };
+    const ct = await subtle.encrypt({ name: 'AES-GCM', iv }, rk, new TextEncoder().encode(JSON.stringify(rec)));
+    const wk = await subtle.encrypt({ name: 'RSA-OAEP' }, pub, await subtle.exportKey('raw', rk));
+    const b = (x: ArrayBuffer | Uint8Array) => Buffer.from(x as ArrayBuffer).toString('base64');
+    const env: any = { v: 1, kv: k.version, wk: b(wk), iv: b(iv), ct: b(ct) };
+    env.mac = envelopeMac(attestKeyFor(k, w.A.tenant.id, w.a.tech.userId), env);
+    const relabelled = { ...env, kv: k.version + 50 };
+    const f = (records: any[]) => JSON.stringify({ format: 'ohea-field-recovery', version: 1, tenant_id: w.A.tenant.id, user_id: w.a.tech.userId, exported_at: new Date().toISOString(), records });
+    await replaceRecoveryKey(URL_, w.A.tenant.id, 'H2 Operator', 'Suspected compromise (test)', { revokePrevious: true });
+    const out = await importRecoveryFile(w.a.prac, f([env, relabelled]));
+    expect(out.undecryptable).toEqual([1, 2]);
+  });
+
+  it('Low: method-review ordering inside one transaction, and pilot authorisations are append-only', async () => {
+    const c = await admin();
+    await c.query('begin');
+    await c.query(`insert into method_reviews (calc_code,calc_version,status,reviewer_name,reviewer_competence,reviewed_on,evidence_ref,recorded_by) values ('stel_15',$1,'rejected','R','C','2026-01-01','E','x')`, [CALCULATIONS.stel_15.version]);
+    await c.query(`insert into method_reviews (calc_code,calc_version,status,recorded_by) values ('stel_15',$1,'not_reviewed','x')`, [CALCULATIONS.stel_15.version]);
+    expect((await c.query('select method_status_effective($1,$2) s', ['stel_15', CALCULATIONS.stel_15.version])).rows[0].s).toBe('not_reviewed');
+    await c.query('rollback');
+    const pa = (await c.query('select id from pilot_authorisations where tenant_id=$1 and withdrawn_at is null limit 1', [w.A.tenant.id])).rows[0];
+    await expect(c.query(`update pilot_authorisations set scope_ref='changed' where id=$1`, [pa.id])).rejects.toThrow(/append-only/);
+    await c.end();
   });
 });

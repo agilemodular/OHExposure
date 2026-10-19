@@ -17,9 +17,10 @@ COPY public ./public
 COPY scripts ./scripts
 COPY src ./src
 COPY tsconfig.json ./
-RUN mkdir -p /data/attachments && chown -R node:node /data
+RUN mkdir -p /data/attachments /backups && chown -R node:node /data /backups
 USER node
 ENV STORAGE_DIR=/data/attachments/ PORT=3000 HOST=0.0.0.0
 EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 CMD node -e "fetch('http://127.0.0.1:'+process.env.PORT+'/healthz').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
-CMD ["npx", "tsx", "scripts/start.ts"]
+# Production: the `migrate` job runs scripts/release.ts; the app service runs the server only (see deploy/).
+CMD ["npx", "tsx", "src/server.ts"]

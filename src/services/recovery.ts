@@ -36,9 +36,10 @@ export const kekFromEnv = kek;
  * Checks that a stored key row opens with the given KEK and that its public key belongs to its private key. A row
  * inserted directly through the application role (with a public key whose private half is not sealed here) fails.
  */
-export function keyRowValid(row: { public_key_spki: string; private_key_enc: string }, k: Buffer = kek()) {
+export function keyRowValid(row: { public_key_spki: string; private_key_enc: string; attest_secret_enc?: string | null }, k: Buffer = kek()) {
   try {
     const priv = createPrivateKey({ key: unsealWith(k, row.private_key_enc), format: 'der', type: 'pkcs8' });
+    if (row.attest_secret_enc && unsealWith(k, row.attest_secret_enc).length !== 32) return false;
     return createPublicKey(priv).export({ type: 'spki', format: 'der' }).toString('base64') === row.public_key_spki;
   } catch { return false; }
 }
@@ -47,21 +48,25 @@ const verifiedTenants = new Set<string>();
 /** New key material: an RSA-OAEP 3072-bit pair with the private half sealed under the KEK. */
 export function newKeyMaterial(k: Buffer = kek()) {
   const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 3072 });
-  return { public_key_spki: publicKey.export({ type: 'spki', format: 'der' }).toString('base64'), private_key_enc: sealWith(k, privateKey.export({ type: 'pkcs8', format: 'der' })) };
+  return { public_key_spki: publicKey.export({ type: 'spki', format: 'der' }).toString('base64'), private_key_enc: sealWith(k, privateKey.export({ type: 'pkcs8', format: 'der' })),
+    // Separate random secret for attestation keys, so that exposure of a version's private key alone does not allow
+    // attributable recovery files to be forged.
+    attest_secret_enc: sealWith(k, randomBytes(32)) };
 }
 
-export interface ActiveKey { version: number; spki: string; privateKeyEnc: string }
+export interface ActiveKey { version: number; spki: string; privateKeyEnc: string; attestSecretEnc: string | null }
 /**
  * The organisation's active recovery key version, created on first use and verified (against the KEK and its own
  * public half) the first time this process uses it. Older versions are kept, inactive, so envelopes sealed to them on
  * devices that have not reconnected stay importable.
  */
 export async function activeRecoveryKey(tx: Tx, tenantId: string): Promise<ActiveKey> {
-  let k = await one(tx, 'select key_version, public_key_spki, private_key_enc from field_recovery_keys where active');
+  let k = await one(tx, 'select key_version, public_key_spki, private_key_enc, attest_secret_enc from field_recovery_keys where active');
   if (!k) {
     const m = newKeyMaterial();
-    await tx.query(`insert into field_recovery_keys (tenant_id, key_version, public_key_spki, private_key_enc, active) values ($1,1,$2,$3,true) on conflict do nothing`, [tenantId, m.public_key_spki, m.private_key_enc]);
-    k = await one(tx, 'select key_version, public_key_spki, private_key_enc from field_recovery_keys where active');
+    await tx.query(`insert into field_recovery_keys (tenant_id, key_version, public_key_spki, private_key_enc, attest_secret_enc, active) values ($1,1,$2,$3,$4,true) on conflict do nothing`,
+      [tenantId, m.public_key_spki, m.private_key_enc, m.attest_secret_enc]);
+    k = await one(tx, 'select key_version, public_key_spki, private_key_enc, attest_secret_enc from field_recovery_keys where active');
   }
   const tag = `${tenantId}:${k.key_version}`;
   if (!verifiedTenants.has(tag)) {
@@ -71,7 +76,7 @@ export async function activeRecoveryKey(tx: Tx, tenantId: string): Promise<Activ
     }
     verifiedTenants.add(tag);
   }
-  return { version: k.key_version, spki: k.public_key_spki, privateKeyEnc: k.private_key_enc };
+  return { version: k.key_version, spki: k.public_key_spki, privateKeyEnc: k.private_key_enc, attestSecretEnc: k.attest_secret_enc ?? null };
 }
 export const recoveryPublicKey = async (tx: Tx, tenantId: string) => (await activeRecoveryKey(tx, tenantId)).spki;
 
@@ -83,13 +88,23 @@ export const recoveryPublicKey = async (tx: Tx, tenantId: string) => (await acti
  */
 export const attestKeyFrom = (privateKeyEnc: string, tenantId: string, userId: string) =>
   createHmac('sha256', createHash('sha256').update(unseal(privateKeyEnc)).digest()).update(`ohea-recovery-attest|${tenantId}|${userId}`).digest('base64');
+/** Attestation key of a key version: from its separate secret, or (versions created before that existed) its private key. */
+export const attestKeyFor = (row: { privateKeyEnc: string; attestSecretEnc: string | null }, tenantId: string, userId: string) =>
+  row.attestSecretEnc
+    ? createHmac('sha256', unseal(row.attestSecretEnc)).update(`ohea-recovery-attest|${tenantId}|${userId}`).digest('base64')
+    : attestKeyFrom(row.privateKeyEnc, tenantId, userId);
 export async function recoveryAttestKey(tx: Tx, tenantId: string, userId: string) {
-  return attestKeyFrom((await activeRecoveryKey(tx, tenantId)).privateKeyEnc, tenantId, userId);
+  return attestKeyFor(await activeRecoveryKey(tx, tenantId), tenantId, userId);
 }
-const macOk = (key: string, e: { wk: string; iv: string; ct: string; mac: string }) => {
-  const want = createHmac('sha256', Buffer.from(key, 'base64')).update(`${e.wk}.${e.iv}.${e.ct}`).digest();
+/** Envelope MAC. Binds the key version as well as the ciphertext. */
+export const envelopeMac = (key: string, e: { kv?: number; wk: string; iv: string; ct: string }) =>
+  createHmac('sha256', Buffer.from(key, 'base64')).update(`${e.kv ?? 1}.${e.wk}.${e.iv}.${e.ct}`).digest('base64');
+const macOk = (key: string, e: { kv: number; wk: string; iv: string; ct: string; mac: string }, legacy: boolean) => {
   const got = Buffer.from(e.mac, 'base64');
-  return got.length === want.length && timingSafeEqual(got, want);
+  const eq = (want: Buffer) => got.length === want.length && timingSafeEqual(got, want);
+  if (eq(Buffer.from(envelopeMac(key, e), 'base64'))) return true;
+  // Version-1 keys created before the MAC covered the version also accept the earlier form.
+  return legacy && eq(createHmac('sha256', Buffer.from(key, 'base64')).update(`${e.wk}.${e.iv}.${e.ct}`).digest());
 };
 
 const envelope = z.object({ v: z.literal(1), kv: z.number().int().positive().default(1), wk: z.string().min(16).max(2000), iv: z.string().min(8).max(64), ct: z.string().min(8).max(200_000), mac: z.string().min(16).max(200) });
@@ -108,17 +123,18 @@ export async function importRecoveryFile(a: Actor, raw: string) {
   if (parsed.tenant_id !== a.tenantId) throw invalid('This recovery file belongs to a different organisation and cannot be imported here.');
   const sha = createHash('sha256').update(raw).digest('hex');
   const { keys, already } = await withActor(a, async (tx) => ({
-    keys: await many(tx, 'select key_version, public_key_spki, private_key_enc from field_recovery_keys'),
+    keys: await many(tx, 'select key_version, public_key_spki, private_key_enc, attest_secret_enc, revoked_at from field_recovery_keys'),
     already: await one(tx, 'select id, imported_at from field_recovery_imports where file_sha256=$1', [sha]),
   }));
   if (!keys.length) throw invalid('No recovery key exists for this organisation, so this file cannot have been produced here.');
   const owner = await withActor(a, (tx) => one(tx, 'select id from users where id=$1', [parsed.user_id]));
   if (!owner) throw invalid('The user named in this recovery file is not a user of this organisation.');
   // Each envelope names the key version it was sealed to; every version the organisation has had is kept.
-  const byVersion = new Map<number, { attest: string; priv: any }>();
+  const byVersion = new Map<number, { attest: string; legacy: boolean; priv: any }>();
   for (const k of keys) {
-    if (!keyRowValid(k)) continue; // an invalid row (wrong KEK, planted) opens nothing
-    byVersion.set(k.key_version, { attest: attestKeyFrom(k.private_key_enc, a.tenantId, parsed.user_id),
+    if (k.revoked_at) continue;     // revoked versions (suspected compromise) open nothing
+    if (!keyRowValid(k)) continue;  // an invalid row (wrong KEK, planted) opens nothing
+    byVersion.set(k.key_version, { attest: attestKeyFor({ privateKeyEnc: k.private_key_enc, attestSecretEnc: k.attest_secret_enc }, a.tenantId, parsed.user_id), legacy: !k.attest_secret_enc,
       priv: { key: unseal(k.private_key_enc), format: 'der' as const, type: 'pkcs8' as const, padding: constants.RSA_PKCS1_OAEP_PADDING, oaepHash: 'sha256' } });
   }
   const items: any[] = [];
@@ -126,7 +142,7 @@ export async function importRecoveryFile(a: Actor, raw: string) {
   parsed.records.forEach((e, i) => {
     try {
       const kv = byVersion.get(e.kv);
-      if (!kv || !macOk(kv.attest, e)) { undecryptable.push(i + 1); return; }
+      if (!kv || !macOk(kv.attest, e, kv.legacy)) { undecryptable.push(i + 1); return; }
       const key = privateDecrypt(kv.priv, Buffer.from(e.wk, 'base64'));
       const buf = Buffer.from(e.ct, 'base64');
       const d = createDecipheriv('aes-256-gcm', key, Buffer.from(e.iv, 'base64'));

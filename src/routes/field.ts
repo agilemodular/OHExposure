@@ -5,7 +5,7 @@ import * as field from '../services/field.js';
 import * as att from '../services/attachments.js';
 import { lookups, substanceLabel, workerLabel } from '../services/lookups.js';
 import { controlsFor } from '../services/assurance.js';
-import { activeRecoveryKey, attestKeyFrom, importRecoveryFile } from '../services/recovery.js';
+import { activeRecoveryKey, attestKeyFor, importRecoveryFile } from '../services/recovery.js';
 import { utcToZonedInput } from '../services/util.js';
 import { fmtDate, fmtDateTime, html, label } from '../ui/html.js';
 import { csrfField, empty, options, type PageCtx } from '../ui/layout.js';
@@ -56,7 +56,7 @@ export function fieldRoutes(app: FastifyInstance) {
     const ctl = await controlsFor(c.actor);
     const rk = ctl.offlineCaptureEnabled ? await withActor(c.actor, async (tx) => {
       const k = await activeRecoveryKey(tx, c.actor.tenantId);
-      return { spki: k.spki, version: k.version, attest: attestKeyFrom(k.privateKeyEnc, c.actor.tenantId, c.actor.userId) };
+      return { spki: k.spki, version: k.version, attest: attestKeyFor(k, c.actor.tenantId, c.actor.userId) };
     }) : null;
     return {
       userId: c.actor.userId, tenantId: c.actor.tenantId, csrf: c.csrf, fetchedAt: new Date().toISOString(),

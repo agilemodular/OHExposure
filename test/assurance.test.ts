@@ -131,10 +131,11 @@ describe('pilot gating of calculation methods and reference data', () => {
     await expect(asmt.submitForReview(w.a.prac, S.rev)).rejects.toThrow(/not reviewed by a competent occupational hygienist/);
     // The database refuses the same approval even if the service layer is bypassed.
     await expect(withActor(w.a.rev, (tx) => tx.query(`update assessment_revisions set status='approved' where id=$1`, [S.rev]))).rejects.toThrow(/only a revision in review/);
-    await expect(withActor(w.a.rev, async (tx) => {
-      await tx.query(`update assessment_revisions set status='in_review', submitted_by=$2 where id=$1`, [S.rev, w.a.prac.userId]);
-      await tx.query(`update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [S.rev, w.a.rev.userId]);
-    })).rejects.toThrow(/pilot approval refused/);
+    // A submitter can only submit as themselves; then the reviewer's direct approval is still refused by the pilot rules.
+    await expect(withActor(w.a.rev, (tx) => tx.query(`update assessment_revisions set status='in_review', submitted_by=$2 where id=$1`, [S.rev, w.a.prac.userId]))).rejects.toThrow(/submitter must be the signed-in user/);
+    await withActor(w.a.prac, (tx) => tx.query(`update assessment_revisions set status='in_review', submitted_by=$2, submitted_at=now() where id=$1`, [S.rev, w.a.prac.userId]));
+    await expect(withActor(w.a.rev, (tx) => tx.query(`update assessment_revisions set status='approved', reviewer_id=$2 where id=$1`, [S.rev, w.a.rev.userId]))).rejects.toThrow(/pilot approval refused/);
+    await asmt.returnToDraft(w.a.rev, S.rev, { notes: 'Back to draft after the direct-write test' });
     const caps = await methodCapabilities(w.a.prac);
     expect(caps.rows.find((r) => r.code === 'twa_8h')!.pilotEnabled).toBe(false);
   });
@@ -214,7 +215,11 @@ describe('pilot report issue gate', () => {
     expect(ap.assurance_level_at_approval).toBe('evaluation');
     const evalReport = await rep.generateReport(w.a.prac, S.asmtId, id);
     expect((await rep.getReport(w.a.prac, evalReport.id)).content_html).toMatch(/NOT APPROVED UNDER AN AUTHORISED PILOT/);
+    // Returning to pilot level needs a current method approval (database rule); STEL is approved for the purpose.
+    const stel = { method: 'stel_15', version: CALCULATIONS.stel_15.version, recordedBy: 'Test Operator' };
+    await recordMethodReview(URL_, { ...stel, status: 'approved', reviewer: 'Test Reviewer', competence: 'Test', reviewedOn: yesterday, evidence: 'T', ...APPROVAL });
     await admin.query(`update tenants set assurance_level='pilot' where id=$1`, [w.A.tenant.id]);
+    await recordMethodReview(URL_, { ...stel, status: 'not_reviewed' });
     await admin.end();
     await expect(rep.generateReport(w.a.prac, S.asmtId, id)).rejects.toThrow(/not approved under the pilot controls/);
     // Direct insert of an issued report through the application role is refused by the database.
@@ -322,7 +327,7 @@ describe('field recovery files', () => {
     const { createHmac } = await import('node:crypto');
     const { recoveryAttestKey: rak } = await import('../src/services/recovery.js');
     const k = attest ?? await withActor(w.a.tech, (tx) => rak(tx, w.A.tenant.id, w.a.tech.userId));
-    return { ...e, mac: createHmac('sha256', Buffer.from(k, 'base64')).update(`${e.wk}.${e.iv}.${e.ct}`).digest('base64') };
+    return { ...e, kv: 1, mac: createHmac('sha256', Buffer.from(k, 'base64')).update(`1.${e.wk}.${e.iv}.${e.ct}`).digest('base64') };
   }
   it('opens sealed records server-side, rejects other organisations and tampering, and is idempotent', async () => {
     const { recoveryPublicKey, importRecoveryFile } = await import('../src/services/recovery.js');

@@ -35,6 +35,7 @@
   const getMeta = (k, name) => tx('meta', 'readonly', (s) => s.get(k), name);
   const setMeta = (k, v) => tx('meta', 'readwrite', (s) => s.put(v, k));
   const delMeta = (k) => tx('meta', 'readwrite', (s) => s.delete(k));
+  const setMetaMany = (obj) => tx('meta', 'readwrite', (s) => { for (const [k, v] of Object.entries(obj)) s.put(v, k); });
   const rawRecords = (name) => tx('records', 'readonly', (s) => s.getAll(), name);
   const putRaw = (r) => tx('records', 'readwrite', (s) => s.put(r));
   const delRaw = (id) => tx('records', 'readwrite', (s) => s.delete(id));
@@ -56,7 +57,7 @@
     // Attestation: HMAC under this user's key (held only inside the PIN-encrypted cache) binds the envelope to the user.
     if (!attestKey) throw new Error('This device needs to connect once to refresh its offline keys before records can be saved on it. Reconnect and unlock again.');
     const hk = await crypto.subtle.importKey('raw', unb64(attestKey), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
-    env.mac = b64(await crypto.subtle.sign('HMAC', hk, te.encode(`${env.wk}.${env.iv}.${env.ct}`)));
+    env.mac = b64(await crypto.subtle.sign('HMAC', hk, te.encode(`${env.kv}.${env.wk}.${env.iv}.${env.ct}`)));
     return env;
   }
 
@@ -220,8 +221,9 @@
         recoveryKeyVersion: b.offline.recoveryKeyVersion || (saved && saved.recoveryKeyVersion) || 1, tenantId: b.tenantId };
 
       if (policy.windingDown) { await disableOffline(); return; }
-      await setMeta('policy', policy);
-      await setMeta('refEnc', await encJSON(key, b));
+      // Policy (recovery key version) and reference cache (attestation key) are written together, so they can never
+      // describe different key versions after an interruption.
+      await setMetaMany({ policy, refEnc: await encJSON(key, b) });
     } catch (e) {
       ref = cached;
       if (ref) {

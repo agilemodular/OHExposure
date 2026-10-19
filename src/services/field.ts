@@ -298,14 +298,18 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
         if (!cur) {
           if (it.server_id) return { client_uuid: it.client_uuid, outcome: 'rejected', message: 'Record not found or not accessible' };
           const { event, warnings } = await insertEvent(tx, a, d, true, { clockOffsetS, recoveredFromUser: opts.recoveredFromUser ?? null });
-          return { client_uuid: it.client_uuid, outcome: 'created', server_id: event.id, version: event.version, warnings };
+          return { client_uuid: it.client_uuid, outcome: 'created', server_id: event.id, version: event.version, warnings: [...warnings, ...(await releaseHolds(tx, it.client_uuid, event.id))] };
         }
         const { values } = await prepare(tx, a, d);
         const same = comparable(values) === comparable(cur);
-        if (same) return { client_uuid: it.client_uuid, outcome: 'duplicate', server_id: cur.id, version: cur.version };
+        if (same) {
+          // The server already holds exactly this content, so nothing held entered the record; close any hold.
+          await tx.query(`update field_intake_holds set status='synchronised', resolved_at=now(), sampling_event_id=$2 where client_uuid=$1 and status='held'`, [it.client_uuid, cur.id]);
+          return { client_uuid: it.client_uuid, outcome: 'duplicate', server_id: cur.id, version: cur.version };
+        }
         if (it.base_version !== null && it.base_version === cur.version && !LOCKED.includes(cur.status)) {
           const { event, warnings } = await applyUpdate(tx, a, cur, d, true);
-          return { client_uuid: it.client_uuid, outcome: 'updated', server_id: event.id, version: event.version, warnings };
+          return { client_uuid: it.client_uuid, outcome: 'updated', server_id: event.id, version: event.version, warnings: [...warnings, ...(await releaseHolds(tx, it.client_uuid, event.id))] };
         }
         // The same device copy re-sent (retry, recovery re-import) is not recorded as a new conflict.
         const prior = await one(tx, `select id, status from sync_conflicts where entity_id=$1 and client_uuid=$2 and coalesce(base_version,-1)=coalesce($3::int,-1) and client_payload=$4::jsonb order by submitted_at desc limit 1`,
@@ -316,20 +320,11 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
           values ($1,$2,'sampling_event',$3,$4,$5,$6,$7,$8,$9) returning id`,
           [a.tenantId, cur.client_id, cur.id, it.client_uuid, it.base_version, cur.version, it.payload, cur, a.userId]);
         await audit(tx, a, 'sync.conflict', 'sampling_event', cur.id, { conflict_id: c.id, base_version: it.base_version, server_version: cur.version });
+        // A held record that ends up as a conflict stays tracked: applying the device copy later flags the sample.
+        await tx.query(`update field_intake_holds set status='in_conflict', sampling_event_id=$2 where client_uuid=$1 and status='held'`, [it.client_uuid, cur.id]);
         return { client_uuid: it.client_uuid, outcome: 'conflict', server_id: cur.id, version: cur.version, conflict_id: c.id,
           message: LOCKED.includes(cur.status) ? `Sample is already ${cur.status}; your offline changes were kept for review.` : 'The server copy changed since you went offline; both versions were kept for review.' };
       });
-      // A record that was held during a suspension is flagged for review when it finally arrives, so it cannot enter an
-      // assessment unnoticed.
-      if (res.server_id && (res.outcome === 'created' || res.outcome === 'updated')) {
-        await withActor(a, async (tx) => {
-          const held = await many(tx, `update field_intake_holds set status='synchronised', resolved_at=now(), sampling_event_id=$2 where client_uuid=$1 and status='held' returning id`, [it.client_uuid, res.server_id]);
-          if (held.length) {
-            await tx.query('update sampling_events set suspension_review_required=true, suspension_reviewed_by=null, suspension_reviewed_at=null where id=$1', [res.server_id]);
-            res.warnings = [...(res.warnings ?? []), 'This record was received during a suspension; a reviewer must clear it before it can be used in an assessment.'];
-          }
-        });
-      }
       out.push(res);
     } catch (e: any) {
       out.push({ client_uuid: it.client_uuid, outcome: 'rejected', message: e instanceof AppError ? e.message : 'Server error' });
@@ -354,6 +349,10 @@ export async function resolveConflict(a: Actor, id: string, input: unknown) {
       const cur = await one(tx, 'select * from sampling_events where id=$1 for update', [c.entity_id]);
       const p = parse(samplingInput, { ...c.client_payload, client_uuid: cur.client_uuid });
       await applyUpdate(tx, a, cur, p, true);
+      // If the device copy was first received during a suspension, the sample must now be reviewed before use.
+      await releaseHolds(tx, c.client_uuid, cur.id, ['held', 'in_conflict']);
+    } else {
+      await tx.query(`update field_intake_holds set status='synchronised', resolved_at=now() where client_uuid=$1 and status='in_conflict'`, [c.client_uuid]);
     }
     await tx.query('update sync_conflicts set status=$2, resolution_notes=$3, resolved_by=$4, resolved_at=now() where id=$1', [id, d.resolution, d.notes, a.userId]);
     await audit(tx, a, 'sync.conflict_resolved', 'sampling_event', c.entity_id, d);
@@ -388,6 +387,17 @@ export async function listSamples(a: Actor, filter: { status?: string } = {}) {
     where ($1::text is null or e.status=$1) order by e.start_at desc nulls first limit 500`, [filter.status ?? null]));
 }
 
+/**
+ * Called in the same transaction that writes a field record: if a copy of it was held during a suspension, the hold
+ * is closed and the sample is flagged so it cannot support a submission or approval until someone else clears it.
+ */
+async function releaseHolds(tx: Tx, clientUuid: string, eventId: string, statuses = ['held']) {
+  const held = await many(tx, `update field_intake_holds set status='synchronised', resolved_at=now(), sampling_event_id=$2 where client_uuid=$1 and status = any($3) returning id`, [clientUuid, eventId, statuses]);
+  if (!held.length) return [];
+  await tx.query('update sampling_events set suspension_review_required=true, suspension_reviewed_by=null, suspension_reviewed_at=null where id=$1', [eventId]);
+  return ['This record was received during a suspension; a reviewer must clear it before it can be used in an assessment.'];
+}
+
 // ───── Records received during a suspension
 export async function listSuspensionHolds(a: Actor) {
   requirePerm(a, 'conflicts.resolve');
@@ -404,10 +414,12 @@ export async function clearSuspensionReview(a: Actor, sampleId: string, input: u
   const d = parse(z.object({ notes: reqStr(10) }), input);
   return withActor(a, async (tx) => {
     await assertWorkflowActive(tx, 'field_sync', 'clear suspension review');
-    const e = await one(tx, 'select id, created_by, suspension_review_required, suspension_reviewed_at from sampling_events where id=$1 for update', [sampleId]);
+    const e = await one(tx, 'select id, client_uuid, created_by, recovered_from_user, suspension_review_required, suspension_reviewed_at from sampling_events where id=$1 for update', [sampleId]);
     if (!e) throw notFound('Sampling event');
     if (!e.suspension_review_required || e.suspension_reviewed_at) throw invalid('This record does not need suspension review');
-    if (e.created_by === a.userId) throw forbidden('Someone other than the person who submitted the record must clear it');
+    const submitters = await many(tx, 'select distinct submitted_by from field_intake_holds where sampling_event_id=$1 or server_id=$1 or client_uuid=$2', [sampleId, e.client_uuid]);
+    if ([e.created_by, e.recovered_from_user, ...submitters.map((x) => x.submitted_by)].includes(a.userId))
+      throw forbidden('Someone other than the person who captured or submitted the record must clear it');
     await tx.query('update sampling_events set suspension_reviewed_by=$2, suspension_reviewed_at=now() where id=$1', [sampleId, a.userId]);
     await audit(tx, a, 'sample.suspension_review_cleared', 'sampling_event', sampleId, d);
   });
