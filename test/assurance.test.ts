@@ -224,7 +224,7 @@ describe('pilot report issue gate', () => {
     await expect(rep.generateReport(w.a.prac, S.asmtId, id)).rejects.toThrow(/not approved under the pilot controls/);
     // Direct insert of an issued report through the application role is refused by the database.
     await expect(withActor(w.a.prac, (tx) => tx.query(`insert into reports (tenant_id,client_id,assessment_id,assessment_revision_id,version,status,content_html,content_hash,generated_by)
-      select tenant_id, client_id, assessment_id, id, 99, 'issued', 'x', 'x', $2 from assessment_revisions where id=$1`, [id, w.a.prac.userId]))).rejects.toThrow(/report issue refused/);
+      select tenant_id, client_id, assessment_id, id, 99, 'issued', 'x', '2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881', $2 from assessment_revisions where id=$1`, [id, w.a.prac.userId]))).rejects.toThrow(/report issue refused/);
   });
 });
 

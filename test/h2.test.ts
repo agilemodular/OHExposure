@@ -226,7 +226,7 @@ describe('approval and report-issue prerequisites on every write path', () => {
   it('report issue through the application role is refused for a non-approved revision or a non-issuing role', async () => {
     const { assessmentId, revId } = await inReview([S.samples[1]]);
     const ins = (actor: any, rev: string, as: string, by: string) => withActor(actor, (tx) => tx.query(`insert into reports (tenant_id,client_id,assessment_id,assessment_revision_id,version,status,content_html,content_hash,generated_by)
-      select tenant_id, client_id, $2, id, 50, 'issued', 'x', 'x', $3 from assessment_revisions where id=$1`, [rev, as, by]));
+      select tenant_id, client_id, $2, id, 50, 'issued', 'x', '2d711642b726b04401627ca9fbac32f5c8530fb1903cc4db02258717921a4881', $3 from assessment_revisions where id=$1`, [rev, as, by]));
     await expect(ins(w.a.prac, revId, assessmentId, w.a.prac.userId)).rejects.toThrow(/not an approved revision/);
     await expect(ins(w.a.prac, S.revA, S.asA, w.a.tech.userId)).rejects.toThrow(/issuer must be/);
     await expect(ins(w.a.prac, S.revA, assessmentId, w.a.prac.userId)).rejects.toThrow(/not an approved revision of this assessment/);
