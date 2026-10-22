@@ -28,6 +28,7 @@ FILES = {
   '01-source/src/services/reports.ts': 'src/services/reports.ts',
   '01-source/src/ui/html.ts': 'src/ui/html.ts',
   '01-source/db/migrations/026_engine_1_4_remediation.sql': 'db/migrations/026_engine_1_4_remediation.sql',
+  '01-source/db/migrations/027_disposition_roles.sql': 'db/migrations/027_disposition_roles.sql',
   '01-source/scripts/tr/reproductions.ts': 'scripts/tr/reproductions.ts',
   '01-source/scripts/tr/engine-change-impact.ts': 'scripts/tr/engine-change-impact.ts',
   '01-source/scripts/generate-validation-examples.ts': 'scripts/generate-validation-examples.ts',
