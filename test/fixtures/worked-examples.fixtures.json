@@ -1,0 +1,5719 @@
+{
+ "description": "Structured regression fixtures for engine 1.4.0. Expected values are independent of the engine (Python oracle + hand-written statuses).",
+ "engine": {
+  "engine": "1.4.0",
+  "twa_8h": "1.3.0",
+  "stel_15": "1.2.0"
+ },
+ "molarVolumeLPerMol": 24.05526,
+ "comparisonRelativeTolerance": 1e-09,
+ "generatedBy": "scripts/tr/build_fixtures.py",
+ "cases": [
+  {
+   "id": "E1",
+   "group": "original",
+   "description": "Full-shift sample, 300 µg over 480 min at 2 L/min",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.3125,
+      "upper": 0.3125,
+      "comparison": "below_benchmark"
+     }
+    ],
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0.3125,
+      "upper": 0.3125,
+      "included": true
+     }
+    ],
+    "dataQuality": "complete",
+    "benchmarkState": "below_benchmark",
+    "calculationAvailability": "complete",
+    "evidenceAdequacy": "adequate",
+    "flagsInclude": [
+     "SHIFT_INFERRED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "V = 2 L/min × 480 min = 960 L; C = 0.300 mg / 0.960 m³ = 0.3125 mg/m³; TWA = 0.3125 × 480 / 480."
+  },
+  {
+   "id": "E2",
+   "group": "original",
+   "description": "Interruption 30 min and flow drift 10 % (method tolerance 5 %, consequence not stated)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [
+       {
+        "start": "2026-03-02T12:00:00Z",
+        "end": "2026-03-02T12:30:00Z"
+       }
+      ],
+      "flowPreLpm": 2,
+      "flowPostLpm": 1.8,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0.3508771929824561,
+      "upper": 0.3508771929824561,
+      "sampledMinutes": 450.0,
+      "volumeL": 855.0,
+      "included": false
+     }
+    ],
+    "results": [],
+    "dataQuality": "failed",
+    "benchmarkState": "not_comparable",
+    "evidenceAdequacy": "no_formal_evidence",
+    "flagsInclude": [
+     "INTERRUPTED",
+     "ACCEPTANCE_RULE_UNDEFINED",
+     "FLOW_DRIFT_DISPOSITION_REQUIRED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "T = 480 − 30 = 450 min; mean flow 1.9 L/min; V = 855 L; C = 0.300/0.855 = 0.350877… mg/m³.",
+   "changeFrom_1_3_1": "1.3.1 kept the sample with a qualify flag. 1.4.0 (TR-05): the method does not state the consequence of a flow-drift failure, so the sample is excluded until a reviewer records a disposition."
+  },
+  {
+   "id": "E2-advisory",
+   "group": "original-variant",
+   "description": "E2 with the method stating flow drift as advisory",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [
+       {
+        "start": "2026-03-02T12:00:00Z",
+        "end": "2026-03-02T12:30:00Z"
+       }
+      ],
+      "flowPreLpm": 2,
+      "flowPostLpm": 1.8,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true,
+       "acceptance": {
+        "flowDrift": "advisory"
+       }
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 450,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0.3508771929824561,
+      "upper": 0.3508771929824561,
+      "included": true
+     }
+    ],
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.3289473684210526,
+      "upper": 0.3289473684210526,
+      "comparison": "below_benchmark"
+     }
+    ],
+    "dataQuality": "qualified",
+    "benchmarkState": "below_benchmark",
+    "flagsInclude": [
+     "FLOW_DRIFT_ADVISORY"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "As E2; exposure period 450 min = sampled time, so TWA = 0.350877 × 450 / 480 = 0.328947 mg/m³."
+  },
+  {
+   "id": "E3",
+   "group": "original",
+   "description": "Two consecutive samples 0.5 and 0.2 mg/m³",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T12:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 240,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T12:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 96,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.35,
+      "upper": 0.35,
+      "comparison": "below_benchmark"
+     }
+    ],
+    "dataQuality": "complete",
+    "benchmarkState": "below_benchmark"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "(0.5 × 240 + 0.2 × 240) / 480 = 0.35 mg/m³."
+  },
+  {
+   "id": "E4-none",
+   "group": "original",
+   "description": "Half-shift sample, 480-min exposure, no assumption",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T12:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 240,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": null,
+      "upper": null,
+      "comparison": "not_comparable"
+     }
+    ],
+    "dataQuality": "incomplete",
+    "benchmarkState": "indeterminate",
+    "calculationAvailability": "none",
+    "flagsInclude": [
+     "COVERAGE_INCOMPLETE"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Coverage 240/480 = 50 %; no assumption → no TWA; uncalculable formal result → indeterminate."
+  },
+  {
+   "id": "E4-zero",
+   "group": "original",
+   "description": "Half-shift sample, zero exposure assumed (justified)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T12:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 240,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "zero_exposure",
+     "unsampledJustification": "Worker in office with no process access for the rest of the shift."
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.25,
+      "upper": 0.25,
+      "comparison": "below_benchmark",
+      "assumptionDependent": true
+     }
+    ],
+    "dataQuality": "qualified",
+    "benchmarkState": "below_benchmark",
+    "flagsInclude": [
+     "UNSAMPLED_ZERO"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "0.5 × 240 / 480 = 0.25 mg/m³."
+  },
+  {
+   "id": "E4-same",
+   "group": "original",
+   "description": "Half-shift sample, sampled mean assumed for the rest (justified)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T12:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 240,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "same_as_sampled",
+     "unsampledJustification": "Worker in office with no process access for the rest of the shift."
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.5,
+      "upper": 0.5,
+      "comparison": "at_or_above_benchmark",
+      "assumptionDependent": true
+     }
+    ],
+    "dataQuality": "qualified",
+    "benchmarkState": "at_or_above_benchmark",
+    "flagsInclude": [
+     "EXTRAPOLATED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "0.5 × 480 / 480 = 0.5 mg/m³; equal to the benchmark → at or above."
+  },
+  {
+   "id": "E5-0.05",
+   "group": "original",
+   "description": "Non-detect < 10 µg over 960 L; benchmark 0.05",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.05,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0,
+      "upper": 0.010416666666666668,
+      "included": true
+     }
+    ],
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.0,
+      "upper": 0.010416666666666668,
+      "comparison": "below_benchmark"
+     }
+    ],
+    "benchmarkState": "below_benchmark",
+    "dataQuality": "qualified",
+    "flagsInclude": [
+     "NON_DETECT"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Interval 0 – 0.010/0.960 = 0 – 0.0104167 mg/m³."
+  },
+  {
+   "id": "E5-0.005",
+   "group": "original",
+   "description": "Non-detect < 10 µg over 960 L; benchmark 0.005",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.005,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.0,
+      "upper": 0.010416666666666668,
+      "comparison": "indeterminate"
+     }
+    ],
+    "benchmarkState": "indeterminate"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Interval spans 0.005."
+  },
+  {
+   "id": "E6",
+   "group": "original",
+   "description": "10-hour shift, 360 µg over 600 min",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T18:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 360,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 600,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.375,
+      "upper": 0.375,
+      "comparison": "below_benchmark"
+     }
+    ],
+    "dataQuality": "complete",
+    "benchmarkState": "below_benchmark",
+    "flagsInclude": [
+     "EXTENDED_SHIFT"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "V = 1200 L; C = 0.3 mg/m³; TWA = 0.3 × 600 / 480 = 0.375 mg/m³."
+  },
+  {
+   "id": "E7",
+   "group": "original",
+   "description": "STEL, exact 15-minute sample, 45 µg",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 45,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 1,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 1.5,
+      "upper": 1.5,
+      "comparison": "at_or_above_benchmark"
+     }
+    ],
+    "benchmarkState": "at_or_above_benchmark"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "V = 30 L; C = 0.045 / 0.030 = 1.5 mg/m³ (EH40 Schedule para 8: determined by sampling over the 15-minute period)."
+  },
+  {
+   "id": "E7b",
+   "group": "original",
+   "description": "STEL, 10-minute sample, zero-remainder with justification only",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:10:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 45,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none",
+     "shortSampleAssumption": "zero_remainder",
+     "shortSampleJustification": "Decanting task observed to last 10 minutes."
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": null,
+      "upper": null,
+      "comparison": "not_comparable"
+     }
+    ],
+    "benchmarkState": "indeterminate",
+    "flagsInclude": [
+     "STEL_REMAINDER_EVIDENCE_REQUIRED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Task completion alone does not establish zero exposure for the remaining 5 min.",
+   "changeFrom_1_3_1": "1.3.1 produced 1.5 mg/m³ from the justification alone. 1.4.0 (TR-01) requires supporting evidence for the remainder assumption."
+  },
+  {
+   "id": "E7b-evidence",
+   "group": "original-variant",
+   "description": "E7b with continuous observation recorded",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:10:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 45,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none",
+     "shortSampleAssumption": "zero_remainder",
+     "shortSampleJustification": "Decanting task observed to last 10 minutes.",
+     "shortSampleEvidenceBasis": "continuous_observation",
+     "shortSampleEvidenceRef": "Observation sheet OB-7"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 1.5,
+      "upper": 1.5,
+      "comparison": "below_benchmark",
+      "assumptionDependent": true
+     }
+    ],
+    "benchmarkState": "below_benchmark",
+    "dataQuality": "qualified",
+    "flagsInclude": [
+     "STEL_ZERO_REMAINDER",
+     "STEL_SHORT_PEAK_LIMITATION"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "C = 0.045/0.020 = 2.25 mg/m³; 15-min value = 2.25 × 10 / 15 = 1.5 mg/m³ (assumption-dependent)."
+  },
+  {
+   "id": "E8",
+   "group": "original",
+   "description": "Conversion 20 ppm, MW 92.14 g/mol",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": null,
+    "molecularWeight": null
+   },
+   "expected": {
+    "conversion": {
+     "from": {
+      "lower": 20,
+      "upper": 20,
+      "unit": "ppm"
+     },
+     "to": "mg/m3",
+     "molecularWeight": 92.14,
+     "lower": 76.6069458405355,
+     "upper": 76.6069458405355
+    }
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "20 × 92.14 / 24.05526 = 76.6064… mg/m³ (EH40 para 68 molar volume).",
+   "changeFrom_1_3_1": "1.3.1 used 24.0551 rounded from R·T/P (76.6075). 1.4.0 uses the value stated in EH40 para 68 (24.05526) without rounding; relative difference 6.5 × 10⁻⁶."
+  },
+  {
+   "id": "E9",
+   "group": "original",
+   "description": "Overlapping samples for one worker",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T12:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 240,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T11:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 240,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": null,
+      "upper": null,
+      "comparison": "not_comparable"
+     }
+    ],
+    "dataQuality": "incomplete",
+    "benchmarkState": "indeterminate",
+    "calculationAvailability": "none",
+    "flagsInclude": [
+     "SAMPLES_OVERLAP"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Overlap would double count → no TWA → indeterminate (H1-F01 behaviour retained)."
+  },
+  {
+   "id": "E10a",
+   "group": "original",
+   "description": "Calibration expired; indicative 0.3125 vs benchmark 1.0",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": false
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 1,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "not_comparable",
+    "evidenceAdequacy": "no_formal_evidence",
+    "unresolved": [
+     "S"
+    ],
+    "flagsInclude": [
+     "CALIBRATION_INVALID"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Indicative only; the indicative interval is below 1.0 so it cannot be at or above; no formal comparison."
+  },
+  {
+   "id": "E10b",
+   "group": "original",
+   "description": "Calibration expired; indicative 0.3125 vs benchmark 0.2",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": false
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "indeterminate",
+    "unresolved": [
+     "S"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Indicative 0.3125 ≥ 0.2 could be at or above; not proof either way → indeterminate."
+  },
+  {
+   "id": "E10c",
+   "group": "original",
+   "description": "One valid worker below 0.2; another indicative (calibration expired)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "OK",
+      "sampleCode": "OK",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 96,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "CAL",
+      "sampleCode": "CAL",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": false
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W2",
+      "lower": 0.1,
+      "upper": 0.1,
+      "comparison": "below_benchmark"
+     },
+     {
+      "subject": "W1",
+      "lower": 0.3125,
+      "upper": 0.3125,
+      "comparison": "not_comparable"
+     }
+    ],
+    "benchmarkState": "indeterminate",
+    "evidenceAdequacy": "unresolved_evidence",
+    "unresolved": [
+     "CAL"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "W2: 0.096/0.960 = 0.1 mg/m³ below; CAL unresolved → overall indeterminate.",
+   "note": "The review pack labels the workers W2 and W3; the generator labels them W2 and W1. Values are the same."
+  },
+  {
+   "id": "E11",
+   "group": "original",
+   "description": "Static sample only",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "static",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "not_comparable",
+    "results": []
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Static samples are never compared with personal benchmarks."
+  },
+  {
+   "id": "E12",
+   "group": "original",
+   "description": "Screening-only instrument",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": true,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 1,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "not_comparable",
+    "unresolved": [
+     "S"
+    ],
+    "flagsInclude": [
+     "SCREENING_INSTRUMENT"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Indicative only; below 1.0; not comparable."
+  },
+  {
+   "id": "E13",
+   "group": "original",
+   "description": "Generic < LOQ (LOD 10 µg, LOQ 30 µg) over 960 L; benchmark 0.02",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOQ",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.02,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0,
+      "upper": 0.03125,
+      "included": true
+     }
+    ],
+    "benchmarkState": "indeterminate",
+    "dataQuality": "qualified",
+    "flagsInclude": [
+     "BELOW_LOQ"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Detection not confirmed: interval 0 – 0.030/0.960 = 0 – 0.03125 mg/m³.",
+   "changeFrom_1_3_1": "1.3.1 used the LOD as the lower bound (0.010417–0.03125), inferring detection from the presence of an LOD. 1.4.0 (item C) carries generic \"<LOQ\" as 0–LOQ; see E13-detected for confirmed detection."
+  },
+  {
+   "id": "E13-detected",
+   "group": "original-variant",
+   "description": "Laboratory-confirmed detection below LOQ (LOD 10, LOQ 30)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "detected_below_loq",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.02,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0.010416666666666668,
+      "upper": 0.03125,
+      "included": true
+     }
+    ],
+    "benchmarkState": "indeterminate",
+    "flagsInclude": [
+     "DETECTED_BELOW_LOQ"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Interval LOD–LOQ = 0.0104167 – 0.03125 mg/m³."
+  },
+  {
+   "id": "E14",
+   "group": "original",
+   "description": "Failed QC check without disposition",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "dataQuality": "failed",
+    "benchmarkState": "not_comparable",
+    "evidenceAdequacy": "no_formal_evidence",
+    "unresolved": [
+     "S"
+    ],
+    "flagsInclude": [
+     "QC_FAIL_UNRESOLVED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Sample excluded; its interval (0.3125) is below 0.5, so it could not be at or above; no formal comparison."
+  },
+  {
+   "id": "TR-01",
+   "group": "TR",
+   "description": "16-minute sample averaging 0.975 mg/m³; 15-minute benchmark 1",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:16:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 31.2,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 1,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": null,
+      "upper": null,
+      "comparison": "not_comparable"
+     }
+    ],
+    "benchmarkState": "indeterminate",
+    "dataQuality": "incomplete",
+    "flagsInclude": [
+     "STEL_SAMPLE_TOO_LONG"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "C = 0.0312/0.032 = 0.975 mg/m³ over 16 min. 15 min at 1.04 mg/m³ + 1 min at 0 gives the same average, so the average cannot establish the 15-minute value.",
+   "changeFrom_1_3_1": "1.3.1: complete / below_benchmark (14–16 min accepted as 15). 1.4.0: no result; indeterminate."
+  },
+  {
+   "id": "TR-02",
+   "group": "TR",
+   "description": "Valid worker below 0.5; another worker excluded non-detect 0–2 mg/m³",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.3125,
+      "upper": 0.3125,
+      "comparison": "below_benchmark"
+     }
+    ],
+    "benchmarkState": "indeterminate",
+    "evidenceAdequacy": "unresolved_evidence",
+    "unresolved": [
+     "B"
+    ],
+    "dataQuality": "qualified"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "W1 0.3125 below; W2 excluded with no disposition → no favourable overall comparison.",
+   "changeFrom_1_3_1": "1.3.1: qualified / below_benchmark (excluded interval lower bound 0 < 0.5 was ignored)."
+  },
+  {
+   "id": "TR-03",
+   "group": "TR",
+   "description": "<LOQ with LOD 1000 µg and LOQ 1 µg",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOQ",
+       "lod": 1000,
+       "loq": 1
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": null,
+      "upper": null,
+      "included": true
+     }
+    ],
+    "benchmarkState": "indeterminate",
+    "dataQuality": "incomplete",
+    "flagsInclude": [
+     "INPUT_INVALID_LIMITS"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "LOD > LOQ is contradictory; no interval is formed.",
+   "changeFrom_1_3_1": "1.3.1: interval 1.041667–0.001042 (lower > upper) / below_benchmark."
+  },
+  {
+   "id": "TR-04",
+   "group": "TR",
+   "description": "0.000384 µg over 960 L; benchmark 3e-7 mg/m³",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 0.000384,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 0.0001,
+       "loq": 0.0003
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 3e-07,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 4.0000000000000003e-07,
+      "upper": 4.0000000000000003e-07,
+      "comparison": "at_or_above_benchmark"
+     }
+    ],
+    "benchmarkState": "at_or_above_benchmark"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "C = 3.84e-7 mg / 0.96 m³ = 4e-7 mg/m³ > 3e-7.",
+   "changeFrom_1_3_1": "1.3.1 rounded to 6 decimal places (0) and reported below_benchmark."
+  },
+  {
+   "id": "TR-05",
+   "group": "TR",
+   "description": "Flow 2.0 → 1.0 L/min; method tolerance 5 %; consequence not stated",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 1,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0.4166666666666667,
+      "upper": 0.4166666666666667,
+      "included": false
+     }
+    ],
+    "benchmarkState": "not_comparable",
+    "dataQuality": "failed",
+    "flagsInclude": [
+     "ACCEPTANCE_RULE_UNDEFINED",
+     "FLOW_DRIFT_DISPOSITION_REQUIRED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Drift 50 % > 5 %: excluded until a reviewer records a disposition.",
+   "changeFrom_1_3_1": "1.3.1: qualified / below_benchmark with a qualify flag."
+  },
+  {
+   "id": "TR-01a",
+   "group": "TR-variant",
+   "description": "Exactly 15 min uninterrupted, 1.0 mg/m³ vs 1.0",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 30,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 1,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 1.0,
+      "upper": 1.0,
+      "comparison": "at_or_above_benchmark"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "0.030/0.030 = 1.0 mg/m³."
+  },
+  {
+   "id": "TR-01b",
+   "group": "TR-variant",
+   "description": "15 min + 0.05 s (numerical timestamp tolerance only)",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:15:00.050Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 30,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.9999444475306927,
+      "upper": 0.9999444475306927,
+      "comparison": "below_benchmark"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Within the 0.1 s numerical tolerance; not a sampling tolerance."
+  },
+  {
+   "id": "TR-01c",
+   "group": "TR-variant",
+   "description": "15 min 1 s",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:15:01Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 30,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": null,
+      "upper": null,
+      "comparison": "not_comparable"
+     }
+    ],
+    "flagsInclude": [
+     "STEL_SAMPLE_TOO_LONG"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Longer than 15 min: no result."
+  },
+  {
+   "id": "TR-01d",
+   "group": "TR-variant",
+   "description": "14 min, no assumption",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:14:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 28,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": null,
+      "upper": null,
+      "comparison": "not_comparable"
+     }
+    ],
+    "flagsInclude": [
+     "STEL_SAMPLE_SHORT"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Shorter than 15 min without the assumption: no result."
+  },
+  {
+   "id": "TR-01e",
+   "group": "TR-variant",
+   "description": "15 min sampled over a 20-min window (interrupted)",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:20:00Z",
+      "timezone": "UTC",
+      "interruptions": [
+       {
+        "start": "2026-03-02T10:05:00Z",
+        "end": "2026-03-02T10:10:00Z"
+       }
+      ],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 30,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": null,
+      "upper": null,
+      "comparison": "not_comparable"
+     }
+    ],
+    "flagsInclude": [
+     "STEL_WINDOW_TOO_LONG"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Not a single 15-minute period."
+  },
+  {
+   "id": "TR-01f",
+   "group": "TR-variant",
+   "description": "12 min sampled within a 15-min window, with assumption and evidence",
+   "calc": "stel_15",
+   "methodVersion": "1.2.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T10:00:00Z",
+      "endAt": "2026-03-02T10:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [
+       {
+        "start": "2026-03-02T10:05:00Z",
+        "end": "2026-03-02T10:08:00Z"
+       }
+      ],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 24,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": null,
+     "unsampledAssumption": "none",
+     "shortSampleAssumption": "zero_remainder",
+     "shortSampleJustification": "Pump paused while the worker left the booth area.",
+     "shortSampleEvidenceBasis": "direct_reading_instrument",
+     "shortSampleEvidenceRef": "DRM-02 log 10:05–10:08"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.8,
+      "upper": 0.8,
+      "comparison": "below_benchmark",
+      "assumptionDependent": true
+     }
+    ],
+    "flagsInclude": [
+     "STEL_ZERO_REMAINDER"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "C = 0.024/0.024 = 1.0 mg/m³ over 12 min; 1.0 × 12/15 = 0.8 mg/m³."
+  },
+  {
+   "id": "TR-02a",
+   "group": "TR-variant",
+   "description": "Adverse valid result alongside unresolved excluded evidence",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 600,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "at_or_above_benchmark",
+    "evidenceAdequacy": "unresolved_evidence"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "A valid at-or-above result stands regardless of unresolved evidence (0.625 ≥ 0.5)."
+  },
+  {
+   "id": "TR-02b",
+   "group": "TR-variant",
+   "description": "Excluded sample dispositioned as duplicate of a valid sample",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      },
+      "evidenceDisposition": {
+       "kind": "duplicate",
+       "reason": "Recorded reason for the disposition.",
+       "consequence": "Stated consequence for the assessment scope.",
+       "authorisedBy": "Reviewer R",
+       "relatedSampleCode": "A"
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "below_benchmark",
+    "evidenceAdequacy": "adequate"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Duplicate of formal sample A → resolved."
+  },
+  {
+   "id": "TR-02c",
+   "group": "TR-variant",
+   "description": "Excluded sample not replaced (worker unassessed)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      },
+      "evidenceDisposition": {
+       "kind": "not_replaced",
+       "reason": "Recorded reason for the disposition.",
+       "consequence": "Stated consequence for the assessment scope.",
+       "authorisedBy": "Reviewer R",
+       "relatedSampleCode": null
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "indeterminate",
+    "evidenceAdequacy": "coverage_gap"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Coverage gap blocks a favourable overall comparison."
+  },
+  {
+   "id": "TR-02d",
+   "group": "TR-variant",
+   "description": "Reviewer judges remaining coverage adequate",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      },
+      "evidenceDisposition": {
+       "kind": "remaining_coverage_adequate",
+       "reason": "Recorded reason for the disposition.",
+       "consequence": "Stated consequence for the assessment scope.",
+       "authorisedBy": "Reviewer R",
+       "relatedSampleCode": null
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "below_benchmark",
+    "evidenceAdequacy": "adequate_with_accepted_gaps"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Authorised judgement with stated consequence."
+  },
+  {
+   "id": "TR-02e",
+   "group": "TR-variant",
+   "description": "Disposition without an assessment of consequences",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      },
+      "evidenceDisposition": {
+       "kind": "outside_scope",
+       "reason": "Recorded reason for the disposition.",
+       "consequence": "",
+       "authorisedBy": "Reviewer R",
+       "relatedSampleCode": null
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "indeterminate",
+    "evidenceAdequacy": "unresolved_evidence"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Incomplete disposition does not resolve the evidence."
+  },
+  {
+   "id": "TR-02f",
+   "group": "TR-variant",
+   "description": "Excluded sample outside the assessment scope",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      },
+      "evidenceDisposition": {
+       "kind": "outside_scope",
+       "reason": "Recorded reason for the disposition.",
+       "consequence": "Stated consequence for the assessment scope.",
+       "authorisedBy": "Reviewer R",
+       "relatedSampleCode": null
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "below_benchmark",
+    "evidenceAdequacy": "adequate"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Not part of the intended scope."
+  },
+  {
+   "id": "TR-02g",
+   "group": "TR-variant",
+   "description": "Indicative over-range result (upper bound unknown) beside a valid below result",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": false
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 100,
+       "unit": "ug",
+       "qualifier": ">",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "indeterminate",
+    "evidenceAdequacy": "unresolved_evidence",
+    "unresolved": [
+     "B"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Unknown upper bound cannot be ruled out."
+  },
+  {
+   "id": "TR-03a",
+   "group": "TR-variant",
+   "description": "Negative value",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": -5,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": null,
+      "upper": null
+     }
+    ],
+    "flagsInclude": [
+     "INPUT_INVALID_NEGATIVE"
+    ],
+    "benchmarkState": "indeterminate"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Invalid input: no numeric result, specific reason."
+  },
+  {
+   "id": "TR-03b",
+   "group": "TR-variant",
+   "description": "Zero flow",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 0,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": null,
+      "upper": null
+     }
+    ],
+    "flagsInclude": [
+     "INPUT_INVALID_FLOW"
+    ],
+    "benchmarkState": "indeterminate"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Invalid input: no numeric result, specific reason."
+  },
+  {
+   "id": "TR-03c",
+   "group": "TR-variant",
+   "description": "Unknown unit",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 10,
+       "unit": "kg",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": null,
+      "upper": null
+     }
+    ],
+    "flagsInclude": [
+     "INPUT_INVALID_UNIT"
+    ],
+    "benchmarkState": "indeterminate"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Invalid input: no numeric result, specific reason."
+  },
+  {
+   "id": "TR-03d",
+   "group": "TR-variant",
+   "description": "Detected below LOQ without an LOD",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "detected_below_loq",
+       "lod": null,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": null,
+      "upper": null
+     }
+    ],
+    "flagsInclude": [
+     "INPUT_INVALID_LIMITS"
+    ],
+    "benchmarkState": "indeterminate"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Invalid input: no numeric result, specific reason."
+  },
+  {
+   "id": "TR-03e",
+   "group": "TR-variant",
+   "description": "Unknown qualifier",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 10,
+       "unit": "ug",
+       "qualifier": "~",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": null,
+      "upper": null
+     }
+    ],
+    "flagsInclude": [
+     "INPUT_INVALID_QUALIFIER"
+    ],
+    "benchmarkState": "indeterminate"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Invalid input: no numeric result, specific reason."
+  },
+  {
+   "id": "TR-03f",
+   "group": "TR-variant",
+   "description": "Benchmark value zero",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "not_comparable",
+    "notePattern": "Benchmark rejected"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "A benchmark must be a positive finite number."
+  },
+  {
+   "id": "TR-03g",
+   "group": "TR-variant",
+   "description": "Over-range result: upper bound unknown and explicit",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 500,
+       "unit": "ug",
+       "qualifier": ">",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0.5208333333333334,
+      "upper": "Infinity",
+      "upperUnbounded": true
+     }
+    ],
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.5208333333333334,
+      "upper": "Infinity",
+      "comparison": "at_or_above_benchmark"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "0.500/0.960 = 0.520833 ≥ 0.5; upper bound unknown, serialised as \"Infinity\" with upperUnbounded = true."
+  },
+  {
+   "id": "TR-04a",
+   "group": "TR-variant",
+   "description": "480 µg over 960 L vs 0.5 mg/m³",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 480,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.5,
+      "upper": 0.5,
+      "comparison": "at_or_above_benchmark"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "480/960 mg/m³ vs 0.5 (equal counts as at or above)."
+  },
+  {
+   "id": "TR-04b",
+   "group": "TR-variant",
+   "description": "479.999 µg over 960 L vs 0.5 mg/m³",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 479.999,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.49999895833333335,
+      "upper": 0.49999895833333335,
+      "comparison": "below_benchmark"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "479.999/960 mg/m³ vs 0.5 (equal counts as at or above)."
+  },
+  {
+   "id": "TR-04c",
+   "group": "TR-variant",
+   "description": "480.001 µg over 960 L vs 0.5 mg/m³",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 480.001,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.5000010416666667,
+      "upper": 0.5000010416666667,
+      "comparison": "at_or_above_benchmark"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "480.001/960 mg/m³ vs 0.5 (equal counts as at or above)."
+  },
+  {
+   "id": "TR-04d",
+   "group": "TR-variant",
+   "description": "500 µg/m³ equals 0.5 mg/m³",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "concentration",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 500,
+       "unit": "ug/m3",
+       "qualifier": "=",
+       "lod": 1,
+       "loq": 3
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.5,
+      "upper": 0.5,
+      "comparison": "at_or_above_benchmark"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Equivalent unit representation."
+  },
+  {
+   "id": "TR-04e",
+   "group": "TR-variant",
+   "description": "Round trip ppm → mg/m³ → ppm",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": null,
+    "molecularWeight": null
+   },
+   "expected": {
+    "roundTrip": {
+     "value": 3.7,
+     "molecularWeight": 78.11,
+     "relative": 1e-12
+    }
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Repeated transformations return the original value."
+  },
+  {
+   "id": "TR-04f",
+   "group": "TR-variant",
+   "description": "Tiny non-detect interval 0–3e-7 vs 3e-7",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 0.000288,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 3e-07,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.0,
+      "upper": 3.0000000000000004e-07,
+      "comparison": "indeterminate"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Upper bound 0.000288 µg / 0.96 m³ = 3e-7 equals the benchmark → spans it (indeterminate)."
+  },
+  {
+   "id": "TR-05a",
+   "group": "TR-variant",
+   "description": "Flow drift: method says invalid; a disposition is present but cannot override",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 1,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true,
+       "acceptance": {
+        "flowDrift": "invalid"
+       }
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      },
+      "acceptanceDispositions": [
+       {
+        "criterion": "flow_drift",
+        "evidence": "Mid-sampling checks were within tolerance.",
+        "authorisedBy": "Reviewer R",
+        "scope": "This sample only"
+       }
+      ]
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "included": false
+     }
+    ],
+    "flagsInclude": [
+     "FLOW_DRIFT_INVALID"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Hard prohibition: not accepted by disposition."
+  },
+  {
+   "id": "TR-05b",
+   "group": "TR-variant",
+   "description": "Flow drift: disposition required and recorded (criterion, evidence, reviewer, scope)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 1,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true,
+       "acceptance": {
+        "flowDrift": "disposition_required"
+       }
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      },
+      "acceptanceDispositions": [
+       {
+        "criterion": "flow_drift",
+        "evidence": "Mid-sampling checks were within tolerance.",
+        "authorisedBy": "Reviewer R",
+        "scope": "This sample only"
+       }
+      ]
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "included": true
+     }
+    ],
+    "flagsInclude": [
+     "FLOW_DRIFT_ACCEPTED"
+    ],
+    "dataQuality": "qualified"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Accepted with a complete disposition."
+  },
+  {
+   "id": "TR-05c",
+   "group": "TR-variant",
+   "description": "Flow drift: disposition with free text only (no scope)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 1,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true,
+       "acceptance": {
+        "flowDrift": "disposition_required"
+       }
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      },
+      "acceptanceDispositions": [
+       {
+        "criterion": "flow_drift",
+        "evidence": "Looked fine to me.",
+        "authorisedBy": "Reviewer R",
+        "scope": ""
+       }
+      ]
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "included": false
+     }
+    ],
+    "flagsInclude": [
+     "FLOW_DRIFT_DISPOSITION_REQUIRED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Incomplete disposition does not accept the sample."
+  },
+  {
+   "id": "TR-05d",
+   "group": "TR-variant",
+   "description": "Minimum volume 1000 L not met (960 L), advisory",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": 1000,
+       "suitableForFormalAssessment": true,
+       "acceptance": {
+        "minVolume": "advisory"
+       }
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "included": true
+     }
+    ],
+    "flagsInclude": [
+     "VOLUME_BELOW_MIN_ADVISORY"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "960 L < 1000 L, advisory."
+  },
+  {
+   "id": "TR-05e",
+   "group": "TR-variant",
+   "description": "Minimum volume not met, consequence not stated",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": 1000,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "included": false
+     }
+    ],
+    "flagsInclude": [
+     "ACCEPTANCE_RULE_UNDEFINED",
+     "VOLUME_BELOW_MIN_DISPOSITION_REQUIRED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Unknown rule → disposition required."
+  },
+  {
+   "id": "A-1",
+   "group": "method",
+   "description": "Night shift across midnight without a shift reference",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "N1",
+      "sampleCode": "N1",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-01-01T22:00:00Z",
+      "endAt": "2026-01-02T02:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 480,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "N2",
+      "sampleCode": "N2",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-01-02T02:00:00Z",
+      "endAt": "2026-01-02T06:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 480,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "flagsInclude": [
+     "SHIFT_ASSOCIATION_REQUIRED"
+    ],
+    "calculationAvailability": "none"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "No silent merging or splitting across midnight."
+  },
+  {
+   "id": "A-2",
+   "group": "method",
+   "description": "Night shift with an explicit shift reference",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "N1",
+      "sampleCode": "N1",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-01-01T22:00:00Z",
+      "endAt": "2026-01-02T02:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 480,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      },
+      "shiftRef": "N-0101"
+     },
+     {
+      "sampleId": "N2",
+      "sampleCode": "N2",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-01-02T02:00:00Z",
+      "endAt": "2026-01-02T06:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 480,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      },
+      "shiftRef": "N-0101"
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 2,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 1.0,
+      "upper": 1.0,
+      "comparison": "below_benchmark"
+     }
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "(1.0 × 240 + 1.0 × 240)/480 = 1.0 mg/m³."
+  },
+  {
+   "id": "A-3",
+   "group": "method",
+   "description": "Split shift on one date, no reference (grouped by date, noted)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "SP1",
+      "sampleCode": "SP1",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T06:00:00Z",
+      "endAt": "2026-03-02T10:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 240,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "SP2",
+      "sampleCode": "SP2",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T16:00:00Z",
+      "endAt": "2026-03-02T20:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 96,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.35,
+      "upper": 0.35,
+      "comparison": "below_benchmark"
+     }
+    ],
+    "flagsInclude": [
+     "SHIFT_INFERRED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Same local date, no samples near another date."
+  },
+  {
+   "id": "B-1",
+   "group": "method",
+   "description": "Two task records without times (240 + 240), exposure entered 300",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T13:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 300,
+     "unsampledAssumption": "none",
+     "exposureRecords": [
+      {
+       "ref": "T1",
+       "minutes": 240,
+       "basis": "recorded_fact"
+      },
+      {
+       "ref": "T2",
+       "minutes": 240,
+       "basis": "recorded_fact"
+      }
+     ]
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "flagsInclude": [
+     "EXPOSURE_OVERLAP_UNKNOWN"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Total between 240 (full overlap) and 480 (sequential)."
+  },
+  {
+   "id": "B-2",
+   "group": "method",
+   "description": "Timed overlapping tasks 0–240 and 120–360 (union 360), exposure entered 300",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T13:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 300,
+     "unsampledAssumption": "none",
+     "exposureRecords": [
+      {
+       "ref": "T1",
+       "minutes": 240,
+       "basis": "recorded_fact",
+       "startMin": 0,
+       "endMin": 240
+      },
+      {
+       "ref": "T2",
+       "minutes": 240,
+       "basis": "recorded_fact",
+       "startMin": 120,
+       "endMin": 360
+      }
+     ]
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "flagsInclude": [
+     "EXPOSURE_BELOW_RECORDED"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Overlap counted once: 360 min; 300 is too short."
+  },
+  {
+   "id": "B-3",
+   "group": "method",
+   "description": "Estimated task duration",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none",
+     "exposureRecords": [
+      {
+       "ref": "T1",
+       "minutes": 480,
+       "basis": "user_estimate"
+      }
+     ]
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "flagsInclude": [
+     "EXPOSURE_DURATION_ESTIMATED"
+    ],
+    "dataQuality": "qualified"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Estimates are recorded as uncertainty."
+  }
+ ]
+}

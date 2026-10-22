@@ -1,7 +1,9 @@
 # Professional review handover
 
 **For:** the competent occupational hygienist, once appointed (gates **G2**, **G3** and **G4**).
-**Engine:** 1.3.1. **Prepared:** 19 October 2026.
+**Engine:** 1.4.0 (`twa_8h` 1.3.0, `stel_15` 1.2.0). **Prepared:** 19 October 2026; updated 22 October 2026 after the AI-assisted technical review of `ceec79f` (TR-01–TR-05).
+
+> **Changed since 19 October.** The candidate versions are now `twa_8h` **1.3.0** and `stel_15` **1.2.0** (engine 1.4.0). Approvals are per version; nothing approved earlier transfers. What changed and why: `docs/remediation/remediation-summary.md`. Conventions now put to you (specification §0): (1) STEL: exact 15 min, sampling tolerance 0; zero-remainder only with supporting evidence; (2) generic "<LOQ" carried as 0–LOQ; (3) method acceptance consequences for each method version; MDHS14/4 para 63 treats a cyclone flow change > 5 % (or 0.1 L/min) as invalid and uses the recommended flow, not the mean of pre/post flows, as the volume basis — please state which basis applies; (4) molar volume 24.05526 L/mol (EH40 para 68); (5) the evidence-disposition model and decision table (§0.8); (6) the shift and exposure-duration rules (§0.7). Structured fixtures with independently derived expected values: `test/fixtures/worked-examples.fixtures.json`.
 **Status:** no method is approved. Until you approve a method version, organisations at pilot level cannot submit, approve or issue conclusions that use it; the server and the database both refuse. Everything you need is listed here, so no code inspection is required.
 
 > ## Read first: what the software does not judge
@@ -33,7 +35,7 @@
 
 **Why it matters.** *Not comparable* reads as "this benchmark does not apply". *Indeterminate* reads as "the result could be on either side of the benchmark; more or better evidence is needed". The earlier wording could understate the need to repeat or complete the monitoring. Neither state allows a favourable conclusion. The database refuses *exposure adequately controlled* unless data quality is complete or qualified **and** the comparison is *below benchmark*, so no favourable conclusion could have been produced by this defect.
 
-**What changed.** Engine 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1):
+**What changed.** Engine 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1); retained in engine 1.4.0 (`twa_8h` 1.3.0, `stel_15` 1.2.0) as a row of the decision table (specification §0.8), where unresolved excluded or indicative evidence also prevents a favourable overall result:
 - the case is reported as *indeterminate*, with the note "N result(s) could not be calculated";
 - notes name the actual cause.
 
@@ -56,7 +58,7 @@ If you consider either case should be *indeterminate*, record it as a methodolog
 
 Each candidate method has the same structure. *Source references* name the convention the engine follows. They were not re-checked against the live publications during the build, so confirming them is part of your review.
 
-### 1.1 `twa_8h` v1.2.1: personal 8-hour time-weighted average
+### 1.1 `twa_8h` v1.3.0: personal 8-hour time-weighted average
 
 | Item | Content |
 |---|---|
@@ -71,7 +73,7 @@ Each candidate method has the same structure. *Source references* name the conve
 | Findings | H1-F01 (roll-up), fixed in 1.2.1. See §1.0. **Your disposition:** ☐ |
 | Your decision | ☐ Approved ☐ Approved with conditions ☐ Rejected · Permitted scope: ________ · Review/expiry date: ________ |
 
-### 1.2 `stel_15` v1.1.1: personal 15-minute short-term result
+### 1.2 `stel_15` v1.2.0: personal 15-minute short-term result
 
 | Item | Content |
 |---|---|

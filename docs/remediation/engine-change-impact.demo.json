@@ -1,0 +1,30 @@
+{
+  "generated": "2026-10-22T11:33:21.019Z",
+  "engine": "1.4.0",
+  "revisions": [
+    {
+      "organisation": "Demo Hygiene Consultancy (synthetic)",
+      "assessment": "Bay 2 grinders — Demo Dust X baseline",
+      "revision": 1,
+      "status": "approved",
+      "issuedReports": 1,
+      "calculatedWith": "twa_8h 1.2.1",
+      "currentVersion": "twa_8h 1.3.0 (engine 1.4.0)",
+      "before": {
+        "dataQuality": "qualified",
+        "benchmark": "below_benchmark"
+      },
+      "withCurrentEngine": {
+        "dataQuality": "qualified",
+        "benchmark": "indeterminate",
+        "evidenceAdequacy": "unresolved_evidence",
+        "calculationAvailability": "complete"
+      },
+      "classificationChanged": true,
+      "scenarios": [
+        "TR-02 unresolved evidence"
+      ],
+      "action": "Review: create a new revision with a reason if reassessment is needed; the approval does not transfer to the new method version."
+    }
+  ]
+}

@@ -1,6 +1,101 @@
 # Calculation and benchmark specifications
 
-Engine: `src/calc/engine.ts`, engine version **1.3.1** (calculations `twa_8h` v1.2.1 and `stel_15` v1.1.1). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`.
+Engine: `src/calc/engine.ts`, engine version **1.4.0** (calculations `twa_8h` **v1.3.0** and `stel_15` **v1.2.0**). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`, `test/worked-examples.test.ts` (structured fixtures with independently derived expected values), `test/tr-services.test.ts`.
+
+**§0 below states the 1.4.0 rules and takes precedence.** Sections 1–6 describe the 1.3.1 design; where §0 changes a rule, §0 applies. No method version has a professional approval; 1.4.0 approvals are not transferred from 1.3.1 (approvals are recorded per version).
+
+## 0. Engine 1.4.0 (technical review of commit ceec79f, TR-01–TR-05 and items A–D)
+
+### 0.1 Authoritative references checked (22 October 2026)
+
+| Reference | What it supports here | Where used |
+|---|---|---|
+| HSE, *EH40/2005 Workplace exposure limits*, 4th edition 2020, ISBN 978 0 7176 6703 1 (https://www.hse.gov.uk/pubns/priced/eh40.pdf) — Schedule, Part 1, para 2 | 8-h TWA = (C₁T₁ + … + CₙTₙ)/8 h | `twa_8h` |
+| EH40/2005 (2020), para 66 and Schedule para 8 | STEL averaging period normally 15 min, "any 15-minute period throughout the working shift"; exposure "should be recorded as the average over the specified short-term reference period … and should be determined by sampling over that period" | `stel_15` (no sampling tolerance; shorter samples need a documented assumption) |
+| EH40/2005 (2020), para 68 | mg/m³ = ppm × MW / 24.05526; 24.05526 L/mol is the molar volume at 20 °C and 1 atm | Unit conversion |
+| HSE, *MDHS14/4 General methods for sampling and gravimetric analysis of respirable, thoracic and inhalable aerosols* (June 2014), paras 48–63 | Flow set within ±0.1 L/min; for cyclone samplers "the sample is invalid if the final flow rate differs by more than 0.1 l.min⁻¹ or 5% (whichever is larger) from the initial flow rate"; if valid, the recommended flow rate is used as the mean | Method acceptance consequences (an example of "invalid"); volume basis is a reviewer question |
+| BS EN 689:2018+AC:2019 *Workplace exposure — Measurement of exposure by inhalation to chemical agents — Strategy for testing compliance with occupational exposure limit values* | Representativeness and statistical compliance testing (not implemented; professional judgement) | Limitation statements |
+
+EH40 gives **no** method for short-term results from samples shorter or longer than 15 minutes. The zero-remainder assumption and any sampling tolerance are therefore conventions that need professional approval; they are kept restricted (see 0.3).
+
+### 0.2 Numerical approach (TR-04)
+
+- Every quantity (duration, volume, concentration, interval bounds, conversions, time weighting, ratios) is computed in IEEE-754 double precision with **no intermediate rounding**.
+- Benchmark comparison uses a relative tolerance of 1 × 10⁻⁹, applied conservatively: *below* only if upper < value × (1 − 10⁻⁹); *at or above* if lower ≥ value × (1 − 10⁻⁹). A result equal to the benchmark is *at or above*.
+- Numerical timestamp tolerance: 0.1 s, to absorb floating-point error only. It is **not** an occupational-hygiene sampling tolerance (see 0.3).
+- Display only: 4 **significant figures** (not decimal places); values below 0.001 or of 10⁶ and above in scientific notation; a positive value is never shown as 0. Ratios to the benchmark are displayed the same way.
+- Unbounded upper results (over-range) carry `upper = Infinity` and `upperUnbounded: true`; stored JSON writes `"Infinity"`, never `null`.
+
+### 0.3 `stel_15` v1.2.0 timing (TR-01)
+
+Sampled time T (running time), elapsed window W (start to end) and reference period (15 min) are distinct.
+
+| Case | Result |
+|---|---|
+| T = 15 min, uninterrupted (W = T) | Measured concentration is the 15-minute result |
+| T > 15 min | **No result** (STEL_SAMPLE_TOO_LONG). The average over a longer period cannot establish the highest 15-minute exposure and is not scaled by T/15 |
+| Interrupted, W > 15 min | **No result** (STEL_WINDOW_TOO_LONG) |
+| T < 15 min, or interrupted within 15 min | Only with the zero-remainder assumption, a justification **and** supporting evidence (continuous observation, a direct-reading instrument record, or a process record, with a reference). Completion of the task alone is not evidence. Result C × T / 15, marked **assumption-dependent**, with a short-peak limitation note |
+
+Sampling tolerance: **0 min** (`STEL_SAMPLING_TOLERANCE_MIN`). A non-zero tolerance would be a methodological convention requiring a new method version and professional approval.
+
+### 0.4 Laboratory qualifiers (item C)
+
+| Interpreted qualifier | Meaning | Interval |
+|---|---|---|
+| `=` | Quantified result | [v, v] |
+| `estimated` | Estimated quantitative result (laboratory says so) | [v, v], qualified |
+| `<LOD` | Not detected | [0, LOD or reported limit] |
+| `<LOQ` | Less than LOQ; **detection not confirmed** (even when an LOD is supplied) | [0, LOQ] |
+| `detected_below_loq` | Laboratory confirms detection between LOD and LOQ | [LOD, LOQ]; needs LOD < LOQ |
+| `>` | Over range | [v, ∞), upper bound unknown |
+
+The laboratory's own qualifier text is stored and shown beside the interpretation. CSV mapping: `ND`, `n.d.`, `not detected`, `<DL` → `<LOD`; `<LOR`, `below LOQ` → `<LOQ`; `DET<LOQ`, `detected <LOQ`, `detected below LOQ`, `trace` → `detected_below_loq`; unrecognised text is rejected.
+
+### 0.5 Input validation (TR-03)
+
+Engine and boundaries both check: finite numbers; value, LOD and LOQ ≥ 0; LOD ≤ LOQ; recognised units and qualifiers; flows > 0; valid timestamps; interval lower ≤ upper; benchmark value > 0, averaging period > 0, recognised unit; exposure period > 0 and ≤ 24 h. Invalid input gives no numeric result and an `INPUT_INVALID_*` flag with the specific reason; the submitted record is kept for correction and audit. Boundaries: laboratory entry and CSV import (`lab.ts`), field capture (`field.ts`), method versions (`instruments.ts`), tasks (`register.ts`), benchmark entry (`assessments.ts`); database check `lab_result_values_valid` (migration 026).
+
+### 0.6 Method acceptance consequences (TR-05)
+
+Each method version states, per criterion (flow drift beyond tolerance; air volume below minimum), one of:
+
+| Consequence | Effect |
+|---|---|
+| `advisory` | Result kept, qualified |
+| `disposition_required` | Sample excluded until a **technical reviewer** records a disposition naming the criterion, supporting evidence (≥ 10 characters) and scope; then kept, qualified |
+| `invalid` | Sample excluded; no disposition can override it |
+| not stated | Treated as `disposition_required` and flagged ACCEPTANCE_RULE_UNDEFINED (professional review dependency) |
+
+Dispositions: `sample_acceptance_dispositions` (append-only; database requires an active technical reviewer as the signed-in user).
+
+### 0.7 Shift association (item A) and exposure duration (item B)
+
+- A sample can carry an explicit **shift reference**. Samples with the same worker and shift reference form one shift. Without references, samples are grouped by local start date only when unambiguous; a sample crossing midnight, samples within 16 h of a sample on another date, or a mix of referenced and unreferenced samples give SHIFT_ASSOCIATION_REQUIRED (no result). No silent merging or splitting.
+- The register supplies one record per task linked to the group and substance (hazard duration where stated, else task duration; optional typical start and end within the shift). Timed records are combined as a union (overlaps counted once); untimed records give a range from the longest (full overlap) to the sum (sequential). Entered exposure below the lower bound → no TWA; within an unknown-overlap range → qualified; estimated durations → qualified.
+
+### 0.8 Evidence disposition and the decision table (TR-02, item D)
+
+Status axes are kept separate: **calculation availability** (complete, partial, none), **evidence adequacy** (adequate, adequate with accepted gaps, unresolved evidence, coverage gap, no formal evidence), **numerical comparison** per result, overall **benchmark state**, and the **professional conclusion** (people only).
+
+A personal sample that is excluded, indicative or not calculable needs a disposition before a favourable overall comparison: `duplicate` (names a valid formal sample in the revision), `outside_scope`, `not_replaced` (worker or task remains unassessed), or `remaining_coverage_adequate` (technical reviewer only). Each needs a reason and an assessment of consequences (≥ 10 characters each). Recorded on draft revisions only, append-only, in `assessment_evidence_dispositions`.
+
+| Situation | Overall benchmark state |
+|---|---|
+| No benchmark, or benchmark not verified | no verified benchmark |
+| Benchmark invalid (value ≤ 0, unknown unit) | not comparable |
+| Averaging period differs | not comparable |
+| Any formal result at or above | **at or above** (valid adverse evidence stands regardless of other evidence) |
+| All formal results below, all evidence formal or dispositioned (duplicate, outside scope) | below |
+| All formal results below, gap accepted by a reviewer (remaining coverage adequate) | below (note states the accepted gap) |
+| All formal results below, but unresolved evidence or a coverage gap (not replaced) | **indeterminate** |
+| All formal results below, but some formal worker-shift results could not be calculated | indeterminate |
+| Any formal result spans the benchmark (interval) or is not convertible, others below | indeterminate |
+| Every formal result not comparable (unit) | not comparable |
+| No formal results; some formal results could not be calculated | indeterminate |
+| No formal results; excluded or indicative evidence could be at or above (upper bound ≥ benchmark, unknown, or unconvertible) | indeterminate (not proof either way) |
+| No formal results; only indicative or excluded evidence wholly below | not comparable |
+| Static samples only | not comparable |
 
 > **Methodological sources must be confirmed by a competent occupational hygienist against the current editions before pilot use.** The references below identify the conventions the engine implements; they were not re-checked against the live publications during this build (no access was attempted), and no text from them is reproduced.
 
@@ -10,14 +105,14 @@ One row per calculation capability. **Pilot-enabled** is enforced on the server:
 
 | Capability | `sample_concentration` | `twa_8h` | `stel_15` | Unit conversion |
 |---|---|---|---|---|
-| Version | engine 1.3.1 | **1.2.1** | **1.1.1** | engine 1.3.1 |
+| Version | engine 1.4.0 | **1.3.0** | **1.2.0** | engine 1.4.0 |
 | Purpose | Airborne concentration of one sample, as an interval | Personal 8-h TWA per worker-shift vs 480-min benchmark | Personal 15-min result vs 15-min benchmark | ppm ↔ mg/m³ at comparison |
-| Formula / source | §1; mass ÷ (mean flow × sampled time) | §2; Σ(CᵢTᵢ)/480 — GB convention (HSE EH40, HSG173) *to be confirmed* | §2a; C for 14–16 min; C×T/15 with justified zero remainder | §3a; mg/m³ = ppm × MW / 24.0551 |
+| Formula / source | §1; mass ÷ (mean flow × sampled time) | §2; Σ(CᵢTᵢ)/480 — GB convention (HSE EH40, HSG173) *to be confirmed* | §2a and §0.3; C for exactly 15 min uninterrupted; C×T/15 only with justified and evidenced zero remainder (assumption-dependent) | §3a and §0.1; mg/m³ = ppm × MW / 24.05526 (EH40 para 68) |
 | Inputs | Times, interruptions, flows, method version, instrument, calibration, QC, lab result revision | Concentrations, worker refs, exposure minutes, unsampled assumption + justification, register durations | Concentrations, short-sample assumption + justification | Interval, target unit, molecular weight + source |
 | Units / conversion | µg, mg on sample; µg/m³→mg/m³; ppm, f/ml passed through | Interval unit of inputs; mixed units → not calculated | As TWA | ppm, mg/m³ only; never f/ml |
-| Averaging | — | 480 min (longer shifts still ÷480) | 15 min (±1 min) | — |
-| Missing / unsampled data | Missing times, flows, limits → incomplete | No TWA unless justified assumption; exposure period guard | < 14 min without assumption → not calculated; > 16 min refused | No MW → not comparable |
-| Non-detects | Intervals [0, LOD], [LOD, LOQ], [v, ∞) | Bounds propagate separately | Bounds propagate | Both bounds converted |
+| Averaging | — | 480 min (longer shifts still ÷480) | 15 min exactly (no sampling tolerance) | — |
+| Missing / unsampled data | Missing times, flows, limits → incomplete | No TWA unless justified assumption; exposure period guard | < 15 min without evidenced assumption → not calculated; > 15 min refused | No MW → not comparable |
+| Non-detects | Intervals [0, LOD], [0, LOQ] (generic <LOQ), [LOD, LOQ] (confirmed detection), [v, ∞) (§0.4) | Bounds propagate separately | Bounds propagate | Both bounds converted |
 | Key limitations | No T/P correction, blank correction or uncertainty propagation | No BS EN 689 statistics; representativeness not assessed | Short-sample convention needs confirmation | 20 °C/101.325 kPa only |
 | Test evidence | `test/calc.test.ts`, regressions | `calc.test.ts` (incl. 1.3.1 roll-up), workflow, assurance tests | `calc.test.ts`, STEL service test | `calc.test.ts` |
 | Professional review status | Not reviewed | **Not reviewed** | **Not reviewed** | Not reviewed |

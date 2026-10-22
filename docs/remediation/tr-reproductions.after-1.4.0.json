@@ -1,0 +1,211 @@
+{
+  "engine": "1.4.0",
+  "methods": {
+    "twa_8h": "1.3.0",
+    "stel_15": "1.2.0"
+  },
+  "cases": {
+    "TR-01": {
+      "description": "16-minute sample, average 0.975 mg/m³, 15-minute benchmark 1 mg/m³",
+      "output": {
+        "engine": "1.4.0",
+        "calc": "stel_15 1.2.0",
+        "dataQuality": "incomplete",
+        "benchmarkState": "indeterminate",
+        "evidenceAdequacy": "no_formal_evidence",
+        "calculationAvailability": "none",
+        "note": "1 15-minute result(s) could not be calculated; no formal benchmark comparison is possible.",
+        "samples": [
+          {
+            "code": "S",
+            "included": true,
+            "indicative": false,
+            "sampledMinutes": 16,
+            "volumeL": 32,
+            "concentration": {
+              "lower": 0.975,
+              "upper": 0.975,
+              "unit": "mg/m3"
+            },
+            "flags": []
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "result": null,
+            "comparison": "not_comparable",
+            "flags": [
+              "STEL_SAMPLE_TOO_LONG:incomplete"
+            ]
+          }
+        ]
+      }
+    },
+    "TR-02": {
+      "description": "W1 valid 0.3125 mg/m³; W2 excluded (failed QC) non-detect 0–2 mg/m³; benchmark 0.5 mg/m³",
+      "output": {
+        "engine": "1.4.0",
+        "calc": "twa_8h 1.3.0",
+        "dataQuality": "qualified",
+        "benchmarkState": "indeterminate",
+        "evidenceAdequacy": "unresolved_evidence",
+        "calculationAvailability": "complete",
+        "note": "1 formal worker-shift result(s) compared with SYNTHETIC 0.5 mg/m3 (synthetic). Every calculated result is below the benchmark, but 1 personal sample(s) are unresolved (B: excluded; no disposition recorded); no favourable overall comparison until they are dispositioned or replaced.",
+        "samples": [
+          {
+            "code": "A",
+            "included": true,
+            "indicative": false,
+            "sampledMinutes": 480,
+            "volumeL": 960,
+            "concentration": {
+              "lower": 0.3125,
+              "upper": 0.3125,
+              "unit": "mg/m3"
+            },
+            "flags": []
+          },
+          {
+            "code": "B",
+            "included": false,
+            "indicative": false,
+            "sampledMinutes": 480,
+            "volumeL": 960,
+            "concentration": {
+              "lower": 0,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "flags": [
+              "QC_FAIL_UNRESOLVED:exclude",
+              "NON_DETECT:qualify"
+            ]
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "result": {
+              "lower": 0.3125,
+              "upper": 0.3125,
+              "unit": "mg/m3"
+            },
+            "comparison": "below_benchmark",
+            "flags": [
+              "SHIFT_INFERRED:info"
+            ]
+          }
+        ]
+      }
+    },
+    "TR-03": {
+      "description": "<LOQ with LOD 1000 µg and LOQ 1 µg; benchmark 0.5 mg/m³",
+      "output": {
+        "engine": "1.4.0",
+        "calc": "twa_8h 1.3.0",
+        "dataQuality": "incomplete",
+        "benchmarkState": "indeterminate",
+        "evidenceAdequacy": "no_formal_evidence",
+        "calculationAvailability": "none",
+        "note": "1 worker-shift result(s) could not be calculated; no formal benchmark comparison is possible.",
+        "samples": [
+          {
+            "code": "S",
+            "included": true,
+            "indicative": false,
+            "sampledMinutes": 480,
+            "volumeL": null,
+            "concentration": null,
+            "flags": [
+              "INPUT_INVALID_LIMITS:incomplete"
+            ]
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "result": null,
+            "comparison": "not_comparable",
+            "flags": [
+              "SAMPLE_NOT_CALCULABLE:incomplete",
+              "SHIFT_INFERRED:info"
+            ]
+          }
+        ]
+      }
+    },
+    "TR-04": {
+      "description": "0.000384 µg over 960 L (4e-7 mg/m³); benchmark 3e-7 mg/m³",
+      "output": {
+        "engine": "1.4.0",
+        "calc": "twa_8h 1.3.0",
+        "dataQuality": "complete",
+        "benchmarkState": "at_or_above_benchmark",
+        "evidenceAdequacy": "adequate",
+        "calculationAvailability": "complete",
+        "note": "1 formal worker-shift result(s) compared with SYNTHETIC 3.000 × 10^-7 mg/m3 (synthetic).",
+        "samples": [
+          {
+            "code": "S",
+            "included": true,
+            "indicative": false,
+            "sampledMinutes": 480,
+            "volumeL": 960,
+            "concentration": {
+              "lower": 4.0000000000000003e-7,
+              "upper": 4.0000000000000003e-7,
+              "unit": "mg/m3"
+            },
+            "flags": []
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "result": {
+              "lower": 4.0000000000000003e-7,
+              "upper": 4.0000000000000003e-7,
+              "unit": "mg/m3"
+            },
+            "comparison": "at_or_above_benchmark",
+            "flags": [
+              "SHIFT_INFERRED:info"
+            ]
+          }
+        ]
+      }
+    },
+    "TR-05": {
+      "description": "Flow 2.0 L/min before, 1.0 L/min after, method tolerance 5 %; benchmark 0.5 mg/m³",
+      "output": {
+        "engine": "1.4.0",
+        "calc": "twa_8h 1.3.0",
+        "dataQuality": "failed",
+        "benchmarkState": "not_comparable",
+        "evidenceAdequacy": "no_formal_evidence",
+        "calculationAvailability": "none",
+        "note": "No usable personal 8-hour time-weighted average results are available (all samples excluded or not calculable).",
+        "samples": [
+          {
+            "code": "S",
+            "included": false,
+            "indicative": false,
+            "sampledMinutes": 480,
+            "volumeL": 720,
+            "concentration": {
+              "lower": 0.4166666666666667,
+              "upper": 0.4166666666666667,
+              "unit": "mg/m3"
+            },
+            "flags": [
+              "ACCEPTANCE_RULE_UNDEFINED:qualify",
+              "FLOW_DRIFT_DISPOSITION_REQUIRED:exclude"
+            ]
+          }
+        ],
+        "results": []
+      }
+    }
+  }
+}

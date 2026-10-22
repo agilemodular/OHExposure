@@ -1,16 +1,16 @@
 {
-  "generated": "2026-10-19T14:58:07.841Z",
-  "engine": "1.3.1",
+  "generated": "2026-10-22T11:33:46.536Z",
+  "engine": "1.4.0",
   "calculations": {
     "twa_8h": {
       "code": "twa_8h",
-      "version": "1.2.1",
+      "version": "1.3.0",
       "averagingMinutes": 480,
       "label": "8-hour time-weighted average"
     },
     "stel_15": {
       "code": "stel_15",
-      "version": "1.1.1",
+      "version": "1.2.0",
       "averagingMinutes": 15,
       "label": "15-minute short-term exposure"
     }
@@ -41,7 +41,9 @@
               "upper": 0.3125,
               "unit": "mg/m3"
             },
-            "flags": []
+            "flags": [
+              "SHIFT_INFERRED"
+            ]
           }
         ],
         "issues": []
@@ -52,14 +54,15 @@
         "sampledMinutes": 450,
         "volumeL": 855,
         "concentration": {
-          "lower": 0.350877,
-          "upper": 0.350877,
+          "lower": 0.3508771929824561,
+          "upper": 0.3508771929824561,
           "unit": "mg/m3"
         },
         "indicative": false,
         "flags": [
           "INTERRUPTED",
-          "FLOW_DRIFT_EXCEEDED"
+          "ACCEPTANCE_RULE_UNDEFINED",
+          "FLOW_DRIFT_DISPOSITION_REQUIRED"
         ]
       }
     },
@@ -76,7 +79,9 @@
               "upper": 0.35,
               "unit": "mg/m3"
             },
-            "flags": []
+            "flags": [
+              "SHIFT_INFERRED"
+            ]
           }
         ],
         "issues": []
@@ -86,6 +91,7 @@
       "none": {
         "subjectRef": "W1",
         "shiftDate": "2026-03-02",
+        "shiftRef": null,
         "sampleCodes": [
           "S"
         ],
@@ -96,11 +102,17 @@
         "result": null,
         "averagingMinutes": 480,
         "indicative": false,
+        "assumptionDependent": false,
         "flags": [
           {
             "code": "COVERAGE_INCOMPLETE",
             "severity": "incomplete",
             "message": "240 min of exposure was not sampled and no documented assumption was selected; no 8-hour TWA is produced."
+          },
+          {
+            "code": "SHIFT_INFERRED",
+            "severity": "info",
+            "message": "No shift reference recorded; samples grouped by local start date 2026-03-02."
           }
         ]
       },
@@ -121,7 +133,7 @@
         "volumeL": 960,
         "concentration": {
           "lower": 0,
-          "upper": 0.010417,
+          "upper": 0.010416666666666668,
           "unit": "mg/m3"
         },
         "indicative": false,
@@ -146,7 +158,8 @@
               "unit": "mg/m3"
             },
             "flags": [
-              "EXTENDED_SHIFT"
+              "EXTENDED_SHIFT",
+              "SHIFT_INFERRED"
             ]
           }
         ],
@@ -161,17 +174,13 @@
       }
     },
     "E7b": {
-      "stel": {
-        "lower": 1.5,
-        "upper": 1.5,
-        "unit": "mg/m3"
-      }
+      "stel": null
     },
     "E8": {
-      "molarVolumeL": 24.0551,
+      "molarVolumeL": 24.05526,
       "converted": {
-        "lower": 76.607455,
-        "upper": 76.607455,
+        "lower": 76.6069458405355,
+        "upper": 76.6069458405355,
         "unit": "mg/m3"
       }
     },
@@ -185,7 +194,8 @@
             "subject": "W1",
             "result": null,
             "flags": [
-              "SAMPLES_OVERLAP"
+              "SAMPLES_OVERLAP",
+              "SHIFT_INFERRED"
             ]
           }
         ],
@@ -207,7 +217,9 @@
               "upper": 0.3125,
               "unit": "mg/m3"
             },
-            "flags": []
+            "flags": [
+              "SHIFT_INFERRED"
+            ]
           }
         ],
         "issues": [
@@ -219,7 +231,7 @@
       "assessment": {
         "dataQuality": "qualified",
         "benchmarkState": "indeterminate",
-        "note": "Only indicative personal results are available (screening-only instrument, method not designated for formal assessment, or missing, expired or failed calibration); no formal benchmark comparison. 1 excluded or indicative result(s) (S) are at or above the benchmark value; they must be explained before any favourable conclusion.",
+        "note": "No formal results. Excluded or indicative evidence could be at or above the benchmark (it is not proof either way) and must be resolved.",
         "results": [
           {
             "subject": "W1",
@@ -228,7 +240,9 @@
               "upper": 0.3125,
               "unit": "mg/m3"
             },
-            "flags": []
+            "flags": [
+              "SHIFT_INFERRED"
+            ]
           }
         ],
         "issues": [
@@ -240,7 +254,7 @@
       "assessment": {
         "dataQuality": "qualified",
         "benchmarkState": "indeterminate",
-        "note": "1 formal worker-shift result(s) compared with EXAMPLE 0.2 mg/m3 (synthetic example). 1 excluded or indicative result(s) (CAL) are at or above the benchmark value; they must be explained before any favourable conclusion.",
+        "note": "1 formal worker-shift result(s) compared with EXAMPLE 0.2 mg/m3 (synthetic example). Every calculated result is below the benchmark, but 1 personal sample(s) are unresolved (CAL: indicative only; no disposition recorded); no favourable overall comparison until they are dispositioned or replaced.",
         "results": [
           {
             "subject": "W2",
@@ -249,7 +263,9 @@
               "upper": 0.1,
               "unit": "mg/m3"
             },
-            "flags": []
+            "flags": [
+              "SHIFT_INFERRED"
+            ]
           },
           {
             "subject": "W1",
@@ -258,7 +274,9 @@
               "upper": 0.3125,
               "unit": "mg/m3"
             },
-            "flags": []
+            "flags": [
+              "SHIFT_INFERRED"
+            ]
           }
         ],
         "issues": [
@@ -288,7 +306,9 @@
               "upper": 0.3125,
               "unit": "mg/m3"
             },
-            "flags": []
+            "flags": [
+              "SHIFT_INFERRED"
+            ]
           }
         ],
         "issues": [
@@ -301,7 +321,7 @@
         "sampledMinutes": 480,
         "volumeL": 960,
         "concentration": {
-          "lower": 0.010417,
+          "lower": 0,
           "upper": 0.03125,
           "unit": "mg/m3"
         },

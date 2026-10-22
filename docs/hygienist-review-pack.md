@@ -3,7 +3,7 @@
 **Start with** `professional-review-handover.md`, which indexes this pack and the supporting material.
 
 **For:** the competent occupational hygienist appointed to review the platform before a controlled pilot (pilot gates **G2** and **G3**, dependency D1).
-**Engine:** 1.3.1 — `sample_concentration` (engine-level), `twa_8h` **v1.2.1**, `stel_15` **v1.1.1**, ppm ↔ mg/m³ conversion. **Prepared:** 18 October 2026.
+**Engine:** 1.4.0 (updated 22 Oct 2026; see `docs/remediation/remediation-summary.md` and specification §0) — `sample_concentration` (engine-level), `twa_8h` **v1.3.0**, `stel_15` **v1.2.0**, ppm ↔ mg/m³ conversion. **Prepared:** 18 October 2026.
 **No code inspection is needed.** Every number in this pack was produced by running the engine on the stated inputs (generator kept with the test evidence), not typed in.
 
 ## How to use this pack
@@ -64,6 +64,8 @@ The practitioner writes the interpretation, conclusion category and limitations.
 | C19 | No temperature/pressure correction of sampled air volume; no blank correction; laboratory uncertainty displayed but not propagated. | Known limitations. | ☐ Acceptable for pilot ☐ Must be added first |
 
 ## 3. Worked examples, expected results and tolerances
+
+> **Updated for engine 1.4.0 (22 Oct 2026).** E2, E7b, E8 and E13 change intentionally (method acceptance, STEL remainder evidence, EH40 molar volume, below-LOQ semantics); the reasons are in `docs/remediation/remediation-summary.md` §4. Structured versions of every example, with exact inputs and independently derived expected values, are in `test/fixtures/worked-examples.fixtures.json`. Where the table below differs from the fixtures, the fixtures state the 1.4.0 behaviour put to you for confirmation.
 
 **Tolerance:** hand results should agree with the expected value to **±0.1 % relative** (rounding: concentrations are stored to 6 significant decimals; displayed to 4 significant figures). Any larger difference is a finding. Categorical outcomes (state, flag, "not calculated") must match exactly.
 
@@ -179,8 +181,8 @@ Sign-off is by a named competent person, with a statement of competence. It is r
 |---|---|---|---|---|---|
 | Conventions C1–C19 | | | | | |
 | Worked examples E1–E14 checked | | | | | |
-| `twa_8h` v1.2.1 | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
-| `stel_15` v1.1.1 | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
+| `twa_8h` v1.3.0 | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
+| `stel_15` v1.2.0 | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
 | Unit conversion (engine 1.3.1) | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
 | Example report and limitation statements | | | | | |
 | Control effectiveness and closure rules | | | | | |
