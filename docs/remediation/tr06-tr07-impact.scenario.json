@@ -1,5 +1,5 @@
 {
-  "generated": "2026-10-22T13:31:45.948Z",
+  "generated": "2026-10-22T14:06:41.930Z",
   "engine": "1.5.1",
   "methods": {
     "twa_8h": "1.4.1",
@@ -19,7 +19,7 @@
   },
   "duplicateDispositions": [
     {
-      "dispositionId": "3d0656ea-93b8-44be-a25b-548b22e61838",
+      "dispositionId": "968aa313-03ef-454a-8f5a-35949702cb78",
       "organisation": "TR-06/TR-07 Scenario Consultancy (synthetic)",
       "assessment": "Mixer charging — short-term exposure (synthetic)",
       "revision": 1,
@@ -29,7 +29,7 @@
       "duplicateType": null,
       "recordedBy": "Pat Practitioner",
       "recorderRole": "practitioner",
-      "recordedAt": "2026-10-22T13:31:44.485Z",
+      "recordedAt": "2026-10-22T14:06:40.514Z",
       "reason": "Recorded as a duplicate of the morning sample",
       "consequence": "The morning sample represents this worker and shift",
       "latestForSample": true,
@@ -40,7 +40,7 @@
   ],
   "contradictoryLabRecords": [
     {
-      "resultRevisionId": "410e9225-0e6a-44c7-883e-f86349132fff",
+      "resultRevisionId": "bbc122ad-e52a-4b5d-9596-886349b8d799",
       "organisation": "TR-06/TR-07 Scenario Consultancy (synthetic)",
       "sample": "SYN-DBL",
       "substance": "Demo Dust X (synthetic)",
@@ -53,7 +53,7 @@
       "lod": 10,
       "loq": 30,
       "unit": "ug",
-      "enteredAt": "2026-10-22T13:31:44.420Z",
+      "enteredAt": "2026-10-22T14:06:40.456Z",
       "problem": "Contradictory inputs (qualifier detected_below_loq (laboratory text \"DET<LOQ\"), value 600 ug, LOD 10 ug, LOQ 30 ug): the value is above the LOQ, so it cannot be a detected-below-LOQ estimate (an estimate must lie between the LOD and the LOQ, both inclusive). No numerical result is produced from these inputs. Obtain the laboratory's clarification and record it as an amendment; the reported value is not changed or discarded.",
       "status": "current — awaiting laboratory clarification and amendment"
     }
@@ -90,9 +90,9 @@
       "attribution": "TR-06/TR-07 markers only (calculated with engine 1.4.0 or later)",
       "reports": [
         {
-          "id": "b5c4b5db-5571-4cf5-9f47-d063dc85dc6e",
+          "id": "f647411d-0564-4da9-9d86-b4a831a653da",
           "status": "issued",
-          "generated_at": "2026-10-22T13:31:44.605244+00:00"
+          "generated_at": "2026-10-22T14:06:40.602172+00:00"
         }
       ],
       "issuedReports": 1,

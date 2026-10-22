@@ -131,9 +131,10 @@ Closed since the H2 report: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2, R2-P
 | ID | Severity | Status | Proposed treatment (§6) |
 |---|---|---|---|
 | H1-F01 | Medium (calculation) | Fixed in software; technical disposition updated for engine 1.4.0 (§7); **professional disposition pending** | Not a software decision: appointed hygienist (G2/G3); brief in `professional-review-handover.md` §1.0 |
-| TR-01–TR-05, TR-A–D, TR-R | High/Medium (calculation and reporting) | Fixed and tested; awaiting technical re-review (§7) | Re-review of engine 1.4.0; professional judgement on the conventions listed in §7 |
+| TR-01–TR-05, TR-A–D, TR-R | High/Medium (calculation and reporting) | Fixed and tested; TR-01–TR-05 reproduction outputs verified to match by the independent technical re-review of `b5eb070`; the rest awaiting technical re-review (§7) | Re-review of engine 1.4.0; professional judgement on the conventions listed in §7 |
 | TR-N1–N3, TR-N5–N8 | High–Low | Fixed and tested; awaiting technical re-review (§7.1) | As above |
-| TR-06 (supersedes TR-N4), TR-07; R5-F1–F8 | High (calculation; reachable through the application) | **Implemented — awaiting technical re-review** (§7.2, §7.3), engine 1.5.1 | Re-review of engine 1.5.0; professional judgement on the duplicate thresholds and conflict rule, and the value-field boundaries |
+| TR-06 (supersedes TR-N4), TR-07; R5-F1–F8 | High (calculation; reachable through the application) | Engine reproductions and fixtures verified by the independent technical re-review of `b5eb070`; R5 fixes awaiting re-review (§7.2, §7.3), engine 1.5.1 | Re-review of the R5 fixes; professional judgement on the duplicate thresholds and conflict rule, and the value-field boundaries |
+| TR-08 | High (approval safeguards; reproduced end to end) | **Implemented — awaiting technical re-review** (§7.4), application 1.1.0 | Re-review of the resolver, locks and trigger |
 | R2-Q5 | Low | Partly fixed (tests); remaining edge cases fall under R-X1 | Accept with R-X1 (§6) |
 | R-H2a, R-M5, R-M6, R-M8, R-L1, OO-R7 | Low | Open / mitigated (offline capability) | Defer while offline capture is off |
 | R-X1 (with R2-Q5) | Low | Mitigated | Accept for the pilot with controls |
@@ -144,7 +145,7 @@ Closed since the H2 report: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2, R2-P
 | R2-N7 | Low | Open | Fix before pilot if any existing volume is reused |
 | Image tags | Low | Partial | Fix before pilot (pin digests) |
 
-**No Critical or High software finding is open without an implemented fix.** TR-06, TR-07 and the R5 fixes (§7.3) are implemented but not yet re-reviewed. H1-F01 is fixed in software and awaits the hygienist's disposition.
+**No Critical or High software finding is open without an implemented fix.** The TR-06 and TR-07 engine reproductions are verified as fixed by the independent technical re-review of `b5eb070`; the R5 fixes (§7.3) and TR-08 (§7.4) are implemented but not yet re-reviewed. H1-F01 is fixed in software and awaits the hygienist's disposition.
 
 ## 5. Post-H2 targeted reviews (R3, 19 Oct 2026)
 
@@ -277,12 +278,14 @@ Source: two findings supplied with the remediation brief of 22 October 2026, sta
 
 | ID | Affected versions | Reproduction inputs (unchanged) | Observed (1.4.0) | Expected safety property | Root cause | Correction (1.5.0) | Regression evidence | Professional-review dependency | Status |
 |---|---|---|---|---|---|---|---|---|---|
-| TR-06 | Engine 1.4.0 roll-up (`twa_8h` 1.3.0, `stel_15` 1.2.0); service `recordEvidenceDisposition`; trigger of migration 027. Application exposure confirmed (practitioner) | W1 08:00–08:15 0.1 mg/m³ valid; W1 15:00–15:15 2 mg/m³ excluded (failed QC, no disposition); 15-min synthetic benchmark 1 mg/m³; afternoon dispositioned *duplicate* of morning | Before disposition: indeterminate. After: **below benchmark, evidence adequate** | A different sample offered as coverage must not pass as a duplicate; a duplicate label must not suppress adverse evidence; missing relationship evidence leaves the disposition unresolved; coverage judgements stay reviewer-only | The R4 fix (TR-N4) checked only worker and shift/date; there was no duplicate category and no relationship evidence | Supported categories `same_event_record` and `paired_colocated` with relationship checks (worker, substance, exposure group, tasks, shift, window ±1 min / overlap ≥ 90 %, same instrument / pair reference recorded at capture); a higher paired result or a disagreeing same-event record is a conflict and stays unresolved; engine, service and database (migration 028) enforce it; rejected and set-aside dispositions shown with their evidence in the page and report; the superseded revision's treatment is re-checked in the report | Fixtures in group TR-06 (24 cases: TR-06, TR-06-before, TR-06a–v), TR-02b (intentional change); `tr06-tr07.test.ts` TR-06 (6 tests: reproduction through service and database, reviewer-only route, refusals, supported pair with audit and report, same-event record, conflict and later amendment); scenario run | 1-min and 90 % thresholds; the higher-result conflict rule; paired averaging (not implemented) | **Implemented — awaiting technical re-review** |
-| TR-07 | Engine 1.4.0 (`sample_concentration`); laboratory entry, amendment and CSV import; database constraint of migration 026. Application exposure confirmed (direct entry and CSV `DET<LOQ`) | `detected_below_loq`, value 600 µg, LOD 10 µg, LOQ 30 µg, 960 L; 8-h synthetic benchmark 0.5 mg/m³ | Interval 0.01042–0.03125 mg/m³, **below benchmark**; the value 600 µg ignored | Contradictory inputs give a validation failure and no favourable formal assessment; the value is neither used as a result nor discarded; original laboratory evidence kept | The value field had no defined meaning for this qualifier and was not validated against it | Defined value meaning per qualifier (`value_meaning`); detected-below-LOQ estimate in [LOD, LOQ] inclusive, or equal to the LOQ when declared a reporting threshold; one shared rule (`qualifierValueProblem`) for engine, entry, amendments and CSV import, with a message naming the conflicting fields; database constraint `lab_result_value_meaning_valid` (NOT VALID for historical rows); contradictory samples cannot be set aside except as *not replaced*; explicit CSV mapping column `value_meaning` | Fixtures in group TR-07 (17 cases: TR-07, TR-07a–p); `tr06-tr07.test.ts` TR-07 (7 tests: entry, boundaries, amendments, CSV incl. mapping and preserved raw row, database, generic qualifiers, historical record); scenario run | Inclusive boundaries; laboratory-specific mappings | **Implemented — awaiting technical re-review** |
+| TR-06 | Engine 1.4.0 roll-up (`twa_8h` 1.3.0, `stel_15` 1.2.0); service `recordEvidenceDisposition`; trigger of migration 027. Application exposure confirmed (practitioner) | W1 08:00–08:15 0.1 mg/m³ valid; W1 15:00–15:15 2 mg/m³ excluded (failed QC, no disposition); 15-min synthetic benchmark 1 mg/m³; afternoon dispositioned *duplicate* of morning | Before disposition: indeterminate. After: **below benchmark, evidence adequate** | A different sample offered as coverage must not pass as a duplicate; a duplicate label must not suppress adverse evidence; missing relationship evidence leaves the disposition unresolved; coverage judgements stay reviewer-only | The R4 fix (TR-N4) checked only worker and shift/date; there was no duplicate category and no relationship evidence | Supported categories `same_event_record` and `paired_colocated` with relationship checks (worker, substance, exposure group, tasks, shift, window ±1 min / overlap ≥ 90 %, same instrument / pair reference recorded at capture); a higher paired result or a disagreeing same-event record is a conflict and stays unresolved; engine, service and database (migration 028) enforce it; rejected and set-aside dispositions shown with their evidence in the page and report; the superseded revision's treatment is re-checked in the report | Fixtures in group TR-06 (24 cases: TR-06, TR-06-before, TR-06a–v), TR-02b (intentional change); `tr06-tr07.test.ts` TR-06 (6 tests: reproduction through service and database, reviewer-only route, refusals, supported pair with audit and report, same-event record, conflict and later amendment); scenario run | 1-min and 90 % thresholds; the higher-result conflict rule; paired averaging (not implemented) | Implemented; **engine reproduction verified fixed by the independent technical re-review of `b5eb070`** (22 Oct 2026); all 113 fixtures verified passing |
+| TR-07 | Engine 1.4.0 (`sample_concentration`); laboratory entry, amendment and CSV import; database constraint of migration 026. Application exposure confirmed (direct entry and CSV `DET<LOQ`) | `detected_below_loq`, value 600 µg, LOD 10 µg, LOQ 30 µg, 960 L; 8-h synthetic benchmark 0.5 mg/m³ | Interval 0.01042–0.03125 mg/m³, **below benchmark**; the value 600 µg ignored | Contradictory inputs give a validation failure and no favourable formal assessment; the value is neither used as a result nor discarded; original laboratory evidence kept | The value field had no defined meaning for this qualifier and was not validated against it | Defined value meaning per qualifier (`value_meaning`); detected-below-LOQ estimate in [LOD, LOQ] inclusive, or equal to the LOQ when declared a reporting threshold; one shared rule (`qualifierValueProblem`) for engine, entry, amendments and CSV import, with a message naming the conflicting fields; database constraint `lab_result_value_meaning_valid` (NOT VALID for historical rows); contradictory samples cannot be set aside except as *not replaced*; explicit CSV mapping column `value_meaning` | Fixtures in group TR-07 (17 cases: TR-07, TR-07a–p); `tr06-tr07.test.ts` TR-07 (7 tests: entry, boundaries, amendments, CSV incl. mapping and preserved raw row, database, generic qualifiers, historical record); scenario run | Inclusive boundaries; laboratory-specific mappings | Implemented; **engine reproduction verified fixed by the independent technical re-review of `b5eb070`** (22 Oct 2026); all 113 fixtures verified passing |
 
 Impact on existing records (read-only scan, `scripts/tr/tr06-tr07-impact.ts`): development demonstration database — none found (`docs/remediation/tr06-tr07-impact.demo.json`). Synthetic historical scenario created with the 1.4.0 code — one approved revision with an issued report, classified as a *confirmed changed outcome* (below benchmark → indeterminate); it was not altered, and a new revision was created with a reason (`docs/remediation/tr06-tr07-impact.scenario.json`, `tr06-tr07-scenario.summary.json`).
 
 TR-N4 (§7.1) is superseded by TR-06: its correction was insufficient.
+
+**Re-review (22 Oct 2026).** The independent technical re-review of `b5eb070` verified that the original TR-06 and TR-07 engine reproductions are fixed, that all 113 calculation fixtures pass, and that the TR-01–TR-05 reproduction outputs match the supplied results. It raised TR-08 (§7.4). This is technical verification, not professional occupational-hygiene approval.
 
 ### 7.3 Re-check of engine 1.5.0 (R5, 22 Oct 2026, commit `808f76b`)
 
@@ -324,3 +327,42 @@ Source: application inconsistency raised with the independent technical re-revie
 | Calibration change of the pending-removal sample's instrument during approval | Same, failed calibration recorded for the instrument | **Committed while paused; approval succeeded** |
 
 Controls that do work for **selected** samples (unchanged, for comparison): held records and suspension flags block submission and approval (`h2.test.ts` "H2/M3", "holds records received while suspended …"); a laboratory amendment waits for the approval's share lock (`h2.test.ts` "a laboratory amendment cannot commit between the approval check and the approval").
+
+**Treatment (application 1.1.0, migration 030; engine 1.5.1 and method versions unchanged because no calculation behaviour changed).**
+- **One shared resolver** of the effective evidence set: SQL functions `assessment_removal_state` and `assessment_effective_sample_ids` (migration 030), called by the service (`resolveEvidence`) and by the approval trigger. It returns selected samples plus samples whose latest removal request has no later reviewer confirmation. It removes duplicates and gives a deterministic order (selected in stored order, then pending by id). It reads only removal rows of the revision's own tenant and client, and samples of that tenant and client, under row-level security. A re-added sample is simply selected, and an earlier confirmation never authorises a later request (sequence order). The removal history and confirmations are kept.
+- **Used consistently** in:
+  - snapshot and calculation;
+  - sampling-event and instrument share locks (id order);
+  - held-record and suspension-review checks;
+  - reviewer QC-disposition independence, in the service and now also the database trigger;
+  - freshness (hash);
+  - new revisions;
+  - the prior-disposition review in reports;
+  - comparability (frozen inputs).
+
+  The page and the report keep the selected list and pending removals visible, and messages say when a blocking sample is pending removal.
+- **Transaction safety.**
+  - Every writer of `sample_ids` and of removals locks the revision row, which approval and submission hold `FOR UPDATE`, so membership cannot change during the check.
+  - Laboratory amendments, QC checks, dispositions and voids lock the sample `FOR UPDATE`; calibrations lock the instrument `FOR UPDATE`. These wait for the approval's share locks on the effective set.
+  - **Related writer-path fix:** placing a held field record on an existing sample took no lock on the sample, so a hold could appear between an approval's hold check and its commit (also for selected samples). It now takes `FOR NO KEY UPDATE` on the sample.
+  - The trigger re-checks holds, suspension review and independence on the effective set inside the approving transaction.
+- **Tests** (`test/tr08.test.ts`, 13; scenarios shared with the before-fix reproduction):
+  - held record and suspension flag, at submission, at approval and through the trigger;
+  - approver QC disposition (pending and selected samples);
+  - concurrent amendment and calibration (coordinated transactions, sequence captured);
+  - freshness failure;
+  - hold placement during approval;
+  - confirmed removal;
+  - re-add and second request;
+  - resolver properties;
+  - an ordinary assessment.
+
+  Mutation checks were detected for the service resolver use, the trigger and the hold-placement lock.
+- **Historical impact (read-only, `scripts/tr/tr08-impact.ts`).** Development database: nothing flagged. Synthetic history created with `b5eb070` (`scripts/tr/run-tr08-scenario.sh`): 4 approved revisions with issued reports flagged:
+  - 2 *concern* (an outstanding held record; the approver's own QC disposition);
+  - 1 *needs investigation* (a suspension flag whose set time is not recorded, cleared after approval);
+  - 1 *potentially affected, no concern found*.
+
+  Approved revisions were unchanged by the check (row hash).
+
+**Status: implemented — awaiting technical re-review.** The re-review's verified closure of the TR-06 and TR-07 engine reproductions, the 113 fixtures and the TR-01–TR-05 outputs stands; they pass unchanged.

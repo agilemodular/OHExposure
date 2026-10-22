@@ -1,7 +1,9 @@
-# Duplicate-evidence and detected-below-LOQ remediation — engine 1.5.0
+# Duplicate-evidence and detected-below-LOQ remediation — engines 1.5.0 and 1.5.1
 
 **Responds to:** two findings on re-review package `9b87c17` (engine 1.4.0), supplied with the brief of 22 October 2026 as independently reproduced. This document does not record who made them.
 **Date:** 22 October 2026 · **Engine:** 1.4.0 → 1.5.0 → **1.5.1** · **Methods:** `twa_8h` 1.3.0 → 1.4.0 → **1.4.1**, `stel_15` 1.2.0 → 1.3.0 → **1.3.1** · **Migrations:** 028, 029.
+
+> **Current state:** engine **1.5.1** (`twa_8h` 1.4.1, `stel_15` 1.3.1). The independent technical re-review of `b5eb070` verified that the TR-06 and TR-07 engine reproductions are fixed and that all 113 fixtures pass; it raised TR-08 (approval safeguards), which is handled in application 1.1.0 without changing the engine: `remediation-summary-tr08.md`. References to 1.5.0 below describe that superseded version.
 
 > **Amended after the R5 re-check (§8).** R5 (a separate AI review agent, not the requested technical re-review) found that 1.5.0 did not fully close TR-06: a duplicate without a calculable result skipped the conflict check (High). It also found a pre-existing route for dropping evidence by narrowing the sample list (Medium) and six Lows. All are fixed in 1.5.1 with tests.
 **Classification unchanged: internal prototype — pilot gates remain open.** Passing automated tests is not occupational-hygiene approval or authorisation for pilot use. No method version has a professional approval, and nothing approved for any earlier version transfers.

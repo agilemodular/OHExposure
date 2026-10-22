@@ -3,7 +3,7 @@
 //                     records, through the 1.4.0 services, a "duplicate" disposition across different sampling windows
 //                     and a detected-below-LOQ result of 600 µg (LOD 10, LOQ 30); calculates, approves and issues a report.
 //   phase "current" — run with the current code after migration 028: keeps the approved revision and issued report
-//                     unchanged, creates a new revision with a reason, recalculates with engine 1.5.0 and generates the
+//                     unchanged, creates a new revision with a reason, recalculates with the current engine and generates the
 //                     draft report showing the unresolved contradictory evidence and the rejected duplicate treatment.
 // SYNTHETIC DATA ONLY. Used by scripts/tr/run-tr06-tr07-scenario.sh.
 import { randomUUID } from 'node:crypto';
@@ -18,6 +18,7 @@ import * as field from '../../src/services/field.js';
 import * as lab from '../../src/services/lab.js';
 import * as asmt from '../../src/services/assessments.js';
 import * as rep from '../../src/services/reports.js';
+import * as engine from '../../src/calc/engine.js';
 
 const ADMIN_URL = process.env.DATABASE_ADMIN_URL!;
 const phase = process.argv[2];
@@ -81,9 +82,9 @@ if (phase === 'legacy') {
   const r = (await admin.query(`select r.*, a.id aid from assessment_revisions r join assessments a on a.id=r.assessment_id join tenants t on t.id=r.tenant_id where t.name=$1 and r.status='approved'`, [ORG])).rows[0];
   const before = (await admin.query(`select md5(r::text) h from assessment_revisions r where id=$1`, [r.id])).rows[0].h;
   const reportsBefore = (await admin.query(`select md5(string_agg(p::text, '' order by p.id)) h from reports p where assessment_revision_id=$1`, [r.id])).rows[0].h;
-  const n = await asmt.newRevision(A.practitioner, r.aid, { change_reason: 'Reassessment after engine 1.5.0 (TR-06 duplicate relationship rules; TR-07 contradictory detected-below-LOQ inputs)' });
+  const n = await asmt.newRevision(A.practitioner, r.aid, { change_reason: `Reassessment after engine ${engine.ENGINE_VERSION} (TR-06 duplicate relationship rules; TR-07 contradictory detected-below-LOQ inputs)` });
   // The 1.4.0 duplicate disposition belongs to the approved revision; the new revision starts without dispositions.
-  // Record the same claim again to show how 1.5.0 treats it: refused by the service with its reason.
+  // Record the same claim again to show how the current engine treats it: refused by the service with its reason.
   const ids = (await admin.query(`select id, sample_code from sampling_events where sample_code in ('SYN-AM','SYN-PM','SYN-DBL')`)).rows;
   const id = (c: string) => ids.find((x) => x.sample_code === c).id;
   const attempts: string[] = [];
@@ -92,7 +93,7 @@ if (phase === 'legacy') {
     catch (e: any) { attempts.push(`${t ?? 'no category'}: refused — ${e.message}`); }
   try { await asmt.recordEvidenceDisposition(A.practitioner, n.id, { sample_id: id('SYN-DBL'), kind: 'not_replaced', reason: 'Laboratory result contradicts its qualifier; clarification requested from the laboratory.', consequence: 'Worker SYN-W2 has no formal short-term result until the laboratory clarifies the result.' }); attempts.push('SYN-DBL not_replaced: recorded'); } catch (e: any) { attempts.push(`SYN-DBL not_replaced: refused — ${e.message}`); }
   await asmt.updateDraft(A.practitioner, n.id, { calc_code: 'stel_15', sample_ids: r.sample_ids, benchmark_version_id: r.benchmark_version_id,
-    interpretation: 'Synthetic scenario, reassessed with engine 1.5.0. SYN-PM (worker SYN-W1, 15:00–15:15, 2 mg/m³) was excluded by a failed flow check and is not a duplicate of the morning sample SYN-AM (08:00–08:15). The laboratory result for SYN-DBL contradicts its qualifier and awaits clarification. No favourable overall conclusion is possible.',
+    interpretation: `Synthetic scenario, reassessed with engine ${engine.ENGINE_VERSION} (stel_15 ${engine.CALCULATIONS.stel_15.version}). SYN-PM (worker SYN-W1, 15:00–15:15, 2 mg/m³) was excluded by a failed flow check and is not a duplicate of the morning sample SYN-AM (08:00–08:15). The laboratory result for SYN-DBL contradicts its qualifier and awaits clarification. No favourable overall conclusion is possible.`,
     conclusion_category: 'insufficient_evidence', limitations: 'Synthetic scenario data only. SYN-PM unresolved; SYN-DBL awaiting laboratory clarification.' });
   const calc = await asmt.calculate(A.practitioner, n.id);
   const draft = await rep.generateReport(A.practitioner, r.aid, n.id);

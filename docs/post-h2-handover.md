@@ -1,6 +1,6 @@
 # Post-H2 handover — evidence closure and online-only pilot preparation
 
-> **Dated document.** Engine, migration and test figures below are as of 19 October 2026. Current figures: engine 1.5.1 (`twa_8h` 1.4.1, `stel_15` 1.3.1), 29 migrations, 320 tests — see `test-evidence.md` and `release-readiness-report.md`.
+> **Dated document.** Engine, migration and test figures below are as of 19 October 2026. Current figures: application 1.1.0, engine 1.5.1 (`twa_8h` 1.4.1, `stel_15` 1.3.1), 30 migrations, 333 tests — see `test-evidence.md` and `release-readiness-report.md`.
 
 **Date:** 19 October 2026 · **Repository:** `agilemodular/OHExposure`, `main` · **Engine:** 1.3.1 (unchanged) · **Migrations:** 25 · **Tests:** 169 passing (7 suites); desktop browser checks 24/24 (offline) and 17/17 (online-only)
 **Classification: Internal prototype — pilot gates remain open.** No new evidence supports a change.

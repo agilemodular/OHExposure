@@ -2,7 +2,7 @@
   "approvedRevisionUnchanged": true,
   "issuedReportsUnchanged": true,
   "newRevision": {
-    "id": "b4f6ea65-5fc4-45f4-b918-992499acc1b2",
+    "id": "21729485-4d95-48c0-b4e2-e5ff692ccc5d",
     "calc": "1.5.1 stel_15 1.3.1",
     "benchmark": "indeterminate",
     "dataQuality": "incomplete",
@@ -43,12 +43,12 @@
   ],
   "auditTrail": [
     {
-      "at": "2026-10-22T13:31:44.420Z",
+      "at": "2026-10-22T14:06:40.456Z",
       "action": "lab_result.create",
       "actor": "Pat Practitioner",
       "detail": {
         "unit": "ug",
-        "batch": "e54e3a47-9715-4d4c-954a-844f8bab8465",
+        "batch": "15174077-71c1-4182-aca9-9b7336b2e9a5",
         "value": 3,
         "sample": "SYN-AM",
         "revision": 1,
@@ -56,12 +56,12 @@
       }
     },
     {
-      "at": "2026-10-22T13:31:44.420Z",
+      "at": "2026-10-22T14:06:40.456Z",
       "action": "lab_result.create",
       "actor": "Pat Practitioner",
       "detail": {
         "unit": "ug",
-        "batch": "e54e3a47-9715-4d4c-954a-844f8bab8465",
+        "batch": "15174077-71c1-4182-aca9-9b7336b2e9a5",
         "value": 60,
         "sample": "SYN-PM",
         "revision": 1,
@@ -69,12 +69,12 @@
       }
     },
     {
-      "at": "2026-10-22T13:31:44.420Z",
+      "at": "2026-10-22T14:06:40.456Z",
       "action": "lab_result.create",
       "actor": "Pat Practitioner",
       "detail": {
         "unit": "ug",
-        "batch": "e54e3a47-9715-4d4c-954a-844f8bab8465",
+        "batch": "15174077-71c1-4182-aca9-9b7336b2e9a5",
         "value": 600,
         "sample": "SYN-DBL",
         "revision": 1,
@@ -82,55 +82,55 @@
       }
     },
     {
-      "at": "2026-10-22T13:31:44.480Z",
+      "at": "2026-10-22T14:06:40.509Z",
       "action": "assessment.evidence_disposition",
       "actor": "Pat Practitioner",
       "detail": {
         "kind": "duplicate",
         "reason": "Recorded as a duplicate of the morning sample",
-        "sample_id": "c82c9b44-fa62-473c-b42f-2759c8b9d279",
+        "sample_id": "33408d63-417c-40b0-b020-cb10e01ea6e1",
         "consequence": "The morning sample represents this worker and shift",
-        "related_sample_id": "972bc729-ae17-49eb-ae38-380b64b94555"
+        "related_sample_id": "fd873d03-455f-4d3f-910e-1d804c94e7a5"
       }
     },
     {
-      "at": "2026-10-22T13:31:44.561Z",
+      "at": "2026-10-22T14:06:40.573Z",
       "action": "assessment.approved",
       "actor": "Robin Reviewer",
       "detail": {
         "scope": "Synthetic scenario only",
         "superseded": [],
         "limitations": "Synthetic data; demonstration of a historical record",
-        "snapshot_hash": "abe9936bf380b36aed7470c823263f6d4cb9ebecb46880b1fc49dce750365e11"
+        "snapshot_hash": "7d11880a277078f1fc90694170923d86fe17d8123dd40d336a9b29c22c4bf86e"
       }
     },
     {
-      "at": "2026-10-22T13:31:44.605Z",
+      "at": "2026-10-22T14:06:40.602Z",
       "action": "report.issued",
       "actor": "Robin Reviewer",
       "detail": {
-        "hash": "600c8c310b9f6e4134445b4dff261133bca87279921a01e4fb5d62120d9d87b8",
+        "hash": "356384fd1185b0e46e7a4f46186d04c45e3c5c4a3de0fa8e0f35a91c0220a5d4",
         "revision": 1,
-        "assessment": "7c50e3b5-270d-43f8-8a75-df5213a02d73"
+        "assessment": "53281068-80cb-4f7e-93a8-3b0e7ae28879"
       }
     },
     {
-      "at": "2026-10-22T13:31:46.763Z",
+      "at": "2026-10-22T14:06:42.711Z",
       "action": "assessment.new_revision",
       "actor": "Pat Practitioner",
       "detail": {
-        "reason": "Reassessment after engine 1.5.0 (TR-06 duplicate relationship rules; TR-07 contradictory detected-below-LOQ inputs)",
+        "reason": "Reassessment after engine 1.5.1 (TR-06 duplicate relationship rules; TR-07 contradictory detected-below-LOQ inputs)",
         "revision": 2
       }
     },
     {
-      "at": "2026-10-22T13:31:46.862Z",
+      "at": "2026-10-22T14:06:42.815Z",
       "action": "assessment.evidence_disposition",
       "actor": "Pat Practitioner",
       "detail": {
         "kind": "not_replaced",
         "reason": "Laboratory result contradicts its qualifier; clarification requested from the laboratory.",
-        "sample_id": "ba8942cb-ea19-451f-b5d5-75794834b976",
+        "sample_id": "49fc505e-fb0c-496b-9496-7ae026e81dd2",
         "consequence": "Worker SYN-W2 has no formal short-term result until the laboratory clarifies the result.",
         "sample_code": "SYN-DBL",
         "sample_flags": [
