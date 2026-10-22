@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { sha256 } from '../auth/crypto.js';
-import { CALCULATIONS, comparability, runAssessment, serialiseOutput, STEL_REMAINDER_EVIDENCE, type BenchmarkRef, type CalcCode, type ExposureRecord, type SampleInput } from '../calc/engine.js';
+import { CALCULATIONS, comparability, duplicateProblem, DUPLICATE_TYPES, runAssessment, sampleConcentration, serialiseOutput, STEL_REMAINDER_EVIDENCE, type BenchmarkRef, type CalcCode, type DuplicateType, type ExposureRecord, type SampleInput } from '../calc/engine.js';
 import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
@@ -65,19 +65,21 @@ async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Sna
     const res = await one(tx, `select v.* from lab_results r join lab_result_revisions v on v.result_id=r.id and v.revision=r.current_revision where r.sampling_event_id=$1 and r.substance_id=$2`, [sid, substanceId]);
     // TR-05: reviewer acceptances of failed method criteria; TR-02: the latest evidence disposition for this revision.
     const acc = await many(tx, 'select d.criterion, d.evidence, d.scope, u.name from sample_acceptance_dispositions d join users u on u.id=d.authorised_by where d.sampling_event_id=$1 order by d.criterion', [sid]);
-    const disp = await one(tx, `select d.kind, d.reason, d.consequence, u.name, rs.sample_code related from assessment_evidence_dispositions d join users u on u.id=d.recorded_by
+    const disp = await one(tx, `select d.kind, d.reason, d.consequence, d.duplicate_type, u.name, rs.sample_code related from assessment_evidence_dispositions d join users u on u.id=d.recorded_by
       left join sampling_events rs on rs.id=d.related_sampling_event_id where d.revision_id=$1 and d.sampling_event_id=$2 order by d.seq desc limit 1`, [rev.id, sid]);
     samples.push({
       sampleId: e.id, sampleCode: e.sample_code, sampleType: e.sample_type, subjectRef: e.sample_type === 'personal' ? e.ref_code : e.location_desc, voided: e.status === 'void',
       startAt: e.start_at?.toISOString() ?? null, endAt: e.end_at?.toISOString() ?? null, timezone: e.timezone, shiftRef: e.shift_ref ?? null,
+      // TR-06 relationship evidence: the substance of the result used here, exposure group at sampling, tasks, pair reference.
+      substanceRef: res ? substanceId : null, groupRef: e.group_id_at_sampling ?? null, tasksPerformed: e.tasks_performed ?? null, pairRef: e.pair_ref ?? null,
       interruptions: e.interruptions ?? [], flowPreLpm: e.flow_pre_lpm, flowPostLpm: e.flow_post_lpm,
       method: mv ? { code: mv.code, version: mv.version, resultBasis: mv.result_basis, flowDriftTolerancePct: mv.flow_drift_tolerance_pct, minVolumeL: mv.min_volume_l, suitableForFormalAssessment: mv.suitable_for_formal_assessment,
         acceptance: { flowDrift: mv.flow_drift_consequence ?? null, minVolume: mv.min_volume_consequence ?? null } } : null,
       acceptanceDispositions: acc.map((x) => ({ criterion: x.criterion, evidence: x.evidence, scope: x.scope, authorisedBy: x.name })),
-      evidenceDisposition: disp ? { kind: disp.kind, reason: disp.reason, consequence: disp.consequence, authorisedBy: disp.name, relatedSampleCode: disp.related ?? null } : null,
+      evidenceDisposition: disp ? { kind: disp.kind, reason: disp.reason, consequence: disp.consequence, authorisedBy: disp.name, relatedSampleCode: disp.related ?? null, duplicateType: disp.duplicate_type ?? null } : null,
       instrument: inst ? { assetTag: inst.asset_tag, screeningOnly: inst.screening_only, calibrationValidAtSampling: cal } : null,
       qc: qc.map((q) => ({ checkType: q.check_type, outcome: q.outcome, disposition: q.disposition })),
-      result: res ? { revision: res.revision, value: res.value, unit: res.unit, qualifier: res.qualifier, lod: res.lod, loq: res.loq, labQualifier: res.lab_qualifier ?? null } : null,
+      result: res ? { revision: res.revision, value: res.value, unit: res.unit, qualifier: res.qualifier, lod: res.lod, loq: res.loq, labQualifier: res.lab_qualifier ?? null, valueMeaning: res.value_meaning ?? null } : null,
     });
     refs.push({ sampleId: e.id, version: e.version, resultRevisionId: res?.id ?? null, qcIds: qc.map((q) => `${q.id}:${q.disposition ?? ''}`) });
   }
@@ -177,31 +179,84 @@ export async function updateDraft(a: Actor, revId: string, input: unknown) {
 /**
  * TR-02: disposition of a personal sample that cannot serve as formal evidence in this draft revision (excluded,
  * indicative or uncalculable). The engine needs a disposition before a favourable overall comparison is possible:
- *  - duplicate: the same exposure is covered by a named valid sample in this revision;
- *  - outside_scope: the sample is not part of what this assessment covers;
+ *  - duplicate (TR-06, engine 1.5.0): a supported duplicate category with matching relationship evidence —
+ *      same_event_record: a second record of the same sampling event (same worker, instrument, window ±1 min);
+ *      paired_colocated:  a paired / co-located sampler with the same pair reference recorded at capture, run at the same time.
+ *    Both also need the same worker, substance, exposure group, tasks and shift. A different sample offered as evidence
+ *    that the remaining coverage is adequate is NOT a duplicate (reviewer-only remaining_coverage_adequate).
+ *    A set-aside result higher than the retained paired result (or a disagreeing record of one event) is a conflict and
+ *    is refused: a duplicate label cannot suppress adverse evidence.
+ *  - outside_scope (reviewer): the sample is not part of what this assessment covers;
  *  - not_replaced: the worker or task it covered remains unassessed (blocks a favourable overall comparison);
- *  - remaining_coverage_adequate: a technical reviewer judges the remaining evidence adequate (stated consequence).
- * Append-only; the latest row per sample applies. Recorded on draft revisions only.
+ *  - remaining_coverage_adequate (reviewer): the remaining evidence is judged adequate (stated consequence).
+ * Append-only; the latest row per sample applies. Recorded on draft revisions only. The engine re-checks every
+ * disposition at calculation, so a later change of evidence cannot leave an unsupported disposition in effect.
  */
 export async function recordEvidenceDisposition(a: Actor, revId: string, input: unknown) {
   if (!can(a, 'assess.write') && !can(a, 'assess.approve')) throw forbidden('Only a practitioner or technical reviewer can disposition evidence');
-  const d = parse(z.object({ sample_id: uuid, kind: z.enum(['duplicate', 'outside_scope', 'not_replaced', 'remaining_coverage_adequate']), reason: reqStr(10), consequence: reqStr(10), related_sample_id: optUuid }), input);
+  const d = parse(z.object({ sample_id: uuid, kind: z.enum(['duplicate', 'outside_scope', 'not_replaced', 'remaining_coverage_adequate']), reason: reqStr(10), consequence: reqStr(10), related_sample_id: optUuid,
+    duplicate_type: z.preprocess((v) => (v === '' || v == null ? undefined : v), z.enum(DUPLICATE_TYPES as [DuplicateType, ...DuplicateType[]]).optional()).transform((v) => v ?? null) }), input);
   if (d.kind === 'duplicate' && !d.related_sample_id) throw invalid('A duplicate must name the valid sample it duplicates');
-  if ((d.kind === 'remaining_coverage_adequate' || d.kind === 'outside_scope') && !can(a, 'assess.approve')) throw forbidden('Only a technical reviewer can set evidence aside as outside scope or accept that the remaining coverage is adequate');
   if (d.related_sample_id && d.related_sample_id === d.sample_id) throw invalid('A sample cannot be a duplicate of itself');
+  if (d.kind === 'duplicate' && !d.duplicate_type) throw invalid('State the duplicate category: a second record of the same sampling event, or a paired / co-located sampler. A different sample offered as evidence that the remaining coverage is adequate is not a duplicate; a technical reviewer records that as "remaining coverage adequate".');
+  if (d.kind !== 'duplicate' && (d.duplicate_type || d.related_sample_id)) throw invalid('A related sample and a duplicate category apply only to a duplicate disposition');
+  if ((d.kind === 'remaining_coverage_adequate' || d.kind === 'outside_scope') && !can(a, 'assess.approve')) throw forbidden('Only a technical reviewer can set evidence aside as outside scope or accept that the remaining coverage is adequate');
   return withActor(a, async (tx) => {
     const r = await loadRev(tx, revId, true);
     await assertAssessmentNotOnHold(tx, r.assessment_id);
     if (r.status !== 'draft') throw invalid('Evidence can only be dispositioned on a draft revision');
     if (!r.sample_ids.includes(d.sample_id)) throw invalid('The sample is not part of this revision');
     if (d.related_sample_id && !r.sample_ids.includes(d.related_sample_id)) throw invalid('The related sample is not part of this revision');
-    const row = await one(tx, `insert into assessment_evidence_dispositions (tenant_id,client_id,revision_id,sampling_event_id,kind,reason,consequence,related_sampling_event_id,recorded_by)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`, [r.tenant_id, r.client_id, revId, d.sample_id, d.kind, d.reason, d.consequence, d.related_sample_id, a.userId]);
+    const snap = await buildSnapshot(tx, r, r.substance_id);
+    const pick = (id: string) => { const i = snap.samples.findIndex((x) => x.sampleId === id); return i < 0 ? undefined : { input: snap.samples[i], output: sampleConcentration(snap.samples[i]) }; };
+    const self = pick(d.sample_id)!;
+    // TR-07: contradictory or invalid inputs await laboratory clarification; they can only be recorded as not replaced.
+    if (d.kind !== 'not_replaced' && self.output.flags.some((f) => f.code.startsWith('INPUT_INVALID_')))
+      throw invalid(`${self.input.sampleCode} has contradictory or invalid inputs awaiting correction (${self.output.flags.filter((f) => f.code.startsWith('INPUT_INVALID_')).map((f) => f.message).join(' ')}) It cannot be set aside; record it as not replaced or amend the result.`);
+    if (d.kind === 'duplicate') {
+      // Same rule as the engine (duplicateProblem); refused here with the reason so that nothing unsupported is recorded.
+      const rel = pick(d.related_sample_id!);
+      const p = duplicateProblem({ kind: 'duplicate', reason: d.reason, consequence: d.consequence, authorisedBy: a.name, relatedSampleCode: rel?.input.sampleCode ?? null, duplicateType: d.duplicate_type }, self, rel);
+      if (p) throw invalid(`Duplicate refused for ${self.input.sampleCode}: ${p.problem}.`);
+    }
+    const row = await one(tx, `insert into assessment_evidence_dispositions (tenant_id,client_id,revision_id,sampling_event_id,kind,reason,consequence,related_sampling_event_id,recorded_by,duplicate_type)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`, [r.tenant_id, r.client_id, revId, d.sample_id, d.kind, d.reason, d.consequence, d.related_sample_id, a.userId, d.duplicate_type]);
     // The calculation no longer reflects the evidence: clear it so it must be rerun.
     await tx.query('update assessment_revisions set calc_output=null, data_quality_state=null, benchmark_state=null, inputs_snapshot=null, inputs_hash=null where id=$1', [revId]);
-    await audit(tx, a, 'assessment.evidence_disposition', 'assessment_revision', revId, d);
+    await audit(tx, a, 'assessment.evidence_disposition', 'assessment_revision', revId, { ...d, sample_code: self.input.sampleCode, related_sample_code: d.related_sample_id ? pick(d.related_sample_id)?.input.sampleCode ?? null : null,
+      sample_interval: self.output.concentration, sample_flags: self.output.flags.map((f) => f.code) });
     return row;
   });
+}
+
+/**
+ * Evidence dispositions of the revision this one supersedes, re-checked against the current rules and records
+ * (engine 1.5.0). Dispositions are per revision and are not carried forward automatically; this shows, for the report
+ * and the reviewer, how earlier treatment of evidence stands now (e.g. a 1.4.0 "duplicate" across sampling windows).
+ */
+export async function priorDispositionReview(tx: Tx, rev: any) {
+  if (!rev.supersedes_revision_id) return null;
+  const prev = await one(tx, 'select r.id, r.revision, r.sample_ids, r.status, a.substance_id from assessment_revisions r join assessments a on a.id=r.assessment_id where r.id=$1', [rev.supersedes_revision_id]);
+  if (!prev) return null;
+  const rows = await many(tx, `select distinct on (d.sampling_event_id) d.kind, d.duplicate_type, d.reason, d.consequence, d.recorded_at, d.sampling_event_id, d.related_sampling_event_id, u.name by_name, s.sample_code, rs.sample_code related_code
+    from assessment_evidence_dispositions d join users u on u.id=d.recorded_by join sampling_events s on s.id=d.sampling_event_id left join sampling_events rs on rs.id=d.related_sampling_event_id
+    where d.revision_id=$1 order by d.sampling_event_id, d.seq desc`, [prev.id]);
+  if (!rows.length) return { revision: prev.revision, items: [] };
+  const ids = [...new Set([...(rev.sample_ids ?? []), ...prev.sample_ids])];
+  const snap = await buildSnapshot(tx, { ...rev, sample_ids: ids }, prev.substance_id);
+  const pick = (id: string | null) => { const i = snap.samples.findIndex((x) => x.sampleId === id); return i < 0 ? undefined : { input: snap.samples[i], output: sampleConcentration(snap.samples[i]) }; };
+  const items = rows.map((d) => {
+    const self = pick(d.sampling_event_id);
+    let status: string;
+    if (d.kind === 'duplicate') {
+      const p = self ? duplicateProblem({ kind: 'duplicate', reason: d.reason, consequence: d.consequence, authorisedBy: d.by_name, relatedSampleCode: d.related_code, duplicateType: d.duplicate_type }, self, pick(d.related_sampling_event_id)) : { problem: 'the sample is no longer available', conflict: false };
+      status = p ? `not accepted under the current rules: ${p.problem}` : 'consistent with the current relationship rules; it applies only if recorded again in this revision';
+    } else status = 'a judgement for that revision; it applies only if recorded again in this revision';
+    const inThis = (rev.sample_ids ?? []).includes(d.sampling_event_id);
+    return { sampleCode: d.sample_code, kind: d.kind, duplicateType: d.duplicate_type, relatedSampleCode: d.related_code, by: d.by_name, recordedAt: d.recorded_at, reason: d.reason, consequence: d.consequence,
+      interval: self?.output.concentration ?? null, inThisRevision: inThis, status };
+  });
+  return { revision: prev.revision, items };
 }
 
 export async function calculate(a: Actor, revId: string) {

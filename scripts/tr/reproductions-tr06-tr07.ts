@@ -32,6 +32,14 @@ cases['TR-06-before-disposition'] = { description: 'AM valid 0.1 mg/m³ (08:00�
 cases['TR-06-duplicate'] = { description: 'Same inputs; PM dispositioned as "duplicate" of AM by a practitioner (no duplicate category or pairing evidence supplied, as in the review)',
   output: view(E.runAssessment({ calc: 'stel_15', samples: [am, { ...pm, evidenceDisposition: dup }], parameters: stel, benchmark: bm(1, 15) })) };
 
+// Variants (added; the review's inputs above are unchanged): the same pair, with the disposition claiming each supported
+// category and the relationship evidence recorded (same substance, group, tasks and instrument; a pair reference).
+const ctx = { substanceRef: 'SUB', groupRef: 'G1', tasksPerformed: 'Main task', pairRef: 'PAIR-1' };
+cases['TR-06-variant-same-event'] = { description: 'Variant: disposition claims "same_event_record" (relationship evidence recorded; windows 08:00–08:15 and 15:00–15:15)',
+  output: view(E.runAssessment({ calc: 'stel_15', samples: [{ ...am, ...ctx }, { ...pm, ...ctx, evidenceDisposition: { ...dup, duplicateType: 'same_event_record' } }], parameters: stel, benchmark: bm(1, 15) })) };
+cases['TR-06-variant-paired'] = { description: 'Variant: disposition claims "paired_colocated" (same pair reference recorded; windows do not overlap)',
+  output: view(E.runAssessment({ calc: 'stel_15', samples: [{ ...am, ...ctx }, { ...pm, ...ctx, evidenceDisposition: { ...dup, duplicateType: 'paired_colocated' } }], parameters: stel, benchmark: bm(1, 15) })) };
+
 // TR-07: detected_below_loq with a contradictory reported value.
 //   600 µg, LOD 10 µg, LOQ 30 µg, 960 L (480 min × 2 L/min), synthetic 8-hour benchmark 0.5 mg/m³.
 const dbl: E.SampleInput = { sampleId: 'D', sampleCode: 'D', sampleType: 'personal', subjectRef: 'W1', startAt: '2026-03-02T08:00:00Z', endAt: '2026-03-02T16:00:00Z', timezone: 'UTC',

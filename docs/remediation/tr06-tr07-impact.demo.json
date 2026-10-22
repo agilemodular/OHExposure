@@ -1,0 +1,23 @@
+{
+  "generated": "2026-10-22T12:47:19.470Z",
+  "engine": "1.5.0",
+  "methods": {
+    "twa_8h": "1.4.0",
+    "stel_15": "1.3.0"
+  },
+  "readOnly": true,
+  "summary": {
+    "duplicateDispositions": 0,
+    "duplicateDispositionsInsufficient": 0,
+    "contradictoryLabRecords": 0,
+    "contradictoryLabRecordsCurrent": 0,
+    "dependentRevisions": 0,
+    "confirmedChangedOutcomes": 0,
+    "potentiallyAffected": 0,
+    "approvedRevisionsAffected": 0,
+    "issuedReportsAffected": 0
+  },
+  "duplicateDispositions": [],
+  "contradictoryLabRecords": [],
+  "revisions": []
+}

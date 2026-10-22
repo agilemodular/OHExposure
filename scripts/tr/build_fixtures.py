@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds test/fixtures/worked-examples.fixtures.json: structured regression fixtures for engine 1.4.0.
+"""Builds test/fixtures/worked-examples.fixtures.json: structured regression fixtures for engine 1.5.0.
 
 INDEPENDENCE: expected numeric values are derived here, in Python, from the documented formulas (EH40/2005 4th ed.
 2020, Schedule paras 2 and 8 and para 68; the calculation specification), not by calling the TypeScript engine under
@@ -13,7 +13,7 @@ from datetime import datetime
 
 MOLAR_VOLUME = 24.05526  # L/mol, EH40 para 68 (20 degC, 1 atm)
 REL_TOL = 1e-9           # numeric comparison tolerance used by the fixtures test
-ENGINE = {'engine': '1.4.0', 'twa_8h': '1.3.0', 'stel_15': '1.2.0'}
+ENGINE = {'engine': '1.5.0', 'twa_8h': '1.4.0', 'stel_15': '1.3.0'}
 
 METHOD = {'code': 'M', 'version': '1', 'resultBasis': 'mass_on_sample', 'flowDriftTolerancePct': 5, 'minVolumeL': None, 'suitableForFormalAssessment': True}
 INST = {'assetTag': 'P1', 'screeningOnly': False, 'calibrationValidAtSampling': True}
@@ -66,6 +66,9 @@ def concentration(s):
     """mg/m3 interval from mass on sample: C = m / V, V = mean flow (L/min) × sampled time (min) / 1000."""
     r = s['result']
     t, _ = sampled_minutes(s)
+    if r['unit'] in ('mg/m3', 'ug/m3'):  # direct concentration result
+        k = 1 if r['unit'] == 'mg/m3' else 1 / 1000
+        return {'lower': r['value'] * k, 'upper': r['value'] * k, 'sampledMinutes': t, 'volumeL': None}
     v_m3 = (s['flowPreLpm'] + s['flowPostLpm']) / 2 * t / 1000
     to_mg = 1 / 1000 if r['unit'] == 'ug' else 1
     q = r['qualifier']
@@ -106,12 +109,13 @@ def cmp_state(lo, hi, b):
 cases = []
 
 
-def case(id, group, description, calc, samples, parameters, benchmark, expect, derivation, change=None, mw=None, extra=None):
+def case(id, group, description, calc, samples, parameters, benchmark, expect, derivation, change=None, mw=None, extra=None, change14=None):
     c = {'id': id, 'group': group, 'description': description, 'calc': calc, 'methodVersion': ENGINE[calc], 'engineVersion': ENGINE['engine'],
          'input': {'calc': calc, 'samples': samples, 'parameters': parameters, 'benchmark': benchmark, 'molecularWeight': mw},
          'expected': expect, 'tolerance': {'relative': 1e-9, 'note': 'Numeric expectations from an independent Python calculation; double precision, no rounding.'},
          'derivation': derivation}
     if change: c['changeFrom_1_3_1'] = change
+    if change14: c['changeFrom_1_4_0'] = change14
     if extra: c.update(extra)
     cases.append(c)
 
@@ -267,7 +271,10 @@ def disp(kind, rel=None): return {'kind': kind, 'reason': 'Recorded reason for t
 hi = sample(sampleCode='A', result=res(600))
 case('TR-02a', 'TR-variant', 'Adverse valid result alongside unresolved excluded evidence', 'twa_8h', [hi, x], P, bm(0.5), {'benchmarkState': 'at_or_above_benchmark', 'evidenceAdequacy': 'unresolved_evidence'}, 'A valid at-or-above result stands regardless of unresolved evidence (0.625 ≥ 0.5).')
 xd = copy.deepcopy(x); xd['subjectRef'] = 'W1'; xd['evidenceDisposition'] = disp('duplicate', 'A')
-case('TR-02b', 'TR-variant', 'Excluded sample dispositioned as duplicate of a valid sample', 'twa_8h', [v, xd], P, bm(0.5), {'benchmarkState': 'below_benchmark', 'evidenceAdequacy': 'adequate'}, 'Duplicate of formal sample A → resolved.')
+case('TR-02b', 'TR-variant', 'Excluded sample dispositioned as "duplicate" of a valid sample, no duplicate category or relationship evidence', 'twa_8h', [v, xd], P, bm(0.5),
+     {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['B'], 'unresolvedWhy': {'B': 'category not stated'}},
+     'Same worker, shift and window, but no duplicate category: the relationship is not evidenced, so the disposition is not accepted.',
+     change14='1.4.0 accepted any "duplicate" naming a formal sample of the same worker and shift (below_benchmark / adequate). 1.5.0 (TR-06) needs a supported category and relationship evidence; see TR-06f for a supported duplicate record.')
 xn = copy.deepcopy(x); xn['evidenceDisposition'] = disp('not_replaced')
 case('TR-02c', 'TR-variant', 'Excluded sample not replaced (worker unassessed)', 'twa_8h', [v, xn], P, bm(0.5), {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'coverage_gap'}, 'Coverage gap blocks a favourable overall comparison.')
 xa = copy.deepcopy(x); xa['evidenceDisposition'] = disp('remaining_coverage_adequate')
@@ -281,6 +288,7 @@ case('TR-02g', 'TR-variant', 'Indicative over-range result (upper bound unknown)
 
 xw = copy.deepcopy(x); xw['evidenceDisposition'] = disp('duplicate', 'A')
 case('TR-02h', 'TR-variant', 'R4 N4: "duplicate" naming a sample of a different worker', 'twa_8h', [v, xw], P, bm(0.5), {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['B']}, 'A duplicate must cover the same worker and shift.')
+
 xs = copy.deepcopy(x); xs['subjectRef'] = 'W1'; xs['evidenceDisposition'] = disp('duplicate', 'B')
 case('TR-02i', 'TR-variant', 'R4 N4: "duplicate" naming itself', 'twa_8h', [v, xs], P, bm(0.5), {'benchmarkState': 'indeterminate', 'unresolved': ['B']}, 'A sample cannot duplicate itself.')
 
@@ -338,7 +346,127 @@ case('B-3', 'method', 'Estimated task duration', 'twa_8h', [sample()], {**P, 'ex
 case('B-4', 'method', 'R4 N3: task times 0–60 but 120 recorded minutes; exposure entered 60', 'twa_8h', [sample(endAt='2026-03-02T09:00:00Z', result=res(60))], {**P, 'exposureMinutesPerShift': 60, 'exposureRecords': [{'ref': 'T1', 'minutes': 120, 'basis': 'recorded_fact', 'startMin': 0, 'endMin': 60}]}, bm(0.5),
      {'flagsInclude': ['EXPOSURE_BELOW_RECORDED'], 'calculationAvailability': 'none'}, 'Recorded minutes (120) bound the total even when the times say 60; 60 entered is too short.')
 
-out = {'description': 'Structured regression fixtures for engine 1.4.0. Expected values are independent of the engine (Python oracle + hand-written statuses).',
+# ── TR-06 duplicate relationships (independent review of 9b87c17) ────────────────────────────────────────────
+# Policy (specification §0.6): a duplicate needs a supported category and matching relationship evidence: same worker,
+# substance, exposure group, tasks and shift; same_event_record: windows within ±1 min and the same instrument;
+# paired_colocated: the same pair reference recorded at capture and windows overlapping ≥ 90 % of the longer window.
+# A set-aside paired result higher than the retained one (or a disagreeing record of one event) is a conflict.
+# Statuses below are written by hand from that policy; numbers come from the oracle above.
+CONC = {**METHOD, 'resultBasis': 'concentration', 'flowDriftTolerancePct': None}
+CTX = {'substanceRef': 'SUB', 'groupRef': 'G1', 'tasksPerformed': 'Main task', 'pairRef': 'PAIR-1'}
+QCF = [{'checkType': 'flow_check', 'outcome': 'fail', 'disposition': None}]
+def cs(code, start, end, value, **o):
+    """Personal sample with a direct concentration result (mg/m³), as in the review's TR-06 statement."""
+    return sample(sampleCode=code, startAt=f'2026-03-02T{start}Z', endAt=f'2026-03-02T{end}Z', flowPreLpm=None, flowPostLpm=None, method=copy.deepcopy(CONC), result={'revision': 1, 'value': value, 'unit': 'mg/m3', 'qualifier': '=', 'lod': None, 'loq': None}, **o)
+def dd(rel, dtype=None, kind='duplicate'):
+    d = {'kind': kind, 'reason': 'Recorded as a duplicate of the morning sample', 'consequence': 'The morning sample represents this worker and shift', 'authorisedBy': 'Practitioner P', 'relatedSampleCode': rel}
+    if dtype: d['duplicateType'] = dtype
+    return d
+STEL15 = {'shortSampleAssumption': 'none'}
+AM = cs('AM', '08:00:00', '08:15:00', 0.1)
+PM = cs('PM', '15:00:00', '15:15:00', 2, qc=QCF)
+case('TR-06-before', 'TR-06', 'Review reproduction, before any disposition: AM valid 0.1 mg/m³; PM excluded 2 mg/m³ (failed QC, no disposition); 15-min benchmark 1', 'stel_15', [AM, PM], STEL15, bm(1, 15),
+     {'results': [{'subject': 'W1', **stel(AM), 'comparison': 'below_benchmark'}], 'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['PM']},
+     'AM 0.1 < 1; PM excluded and 2 ≥ 1, unresolved → indeterminate.')
+case('TR-06', 'TR-06', 'Review reproduction: PM dispositioned "duplicate" of AM (no category, no relationship evidence)', 'stel_15', [AM, {**PM, 'evidenceDisposition': dd('AM')}], STEL15, bm(1, 15),
+     {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['PM'], 'unresolvedWhy': {'PM': 'category not stated'}, 'setAside': []},
+     'Different sampling windows of one worker are not duplicates; the disposition is not accepted.',
+     change14='1.4.0: below_benchmark / adequate (same worker and date accepted as a duplicate).')
+AMc, PMc = {**AM, **CTX}, {**PM, **CTX}
+case('TR-06a', 'TR-06', 'As TR-06, disposition claims same_event_record with relationship evidence; windows 08:00 and 15:00', 'stel_15', [AMc, {**PMc, 'evidenceDisposition': dd('AM', 'same_event_record')}], STEL15, bm(1, 15),
+     {'benchmarkState': 'indeterminate', 'unresolved': ['PM'], 'unresolvedWhy': {'PM': 'windows differ by more than 1 min'}}, 'Not the same sampling event.')
+case('TR-06b', 'TR-06', 'As TR-06, disposition claims paired_colocated with the same pair reference; windows do not overlap', 'stel_15', [AMc, {**PMc, 'evidenceDisposition': dd('AM', 'paired_colocated')}], STEL15, bm(1, 15),
+     {'benchmarkState': 'indeterminate', 'unresolved': ['PM'], 'unresolvedWhy': {'PM': 'overlap for 0 min'}}, 'Paired samplers run at the same time.')
+def pair(value2, start2='08:00:00', end2='08:15:00', dtype='paired_colocated', o1=None, o2=None, rel='AM'):
+    a = {**cs('AM', '08:00:00', '08:15:00', 0.1), **CTX, **(o1 or {})}
+    b = {**cs('AM2', start2, end2, value2, qc=QCF), **CTX, **(o2 or {}), 'evidenceDisposition': dd(rel, dtype)}
+    return a, b
+a, b = pair(0.08)
+case('TR-06c', 'TR-06', 'Supported paired sampler: AM2 (excluded, 0.08) worn with AM (0.1), same pair reference and window', 'stel_15', [a, b], STEL15, bm(1, 15),
+     {'results': [{'subject': 'W1', **stel(a), 'comparison': 'below_benchmark'}], 'benchmarkState': 'below_benchmark', 'evidenceAdequacy': 'adequate', 'unresolved': [], 'setAside': [{'code': 'AM2', 'kind': 'duplicate', 'duplicateType': 'paired_colocated'}]},
+     'Relationship evidenced; the set-aside result (0.08) is not higher than the retained one (0.1).')
+a, b = pair(2)
+case('TR-06d', 'TR-06', 'Paired sampler conflict: AM2 2 mg/m³ vs retained AM 0.1', 'stel_15', [a, b], STEL15, bm(1, 15),
+     {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['AM2'], 'rejectedConflict': ['AM2'], 'unresolvedWhy': {'AM2': 'higher than the retained result'}},
+     'A duplicate label cannot suppress adverse evidence: the higher paired result needs a reviewer\'s review.')
+a, b = pair(0.5)
+case('TR-06e', 'TR-06', 'Paired sampler conflict below the benchmark: AM2 0.5 vs retained 0.1', 'stel_15', [a, b], STEL15, bm(1, 15),
+     {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['AM2'], 'rejectedConflict': ['AM2']},
+     'Still a conflict: the policy does not depend on whether the higher result reaches the benchmark. Unresolved evidence blocks a favourable overall comparison (decision table), so the overall state is indeterminate.')
+a, b = pair(0.1, dtype='same_event_record')
+case('TR-06f', 'TR-06', 'Supported duplicate record of one sampling event (same instrument, window and result)', 'stel_15', [a, b], STEL15, bm(1, 15),
+     {'benchmarkState': 'below_benchmark', 'evidenceAdequacy': 'adequate', 'setAside': [{'code': 'AM2', 'kind': 'duplicate', 'duplicateType': 'same_event_record'}]}, 'Same event recorded twice.')
+a, b = pair(0.09, dtype='same_event_record')
+case('TR-06g', 'TR-06', 'Two records of one event with different results (0.09 vs 0.1)', 'stel_15', [a, b], STEL15, bm(1, 15),
+     {'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['AM2'], 'rejectedConflict': ['AM2'], 'unresolvedWhy': {'AM2': 'report different results'}}, 'One event cannot have two results; the discrepancy is resolved, not set aside.')
+for cid, desc, kw, why in [
+    ('TR-06h', 'different worker', {'o2': {'subjectRef': 'W2'}}, 'different worker'),
+    ('TR-06i', 'different substance', {'o2': {'substanceRef': 'SUB-2'}}, 'different substance'),
+    ('TR-06j', 'tasks not recorded for the set-aside sample', {'o2': {'tasksPerformed': None}}, 'tasks performed are not recorded'),
+    ('TR-06k', 'different task context', {'o2': {'tasksPerformed': 'Cleaning'}}, 'tasks recorded differ'),
+    ('TR-06l', 'no pair reference recorded', {'o2': {'pairRef': None}}, 'no pair reference'),
+    ('TR-06m', 'different exposure group', {'o2': {'groupRef': 'G2'}}, 'different exposure group'),
+    ('TR-06n', 'same-event record naming a different instrument', {'dtype': 'same_event_record', 'o2': {'instrument': {**INST, 'assetTag': 'P2'}}}, 'different instruments'),
+    ('TR-06o', 'paired windows overlapping 80 % (08:03–08:18)', {'start2': '08:03:00', 'end2': '08:18:00'}, 'less than 90 %'),
+    ('TR-06s', 'substance not recorded for either sample', {'o1': {'substanceRef': None}, 'o2': {'substanceRef': None}}, 'substance is not recorded'),
+    ('TR-06t', 'different shift reference', {'o1': {'shiftRef': 'DAY-A'}, 'o2': {'shiftRef': 'DAY-B'}}, 'different shift')]:
+    a, b = pair(0.08, **kw)
+    case(cid, 'TR-06', f'Duplicate refused: {desc}', 'stel_15', [a, b], STEL15, bm(1, 15), {'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['AM2'], 'unresolvedWhy': {'AM2': why}}, 'Missing or mismatching relationship evidence leaves the disposition unresolved.')
+a, b = pair(0.08, start2='08:01:30', end2='08:16:30')
+case('TR-06p', 'TR-06', 'Paired windows overlapping exactly 90 % (boundary, accepted)', 'stel_15', [a, b], STEL15, bm(1, 15), {'evidenceAdequacy': 'adequate', 'setAside': [{'code': 'AM2', 'kind': 'duplicate', 'duplicateType': 'paired_colocated'}]}, 'Overlap 13.5 of 15 min = 90 %: at the boundary, accepted (≥).')
+a, b = pair(0.1, start2='08:01:00', end2='08:16:00', dtype='same_event_record')
+case('TR-06q', 'TR-06', 'Same-event record with start and end 1 min apart (boundary, accepted)', 'stel_15', [a, b], STEL15, bm(1, 15), {'evidenceAdequacy': 'adequate'}, 'Differences up to 1 min are accepted as recording granularity.')
+a, b = pair(0.1, start2='08:01:01', end2='08:16:01', dtype='same_event_record')
+case('TR-06r', 'TR-06', 'Same-event record with start and end 1 min 1 s apart (refused)', 'stel_15', [a, b], STEL15, bm(1, 15), {'evidenceAdequacy': 'unresolved_evidence', 'unresolvedWhy': {'AM2': 'windows differ by more than 1 min'}}, 'Beyond the 1-min recording granularity.')
+case('TR-06u', 'TR-06', 'The coverage route: a technical reviewer judges the remaining coverage adequate for PM', 'stel_15', [AM, {**PM, 'evidenceDisposition': dd(None, kind='remaining_coverage_adequate')}], STEL15, bm(1, 15),
+     {'benchmarkState': 'below_benchmark', 'evidenceAdequacy': 'adequate_with_accepted_gaps', 'setAside': [{'code': 'PM', 'kind': 'remaining_coverage_adequate'}]},
+     'A different sample offered as adequate coverage goes through the reviewer-only judgement (role enforced by the service and the database), never through "duplicate".')
+case('TR-06v', 'TR-06', 'Unsupported category text', 'stel_15', [AMc, {**PMc, 'evidenceDisposition': dd('AM', 'adequate_coverage')}], STEL15, bm(1, 15),
+     {'evidenceAdequacy': 'unresolved_evidence', 'unresolvedWhy': {'PM': 'is not supported'}}, 'Only the two documented categories are supported.')
+
+# ── TR-07 contradictory detected_below_loq (independent review of 9b87c17) ──────────────────────────────────────
+# Value-field meaning (specification §0.7): detected_below_loq → an estimate in [LOD, LOQ] (both inclusive), or, when
+# declared as a reporting threshold, equal to the LOQ. Interval is always [LOD, LOQ]. Contradictory → no numeric result.
+def dbl(value, lod=10, loq=30, meaning=None, q='detected_below_loq', **o):
+    r = res(value, q, lod, loq)
+    if meaning: r['valueMeaning'] = meaning
+    return sample(result=r, **o)
+d7 = dbl(600)
+case('TR-07', 'TR-07', 'Review reproduction: detected_below_loq, value 600 µg, LOD 10, LOQ 30, 960 L; 8-h benchmark 0.5', 'twa_8h', [d7], P, bm(0.5),
+     {'samples': [{'code': 'S', 'lower': None, 'upper': None, 'included': True}], 'benchmarkState': 'indeterminate', 'dataQuality': 'incomplete', 'calculationAvailability': 'none', 'flagsInclude': ['INPUT_INVALID_DBL_VALUE'], 'flagMessage': {'INPUT_INVALID_DBL_VALUE': 'value 600 ug.*LOD 10 ug, LOQ 30 ug.*above the LOQ'}},
+     'Detected below the LOQ (30 µg) cannot be 600 µg: contradictory; no numeric result; no favourable assessment.',
+     change14='1.4.0 ignored the value: interval 0.01042–0.03125 mg/m³, below_benchmark.')
+ok7 = dbl(20); c7 = concentration(ok7)
+case('TR-07a', 'TR-07', 'Valid estimate 20 µg inside [10, 30]', 'twa_8h', [ok7], P, bm(0.5),
+     {'samples': [{'code': 'S', 'lower': c7['lower'], 'upper': c7['upper']}], 'results': [{'subject': 'W1', **twa([ok7], 480), 'comparison': 'below_benchmark'}], 'benchmarkState': 'below_benchmark', 'flagsInclude': ['DETECTED_BELOW_LOQ']},
+     'Interval LOD–LOQ: 0.010/0.960 – 0.030/0.960 = 0.0104167 – 0.03125 mg/m³; the estimate is recorded, not used as a quantified value.')
+for cid, val, flag in [('TR-07b', 10, 'DBL_VALUE_AT_LIMIT'), ('TR-07c', 30, 'DBL_VALUE_AT_LIMIT')]:
+    s7x = dbl(val)
+    case(cid, 'TR-07', f'Boundary: estimate {val} µg equals a limit (inclusive)', 'twa_8h', [s7x], P, bm(0.5), {'samples': [{'code': 'S', 'lower': c7['lower'], 'upper': c7['upper']}], 'flagsInclude': [flag], 'benchmarkState': 'below_benchmark'}, 'Limits are inclusive.')
+for cid, desc, s7x, flag in [
+    ('TR-07d', 'Estimate 9.999 µg below the LOD', dbl(9.999), 'INPUT_INVALID_DBL_VALUE'),
+    ('TR-07e', 'Estimate 30.0001 µg above the LOQ', dbl(30.0001), 'INPUT_INVALID_DBL_VALUE'),
+    ('TR-07f', 'LOQ missing', dbl(20, 10, None), 'INPUT_INVALID_LIMITS'),
+    ('TR-07g', 'LOD equal to LOQ (30, 30)', dbl(None, 30, 30), 'INPUT_INVALID_LIMITS'),
+    ('TR-07h', 'LOD above LOQ (40, 30)', dbl(None, 40, 30), 'INPUT_INVALID_LIMITS'),
+    ('TR-07i', 'Declared reporting threshold 600 µg is not the LOQ', dbl(600, meaning='reporting_threshold'), 'INPUT_INVALID_DBL_VALUE'),
+    ('TR-07j', 'Value declared "measured" with qualifier detected_below_loq', dbl(20, meaning='measured'), 'INPUT_INVALID_VALUE_MEANING'),
+    ('TR-07k', '"<LOQ" with the value declared an estimate', dbl(20, q='<LOQ', meaning='estimate'), 'INPUT_INVALID_VALUE_MEANING')]:
+    case(cid, 'TR-07', desc, 'twa_8h', [s7x], P, bm(0.5), {'samples': [{'code': 'S', 'lower': None, 'upper': None}], 'flagsInclude': [flag], 'benchmarkState': 'indeterminate'}, 'Contradictory or invalid: no numeric result, specific reason.')
+th = dbl(30, meaning='reporting_threshold')
+case('TR-07l', 'TR-07', 'Laboratory format with the LOQ in the value field, mapped explicitly as a reporting threshold', 'twa_8h', [th], P, bm(0.5), {'samples': [{'code': 'S', 'lower': c7['lower'], 'upper': c7['upper']}], 'benchmarkState': 'below_benchmark'}, 'Threshold = LOQ: consistent; interval LOD–LOQ.')
+nv = dbl(None)
+case('TR-07m', 'TR-07', 'No value (limits only)', 'twa_8h', [nv], P, bm(0.5), {'samples': [{'code': 'S', 'lower': c7['lower'], 'upper': c7['upper']}], 'benchmarkState': 'below_benchmark'}, 'Interval LOD–LOQ.')
+ok_w2 = sample(sampleCode='A', subjectRef='W2')
+bad = {**dbl(600, qc=QCF), 'sampleCode': 'D', 'sampleId': 'D', 'evidenceDisposition': {'kind': 'remaining_coverage_adequate', 'reason': 'Reviewer judges the other worker adequate', 'consequence': 'W1 is represented by W2 in this group', 'authorisedBy': 'Reviewer R'}}
+case('TR-07n', 'TR-07', 'Contradictory record (also excluded by QC) cannot be set aside, even by a reviewer', 'twa_8h', [ok_w2, bad], P, bm(0.5),
+     {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['D'], 'unresolvedWhy': {'D': 'contradictory or invalid inputs'}}, 'Awaits laboratory clarification; blocks a favourable overall comparison.')
+bad_nr = {**bad, 'evidenceDisposition': {**bad['evidenceDisposition'], 'kind': 'not_replaced'}}
+case('TR-07o', 'TR-07', 'Contradictory record recorded as not replaced: coverage gap', 'twa_8h', [ok_w2, bad_nr], P, bm(0.5), {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'coverage_gap'}, 'The worker remains unassessed.')
+es = sample(result={**res(150, 'estimated'), 'valueMeaning': 'estimate'})
+case('TR-07p', 'TR-07', 'Estimated 150 µg with the default meaning stated explicitly (unchanged behaviour)', 'twa_8h', [es], P, bm(0.5), {'results': [{'subject': 'W1', **twa([es], 480), 'comparison': 'below_benchmark'}], 'flagsInclude': ['ESTIMATED']}, '0.150/0.960 = 0.15625 mg/m³.')
+
+out = {'description': 'Structured regression fixtures for engine 1.5.0. Expected values are independent of the engine (Python oracle + hand-written statuses).',
        'engine': ENGINE, 'molarVolumeLPerMol': MOLAR_VOLUME, 'comparisonRelativeTolerance': REL_TOL, 'generatedBy': 'scripts/tr/build_fixtures.py', 'cases': cases}
 path = os.path.join(os.path.dirname(__file__), '..', '..', 'test', 'fixtures', 'worked-examples.fixtures.json')
 os.makedirs(os.path.dirname(path), exist_ok=True)

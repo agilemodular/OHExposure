@@ -35,11 +35,13 @@ export const samplingInput = z.object({
   handover_to: optStr,
   handover_local: localDT,
   shift_ref: z.preprocess((v) => (typeof v === 'string' && !v.trim() ? undefined : v), z.string().trim().max(60).optional()).transform((v) => v ?? null),
+  /** Paired / co-located sampler reference (engine 1.5.0, TR-06): the same reference on both samplers of a pair. */
+  pair_ref: z.preprocess((v) => (typeof v === 'string' && !v.trim() ? undefined : v), z.string().trim().max(60).optional()).transform((v) => v ?? null),
 });
 export type SamplingInput = z.infer<typeof samplingInput>;
 
 const FIELD_COLUMNS = ['plan_id', 'sample_code', 'sample_type', 'worker_id', 'group_id_at_sampling', 'location_desc', 'substance_id', 'method_version_id', 'instrument_id', 'media_lot',
-  'start_at', 'end_at', 'timezone', 'interruptions', 'tasks_performed', 'flow_pre_lpm', 'flow_post_lpm', 'control_status', 'operating_conditions', 'deviations', 'notes', 'handover_to', 'handover_at', 'shift_ref'] as const;
+  'start_at', 'end_at', 'timezone', 'interruptions', 'tasks_performed', 'flow_pre_lpm', 'flow_post_lpm', 'control_status', 'operating_conditions', 'deviations', 'notes', 'handover_to', 'handover_at', 'shift_ref', 'pair_ref'] as const;
 
 /** Normalises and validates a capture against server state; returns column values and warnings (never hidden). */
 async function prepare(tx: Tx, a: Actor, d: SamplingInput) {
@@ -117,7 +119,7 @@ async function prepare(tx: Tx, a: Actor, d: SamplingInput) {
     media_lot: d.media_lot, start_at, end_at, timezone: tz, interruptions: JSON.stringify(interruptions), tasks_performed: d.tasks_performed,
     flow_pre_lpm: d.flow_pre_lpm, flow_post_lpm: d.flow_post_lpm, control_status: d.control_status, operating_conditions: d.operating_conditions,
     deviations: d.deviations, notes: d.notes, handover_to: d.handover_to, handover_at: d.handover_local ? zonedToUtc(d.handover_local, tz) : null,
-    shift_ref: d.shift_ref,
+    shift_ref: d.shift_ref, pair_ref: d.pair_ref,
   };
   return { clientId, values, status, warnings };
 }
@@ -413,7 +415,7 @@ export async function sampleDetail(a: Actor, id: string) {
       calibrationOk: e.instrument_id && e.start_at ? await calibrationValidAt(tx, e.instrument_id, e.start_at.toISOString()) : null,
       qc: await many(tx, 'select q.*, u.name disposition_by_name from sample_qc_checks q left join users u on u.id=q.disposition_by where sampling_event_id=$1 order by recorded_at', [id]),
       custody: await many(tx, 'select c.*, u.name recorded_by_name from custody_events c left join users u on u.id=c.recorded_by where sampling_event_id=$1 order by at, recorded_at', [id]),
-      results: await many(tx, `select r.*, s.name substance_name, v.value, v.unit, v.qualifier, v.lab_qualifier, v.lod, v.loq, v.lab_report_ref, v.analytical_method, v.uncertainty, v.lab_comments, v.sample_condition, v.revision, v.amendment_reason, v.entered_at
+      results: await many(tx, `select r.*, s.name substance_name, v.value, v.unit, v.qualifier, v.lab_qualifier, v.value_meaning, v.lod, v.loq, v.lab_report_ref, v.analytical_method, v.uncertainty, v.lab_comments, v.sample_condition, v.revision, v.amendment_reason, v.entered_at
         from lab_results r join lab_result_revisions v on v.result_id=r.id join substances s on s.id=r.substance_id where r.sampling_event_id=$1 order by s.name, v.revision desc`, [id]),
       conflicts: await many(tx, `select * from sync_conflicts where entity_id=$1 and status='open'`, [id]),
       acceptance: await many(tx, 'select d.*, u.name authorised_by_name from sample_acceptance_dispositions d join users u on u.id=d.authorised_by where d.sampling_event_id=$1 order by recorded_at', [id]),

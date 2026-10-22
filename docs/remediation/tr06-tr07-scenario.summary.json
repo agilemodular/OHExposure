@@ -1,0 +1,146 @@
+{
+  "approvedRevisionUnchanged": true,
+  "issuedReportsUnchanged": true,
+  "newRevision": {
+    "id": "7fa92f0c-9cbf-4bd3-adfa-bec2caefdbea",
+    "calc": "1.5.0 stel_15 1.3.0",
+    "benchmark": "indeterminate",
+    "dataQuality": "incomplete",
+    "evidenceAdequacy": "unresolved_evidence",
+    "unresolved": [
+      {
+        "why": "excluded; no disposition recorded",
+        "reasons": [
+          "Failed QC check \"flow_check\" has no authorised disposition; sample cannot be used as evidence."
+        ],
+        "interval": {
+          "unit": "mg/m3",
+          "lower": 2,
+          "upper": 2
+        },
+        "sampleCode": "SYN-PM",
+        "subjectRef": "SYN-W1",
+        "disposition": null,
+        "rejectedDisposition": null
+      },
+      {
+        "why": "not calculable; not replaced — the worker or task it covered remains unassessed (Worker SYN-W2 has no formal short-term result until the laboratory clarifies the result.)",
+        "reasons": [
+          "Contradictory inputs (qualifier detected_below_loq (laboratory text \"DET<LOQ\"), value 600 ug, LOD 10 ug, LOQ 30 ug): the value is above the LOQ, so it cannot be a detected-below-LOQ estimate (an estimate must lie between the LOD and the LOQ, both inclusive). No numerical result is produced from these inputs. Obtain the laboratory's clarification and record it as an amendment; the reported value is not changed or discarded."
+        ],
+        "interval": null,
+        "sampleCode": "SYN-DBL",
+        "subjectRef": "SYN-W2",
+        "disposition": "not_replaced"
+      }
+    ]
+  },
+  "attempts": [
+    "no category: refused — State the duplicate category: a second record of the same sampling event, or a paired / co-located sampler. A different sample offered as evidence that the remaining coverage is adequate is not a duplicate; a technical reviewer records that as \"remaining coverage adequate\".",
+    "same_event_record: refused — Duplicate refused for SYN-PM: the sampling windows differ by more than 1 min, so the records are not of the same sampling event.",
+    "paired_colocated: refused — Duplicate refused for SYN-PM: no pair reference was recorded at capture for both samples, so they are not evidenced as paired samplers.",
+    "SYN-DBL not_replaced: recorded"
+  ],
+  "auditTrail": [
+    {
+      "at": "2026-10-22T12:55:47.598Z",
+      "action": "lab_result.create",
+      "actor": "Pat Practitioner",
+      "detail": {
+        "unit": "ug",
+        "batch": "0db77b46-5b78-4bfa-a37d-dc68503a135e",
+        "value": 3,
+        "sample": "SYN-AM",
+        "revision": 1,
+        "qualifier": "="
+      }
+    },
+    {
+      "at": "2026-10-22T12:55:47.598Z",
+      "action": "lab_result.create",
+      "actor": "Pat Practitioner",
+      "detail": {
+        "unit": "ug",
+        "batch": "0db77b46-5b78-4bfa-a37d-dc68503a135e",
+        "value": 60,
+        "sample": "SYN-PM",
+        "revision": 1,
+        "qualifier": "="
+      }
+    },
+    {
+      "at": "2026-10-22T12:55:47.598Z",
+      "action": "lab_result.create",
+      "actor": "Pat Practitioner",
+      "detail": {
+        "unit": "ug",
+        "batch": "0db77b46-5b78-4bfa-a37d-dc68503a135e",
+        "value": 600,
+        "sample": "SYN-DBL",
+        "revision": 1,
+        "qualifier": "detected_below_loq"
+      }
+    },
+    {
+      "at": "2026-10-22T12:55:47.646Z",
+      "action": "assessment.evidence_disposition",
+      "actor": "Pat Practitioner",
+      "detail": {
+        "kind": "duplicate",
+        "reason": "Recorded as a duplicate of the morning sample",
+        "sample_id": "3b3f323a-477a-47c0-b1b5-0d8db66329cc",
+        "consequence": "The morning sample represents this worker and shift",
+        "related_sample_id": "41e332b8-10e1-46ec-8e10-dd7d04e49910"
+      }
+    },
+    {
+      "at": "2026-10-22T12:55:47.720Z",
+      "action": "assessment.approved",
+      "actor": "Robin Reviewer",
+      "detail": {
+        "scope": "Synthetic scenario only",
+        "superseded": [],
+        "limitations": "Synthetic data; demonstration of a historical record",
+        "snapshot_hash": "346b899cd6c729469d362564a5285d4c53ccd2a8e6bac7c1d668000d42eb9cbc"
+      }
+    },
+    {
+      "at": "2026-10-22T12:55:47.748Z",
+      "action": "report.issued",
+      "actor": "Robin Reviewer",
+      "detail": {
+        "hash": "1f5c71e60f5bca92ba8cb6c0d0a84781bf8ce08e32464beccb599c86cf993ebe",
+        "revision": 1,
+        "assessment": "9f641bf1-5f9d-4102-8dd9-643ac7b116c0"
+      }
+    },
+    {
+      "at": "2026-10-22T12:55:49.932Z",
+      "action": "assessment.new_revision",
+      "actor": "Pat Practitioner",
+      "detail": {
+        "reason": "Reassessment after engine 1.5.0 (TR-06 duplicate relationship rules; TR-07 contradictory detected-below-LOQ inputs)",
+        "revision": 2
+      }
+    },
+    {
+      "at": "2026-10-22T12:55:50.009Z",
+      "action": "assessment.evidence_disposition",
+      "actor": "Pat Practitioner",
+      "detail": {
+        "kind": "not_replaced",
+        "reason": "Laboratory result contradicts its qualifier; clarification requested from the laboratory.",
+        "sample_id": "8dfd2291-4571-48b6-ac7c-f8dc009f6be7",
+        "consequence": "Worker SYN-W2 has no formal short-term result until the laboratory clarifies the result.",
+        "sample_code": "SYN-DBL",
+        "sample_flags": [
+          "INPUT_INVALID_DBL_VALUE"
+        ],
+        "duplicate_type": null,
+        "sample_interval": null,
+        "related_sample_id": null,
+        "related_sample_code": null
+      }
+    }
+  ]
+}

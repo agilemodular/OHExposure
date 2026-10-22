@@ -1,0 +1,388 @@
+{
+  "engine": "1.5.0",
+  "methods": {
+    "twa_8h": "1.4.0",
+    "stel_15": "1.3.0"
+  },
+  "cases": {
+    "TR-06-before-disposition": {
+      "description": "AM valid 0.1 mg/m³ (08:00–08:15); PM excluded 2 mg/m³ (15:00–15:15, failed QC, no disposition); 15-min benchmark 1 mg/m³; no evidence disposition",
+      "output": {
+        "engine": "1.5.0",
+        "calc": "stel_15 1.3.0",
+        "dataQuality": "qualified",
+        "benchmarkState": "indeterminate",
+        "evidenceAdequacy": "unresolved_evidence",
+        "calculationAvailability": "complete",
+        "note": "1 formal 15-minute result(s) compared with SYNTHETIC 1 mg/m3 (synthetic). Every calculated result is below the benchmark, but 1 personal sample(s) are unresolved (PM: excluded; no disposition recorded); no favourable overall comparison until they are dispositioned or replaced.",
+        "unresolvedEvidence": [
+          {
+            "sampleCode": "PM",
+            "subjectRef": "W1",
+            "why": "excluded; no disposition recorded",
+            "interval": {
+              "lower": 2,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "disposition": null,
+            "reasons": [
+              "Failed QC check \"flow_check\" has no authorised disposition; sample cannot be used as evidence."
+            ],
+            "rejectedDisposition": null
+          }
+        ],
+        "setAsideEvidence": [],
+        "samples": [
+          {
+            "code": "AM",
+            "included": true,
+            "sampledMinutes": 15,
+            "volumeL": null,
+            "concentration": {
+              "lower": 0.1,
+              "upper": 0.1,
+              "unit": "mg/m3"
+            },
+            "flags": [],
+            "messages": []
+          },
+          {
+            "code": "PM",
+            "included": false,
+            "sampledMinutes": 15,
+            "volumeL": null,
+            "concentration": {
+              "lower": 2,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "flags": [
+              "QC_FAIL_UNRESOLVED:exclude"
+            ],
+            "messages": []
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "samples": [
+              "AM"
+            ],
+            "result": {
+              "lower": 0.1,
+              "upper": 0.1,
+              "unit": "mg/m3"
+            },
+            "comparison": "below_benchmark",
+            "flags": []
+          }
+        ]
+      }
+    },
+    "TR-06-duplicate": {
+      "description": "Same inputs; PM dispositioned as \"duplicate\" of AM by a practitioner (no duplicate category or pairing evidence supplied, as in the review)",
+      "output": {
+        "engine": "1.5.0",
+        "calc": "stel_15 1.3.0",
+        "dataQuality": "qualified",
+        "benchmarkState": "indeterminate",
+        "evidenceAdequacy": "unresolved_evidence",
+        "calculationAvailability": "complete",
+        "note": "1 formal 15-minute result(s) compared with SYNTHETIC 1 mg/m3 (synthetic). Every calculated result is below the benchmark, but 1 personal sample(s) are unresolved (PM: excluded; duplicate disposition not accepted: duplicate category not stated (supported: same-event record, paired/co-located sampler). A different sample offered as evidence that the remaining coverage is adequate is not a duplicate; that needs a technical reviewer's \"remaining coverage adequate\" disposition); no favourable overall comparison until they are dispositioned or replaced.",
+        "unresolvedEvidence": [
+          {
+            "sampleCode": "PM",
+            "subjectRef": "W1",
+            "why": "excluded; duplicate disposition not accepted: duplicate category not stated (supported: same-event record, paired/co-located sampler). A different sample offered as evidence that the remaining coverage is adequate is not a duplicate; that needs a technical reviewer's \"remaining coverage adequate\" disposition",
+            "interval": {
+              "lower": 2,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "disposition": "duplicate",
+            "reasons": [
+              "Failed QC check \"flow_check\" has no authorised disposition; sample cannot be used as evidence."
+            ],
+            "rejectedDisposition": {
+              "kind": "duplicate",
+              "duplicateType": null,
+              "relatedSampleCode": "AM",
+              "by": "Practitioner P",
+              "reason": "Recorded as a duplicate of the morning sample",
+              "problem": "duplicate category not stated (supported: same-event record, paired/co-located sampler). A different sample offered as evidence that the remaining coverage is adequate is not a duplicate; that needs a technical reviewer's \"remaining coverage adequate\" disposition",
+              "conflict": false
+            }
+          }
+        ],
+        "setAsideEvidence": [],
+        "samples": [
+          {
+            "code": "AM",
+            "included": true,
+            "sampledMinutes": 15,
+            "volumeL": null,
+            "concentration": {
+              "lower": 0.1,
+              "upper": 0.1,
+              "unit": "mg/m3"
+            },
+            "flags": [],
+            "messages": []
+          },
+          {
+            "code": "PM",
+            "included": false,
+            "sampledMinutes": 15,
+            "volumeL": null,
+            "concentration": {
+              "lower": 2,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "flags": [
+              "QC_FAIL_UNRESOLVED:exclude"
+            ],
+            "messages": []
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "samples": [
+              "AM"
+            ],
+            "result": {
+              "lower": 0.1,
+              "upper": 0.1,
+              "unit": "mg/m3"
+            },
+            "comparison": "below_benchmark",
+            "flags": []
+          }
+        ]
+      }
+    },
+    "TR-06-variant-same-event": {
+      "description": "Variant: disposition claims \"same_event_record\" (relationship evidence recorded; windows 08:00–08:15 and 15:00–15:15)",
+      "output": {
+        "engine": "1.5.0",
+        "calc": "stel_15 1.3.0",
+        "dataQuality": "qualified",
+        "benchmarkState": "indeterminate",
+        "evidenceAdequacy": "unresolved_evidence",
+        "calculationAvailability": "complete",
+        "note": "1 formal 15-minute result(s) compared with SYNTHETIC 1 mg/m3 (synthetic). Every calculated result is below the benchmark, but 1 personal sample(s) are unresolved (PM: excluded; duplicate disposition not accepted: the sampling windows differ by more than 1 min, so the records are not of the same sampling event); no favourable overall comparison until they are dispositioned or replaced.",
+        "unresolvedEvidence": [
+          {
+            "sampleCode": "PM",
+            "subjectRef": "W1",
+            "why": "excluded; duplicate disposition not accepted: the sampling windows differ by more than 1 min, so the records are not of the same sampling event",
+            "interval": {
+              "lower": 2,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "disposition": "duplicate",
+            "reasons": [
+              "Failed QC check \"flow_check\" has no authorised disposition; sample cannot be used as evidence."
+            ],
+            "rejectedDisposition": {
+              "kind": "duplicate",
+              "duplicateType": "same_event_record",
+              "relatedSampleCode": "AM",
+              "by": "Practitioner P",
+              "reason": "Recorded as a duplicate of the morning sample",
+              "problem": "the sampling windows differ by more than 1 min, so the records are not of the same sampling event",
+              "conflict": false
+            }
+          }
+        ],
+        "setAsideEvidence": [],
+        "samples": [
+          {
+            "code": "AM",
+            "included": true,
+            "sampledMinutes": 15,
+            "volumeL": null,
+            "concentration": {
+              "lower": 0.1,
+              "upper": 0.1,
+              "unit": "mg/m3"
+            },
+            "flags": [],
+            "messages": []
+          },
+          {
+            "code": "PM",
+            "included": false,
+            "sampledMinutes": 15,
+            "volumeL": null,
+            "concentration": {
+              "lower": 2,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "flags": [
+              "QC_FAIL_UNRESOLVED:exclude"
+            ],
+            "messages": []
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "samples": [
+              "AM"
+            ],
+            "result": {
+              "lower": 0.1,
+              "upper": 0.1,
+              "unit": "mg/m3"
+            },
+            "comparison": "below_benchmark",
+            "flags": []
+          }
+        ]
+      }
+    },
+    "TR-06-variant-paired": {
+      "description": "Variant: disposition claims \"paired_colocated\" (same pair reference recorded; windows do not overlap)",
+      "output": {
+        "engine": "1.5.0",
+        "calc": "stel_15 1.3.0",
+        "dataQuality": "qualified",
+        "benchmarkState": "indeterminate",
+        "evidenceAdequacy": "unresolved_evidence",
+        "calculationAvailability": "complete",
+        "note": "1 formal 15-minute result(s) compared with SYNTHETIC 1 mg/m3 (synthetic). Every calculated result is below the benchmark, but 1 personal sample(s) are unresolved (PM: excluded; duplicate disposition not accepted: the sampling windows overlap for 0 min, less than 90 % of the longer window, so the samples were not taken at the same time); no favourable overall comparison until they are dispositioned or replaced.",
+        "unresolvedEvidence": [
+          {
+            "sampleCode": "PM",
+            "subjectRef": "W1",
+            "why": "excluded; duplicate disposition not accepted: the sampling windows overlap for 0 min, less than 90 % of the longer window, so the samples were not taken at the same time",
+            "interval": {
+              "lower": 2,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "disposition": "duplicate",
+            "reasons": [
+              "Failed QC check \"flow_check\" has no authorised disposition; sample cannot be used as evidence."
+            ],
+            "rejectedDisposition": {
+              "kind": "duplicate",
+              "duplicateType": "paired_colocated",
+              "relatedSampleCode": "AM",
+              "by": "Practitioner P",
+              "reason": "Recorded as a duplicate of the morning sample",
+              "problem": "the sampling windows overlap for 0 min, less than 90 % of the longer window, so the samples were not taken at the same time",
+              "conflict": false
+            }
+          }
+        ],
+        "setAsideEvidence": [],
+        "samples": [
+          {
+            "code": "AM",
+            "included": true,
+            "sampledMinutes": 15,
+            "volumeL": null,
+            "concentration": {
+              "lower": 0.1,
+              "upper": 0.1,
+              "unit": "mg/m3"
+            },
+            "flags": [],
+            "messages": []
+          },
+          {
+            "code": "PM",
+            "included": false,
+            "sampledMinutes": 15,
+            "volumeL": null,
+            "concentration": {
+              "lower": 2,
+              "upper": 2,
+              "unit": "mg/m3"
+            },
+            "flags": [
+              "QC_FAIL_UNRESOLVED:exclude"
+            ],
+            "messages": []
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "samples": [
+              "AM"
+            ],
+            "result": {
+              "lower": 0.1,
+              "upper": 0.1,
+              "unit": "mg/m3"
+            },
+            "comparison": "below_benchmark",
+            "flags": []
+          }
+        ]
+      }
+    },
+    "TR-07": {
+      "description": "detected_below_loq, reported value 600 µg, LOD 10 µg, LOQ 30 µg, 960 L; 8-hour benchmark 0.5 mg/m³",
+      "output": {
+        "engine": "1.5.0",
+        "calc": "twa_8h 1.4.0",
+        "dataQuality": "incomplete",
+        "benchmarkState": "indeterminate",
+        "evidenceAdequacy": "no_formal_evidence",
+        "calculationAvailability": "none",
+        "note": "1 worker-shift result(s) could not be calculated; no formal benchmark comparison is possible.",
+        "unresolvedEvidence": [
+          {
+            "sampleCode": "D",
+            "subjectRef": "W1",
+            "why": "not calculable; no disposition recorded",
+            "interval": null,
+            "disposition": null,
+            "reasons": [
+              "Contradictory inputs (qualifier detected_below_loq, value 600 ug, LOD 10 ug, LOQ 30 ug): the value is above the LOQ, so it cannot be a detected-below-LOQ estimate (an estimate must lie between the LOD and the LOQ, both inclusive). No numerical result is produced from these inputs. Obtain the laboratory's clarification and record it as an amendment; the reported value is not changed or discarded."
+            ],
+            "rejectedDisposition": null
+          }
+        ],
+        "setAsideEvidence": [],
+        "samples": [
+          {
+            "code": "D",
+            "included": true,
+            "sampledMinutes": 480,
+            "volumeL": null,
+            "concentration": null,
+            "flags": [
+              "INPUT_INVALID_DBL_VALUE:incomplete"
+            ],
+            "messages": [
+              "Contradictory inputs (qualifier detected_below_loq, value 600 ug, LOD 10 ug, LOQ 30 ug): the value is above the LOQ, so it cannot be a detected-below-LOQ estimate (an estimate must lie between the LOD and the LOQ, both inclusive). No numerical result is produced from these inputs. Obtain the laboratory's clarification and record it as an amendment; the reported value is not changed or discarded."
+            ]
+          }
+        ],
+        "results": [
+          {
+            "subject": "W1",
+            "samples": [
+              "D"
+            ],
+            "result": null,
+            "comparison": "not_comparable",
+            "flags": [
+              "SAMPLE_NOT_CALCULABLE:incomplete",
+              "SHIFT_INFERRED:info"
+            ]
+          }
+        ]
+      }
+    }
+  }
+}

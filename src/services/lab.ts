@@ -4,6 +4,7 @@ import { invalid, notFound } from '../errors.js';
 import { assertWorkflowActive } from './assurance.js';
 import { assertLinkableAttachment } from './attachments.js';
 import { assertNotFuture, optNum, optStr, optUuid, parse, reqStr, strArray, uuid, zonedToUtc } from './util.js';
+import { qualifierValueProblem } from '../calc/engine.js';
 
 const resultSchema = z.object({
   sampling_event_id: uuid,
@@ -12,6 +13,9 @@ const resultSchema = z.object({
   unit: z.enum(['ug', 'mg', 'ug/m3', 'mg/m3', 'ppm', 'f/ml']),
   qualifier: z.enum(['=', '<LOD', '<LOQ', 'detected_below_loq', '>', 'estimated']),
   lab_qualifier: z.preprocess((v) => (typeof v === 'string' && !v.trim() ? undefined : v), z.string().trim().max(40).optional()).transform((v) => v ?? null),
+  /** Declared meaning of the value field (engine 1.5.0, TR-07); blank = the qualifier's default. */
+  value_meaning: z.preprocess((v) => (v == null || (typeof v === 'string' && !v.trim()) ? undefined : typeof v === 'string' ? v.trim().toLowerCase() : v),
+    z.enum(['measured', 'estimate', 'reporting_threshold', 'lower_limit']).optional()).transform((v) => v ?? null),
   lod: optNum,
   loq: optNum,
   analytical_method: optStr,
@@ -32,6 +36,9 @@ function validateResult(d: ResultIn) {
   for (const k of ['value', 'lod', 'loq'] as const) if (d[k] != null && d[k]! < 0) throw invalid(`${k} cannot be negative`);
   if (d.lod != null && d.loq != null && d.loq < d.lod) throw invalid('LOQ cannot be below LOD');
   if (d.qualifier === 'detected_below_loq' && (d.lod == null || d.loq == null || !(d.lod < d.loq))) throw invalid('A detected-below-LOQ result needs both limits, with the LOD below the LOQ');
+  // TR-07: the same consistency rule as the engine and the database (value meaning; detected-below-LOQ value in [LOD, LOQ]).
+  const p = qualifierValueProblem({ qualifier: d.qualifier, value: d.value, lod: d.lod, loq: d.loq, unit: d.unit, valueMeaning: d.value_meaning, labQualifier: d.lab_qualifier });
+  if (p) throw invalid(`${p.message} Fields in conflict: ${p.fields.join(', ')}.`);
 }
 
 /**
@@ -65,13 +72,13 @@ async function writeResult(tx: Tx, a: Actor, d: ResultIn, batchId: string | null
   } else {
     res = await one(tx, 'insert into lab_results (tenant_id,client_id,sampling_event_id,substance_id,analyte_name) values ($1,$2,$3,$4,$5) returning *', [e.tenant_id, e.client_id, d.sampling_event_id, d.substance_id, sub.name]);
   }
-  const rev = await one(tx, `insert into lab_result_revisions (tenant_id,client_id,result_id,revision,value,unit,qualifier,lod,loq,analytical_method,laboratory_id,lab_report_ref,uncertainty,sample_condition,lab_comments,source_attachment_id,amendment_reason,import_batch_id,entered_by,lab_qualifier)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) returning *`,
-    [e.tenant_id, e.client_id, res.id, revision, d.value, d.unit, d.qualifier, d.lod, d.loq, d.analytical_method, d.laboratory_id, d.lab_report_ref, d.uncertainty, d.sample_condition, d.lab_comments, d.source_attachment_id, revision > 1 ? d.amendment_reason : null, batchId, a.userId, d.lab_qualifier]);
+  const rev = await one(tx, `insert into lab_result_revisions (tenant_id,client_id,result_id,revision,value,unit,qualifier,lod,loq,analytical_method,laboratory_id,lab_report_ref,uncertainty,sample_condition,lab_comments,source_attachment_id,amendment_reason,import_batch_id,entered_by,lab_qualifier,value_meaning)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21) returning *`,
+    [e.tenant_id, e.client_id, res.id, revision, d.value, d.unit, d.qualifier, d.lod, d.loq, d.analytical_method, d.laboratory_id, d.lab_report_ref, d.uncertainty, d.sample_condition, d.lab_comments, d.source_attachment_id, revision > 1 ? d.amendment_reason : null, batchId, a.userId, d.lab_qualifier, d.value_meaning]);
   await tx.query('insert into custody_events (tenant_id,client_id,sampling_event_id,event,at,notes,recorded_by) values ($1,$2,$3,$4,now(),$5,$6)',
     [e.tenant_id, e.client_id, e.id, revision > 1 ? 'result_amended' : 'analysed', revision > 1 ? d.amendment_reason : d.lab_report_ref, a.userId]);
   if (e.status !== 'analysed') await tx.query(`update sampling_events set status='analysed', version=version+1, updated_at=now() where id=$1`, [e.id]);
-  await audit(tx, a, revision > 1 ? 'lab_result.amend' : 'lab_result.create', 'lab_result', res.id, { sample: e.sample_code, revision, qualifier: d.qualifier, value: d.value, unit: d.unit, batch: batchId });
+  await audit(tx, a, revision > 1 ? 'lab_result.amend' : 'lab_result.create', 'lab_result', res.id, { sample: e.sample_code, revision, qualifier: d.qualifier, lab_qualifier: d.lab_qualifier, value: d.value, value_meaning: d.value_meaning, lod: d.lod, loq: d.loq, unit: d.unit, batch: batchId });
   return { result: res, revision: rev };
 }
 
@@ -150,7 +157,7 @@ export function parseCsv(text: string): string[][] {
   return rows.filter((r) => r.some((x) => x.trim() !== ''));
 }
 
-export const IMPORT_COLUMNS = ['sample_code', 'analyte', 'cas_number', 'value', 'unit', 'qualifier', 'lod', 'loq', 'analytical_method', 'lab_report_ref', 'uncertainty', 'sample_condition', 'lab_comments', 'amendment_reason'];
+export const IMPORT_COLUMNS = ['sample_code', 'analyte', 'cas_number', 'value', 'unit', 'qualifier', 'value_meaning', 'lod', 'loq', 'analytical_method', 'lab_report_ref', 'uncertainty', 'sample_condition', 'lab_comments', 'amendment_reason'];
 
 export async function stageImport(a: Actor, input: { filename: string; csv: string; laboratory_id?: string | null; source_attachment_id?: string | null }) {
   requirePerm(a, 'lab.import');
@@ -180,7 +187,7 @@ export async function stageImport(a: Actor, input: { filename: string; csv: stri
       if (!sub) errs.push(`Unknown analyte "${raw.analyte || raw.cas_number}"`);
       const num = (k: string) => (raw[k] === '' || raw[k] === undefined ? null : Number(raw[k]));
       const parsed: any = {
-        sampling_event_id: ev?.id, substance_id: sub?.id, value: num('value'), unit: raw.unit, qualifier: mapQualifier(raw.qualifier ?? '') ?? raw.qualifier, lab_qualifier: raw.qualifier || null, lod: num('lod'), loq: num('loq'),
+        sampling_event_id: ev?.id, substance_id: sub?.id, value: num('value'), unit: raw.unit, qualifier: mapQualifier(raw.qualifier ?? '') ?? raw.qualifier, lab_qualifier: raw.qualifier || null, value_meaning: raw.value_meaning || null, lod: num('lod'), loq: num('loq'),
         analytical_method: raw.analytical_method || null, laboratory_id: input.laboratory_id ?? null, lab_report_ref: raw.lab_report_ref || null, uncertainty: raw.uncertainty || null,
         sample_condition: raw.sample_condition || null, lab_comments: raw.lab_comments || null, source_attachment_id: input.source_attachment_id ?? null, amendment_reason: raw.amendment_reason || null,
       };

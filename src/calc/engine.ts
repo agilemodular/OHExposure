@@ -40,10 +40,32 @@
 //   A explicit shift association (shiftRef); inference only when unambiguous.  B exposure duration from task records
 //   as a range (overlap-aware).  C below-LOQ semantics: generic "<LOQ" is 0–LOQ; detection only when the laboratory
 //   reports it.  D separate status axes: calculation availability, evidence adequacy, numerical comparison.
-export const ENGINE_VERSION = '1.4.0';
+// 1.5.0 (independent technical review of package 9b87c17, TR-06 and TR-07):
+//   TR-06 a "duplicate" disposition sets evidence aside only for a supported duplicate category with matching
+//         relationship evidence (worker, substance, exposure group, tasks, shift, sampling window, and either the same
+//         instrument for a duplicate record of one event or a recorded pair reference for paired samplers). A different
+//         sample offered as adequate remaining coverage is not a duplicate. A paired or duplicate-record result that is
+//         higher than (or, for one event, differs from) the retained result is a conflict and stays unresolved.
+//   TR-07 the numeric value field has a defined meaning per qualifier; a detected-below-LOQ value outside [LOD, LOQ]
+//         (or a threshold that is not the LOQ) is contradictory: no numerical result, and the sample cannot be set
+//         aside by disposition until the laboratory clarifies it through an amendment.
+export const ENGINE_VERSION = '1.5.0';
 
 export type Qualifier = '=' | '<LOD' | '<LOQ' | 'detected_below_loq' | '>' | 'estimated';
 export const QUALIFIERS: Qualifier[] = ['=', '<LOD', '<LOQ', 'detected_below_loq', '>', 'estimated'];
+/**
+ * Meaning of the numeric value field (1.5.0, TR-07). Each qualifier allows only the meanings listed; the first is the
+ * default when none is recorded. A laboratory format that puts a reporting threshold in the value field of a
+ * detected-below-LOQ result must say so explicitly (import column value_meaning = reporting_threshold).
+ *  - measured:            the quantified result.                      '='
+ *  - estimate:            the laboratory's estimate of the amount.    'estimated'; 'detected_below_loq' (must lie in [LOD, LOQ])
+ *  - reporting_threshold: the "less than" limit, not an amount.       '<LOD', '<LOQ'; 'detected_below_loq' (must equal the LOQ)
+ *  - lower_limit:         the top of the reportable range.            '>'
+ */
+export type ValueMeaning = 'measured' | 'estimate' | 'reporting_threshold' | 'lower_limit';
+export const VALUE_MEANINGS: Record<Qualifier, ValueMeaning[]> = {
+  '=': ['measured'], estimated: ['estimate'], '<LOD': ['reporting_threshold'], '<LOQ': ['reporting_threshold'], '>': ['lower_limit'], detected_below_loq: ['estimate', 'reporting_threshold'],
+};
 export type MassUnit = 'ug' | 'mg';
 export type ConcUnit = 'ug/m3' | 'mg/m3' | 'ppm' | 'f/ml';
 export const RESULT_UNITS = ['ug', 'mg', 'ug/m3', 'mg/m3', 'ppm', 'f/ml'] as const;
@@ -56,7 +78,20 @@ export interface AcceptanceDisposition { criterion: AcceptanceCriterion; evidenc
 
 /** Disposition of a personal sample that cannot be used as formal evidence in this assessment (TR-02). */
 export type EvidenceDispositionKind = 'duplicate' | 'outside_scope' | 'not_replaced' | 'remaining_coverage_adequate';
-export interface EvidenceDisposition { kind: EvidenceDispositionKind; reason: string; consequence: string; authorisedBy: string; relatedSampleCode?: string | null }
+/**
+ * Supported duplicate categories (1.5.0, TR-06). A different sample offered as evidence that the remaining coverage is
+ * adequate is NOT a duplicate; that judgement is 'remaining_coverage_adequate' and is reserved to a technical reviewer.
+ *  - same_event_record: a second record of the same sampling event (same worker, instrument and window).
+ *  - paired_colocated:  a genuine paired / co-located sampler worn at the same time, identified by a pair reference
+ *                       recorded with both samples at capture.
+ */
+export type DuplicateType = 'same_event_record' | 'paired_colocated';
+export const DUPLICATE_TYPES: DuplicateType[] = ['same_event_record', 'paired_colocated'];
+/** Start and end of two records of the same sampling event may differ by at most this (recording granularity), min. */
+export const DUPLICATE_RECORD_WINDOW_TOL_MIN = 1;
+/** Paired samplers: the overlap of the two sampling windows must be at least this fraction of the longer window. */
+export const PAIRED_MIN_OVERLAP_FRACTION = 0.9;
+export interface EvidenceDisposition { kind: EvidenceDispositionKind; reason: string; consequence: string; authorisedBy: string; relatedSampleCode?: string | null; duplicateType?: DuplicateType | string | null }
 
 export interface SampleInput {
   sampleId: string;
@@ -69,6 +104,11 @@ export interface SampleInput {
   timezone: string | null;
   /** Explicit shift / assessment-period association recorded with the sample (1.4.0). */
   shiftRef?: string | null;
+  /** Relationship evidence used to validate duplicate dispositions (1.5.0, TR-06). */
+  substanceRef?: string | null;   // substance of the result used in this assessment
+  groupRef?: string | null;       // exposure group at sampling
+  tasksPerformed?: string | null; // tasks recorded with the sample
+  pairRef?: string | null;        // paired / co-located sampler reference recorded at capture
   interruptions: { start: string; end: string; reason?: string }[];
   flowPreLpm: number | null;
   flowPostLpm: number | null;
@@ -95,6 +135,8 @@ export interface SampleInput {
     loq: number | null;
     /** The laboratory's own qualifier text, preserved alongside the mapped qualifier (1.4.0). */
     labQualifier?: string | null;
+    /** Declared meaning of the value field (1.5.0); null = the qualifier's default. */
+    valueMeaning?: ValueMeaning | string | null;
   } | null;
 }
 
@@ -165,6 +207,31 @@ export function formatInterval(i: Interval | null | undefined): string {
 }
 
 // ───────────────────────── Sample concentration ─────────────────────────
+
+/**
+ * Consistency of the qualifier, the value field and the limits (1.5.0, TR-07). Shared by the engine, laboratory entry,
+ * amendments and the CSV import so that every boundary applies the same rule. Returns null when consistent.
+ * detected_below_loq: both limits finite with LOD < LOQ; a value, if given, is the laboratory's estimate and must lie in
+ * [LOD, LOQ] (both inclusive), or, when declared a reporting threshold, must equal the LOQ.
+ */
+export function qualifierValueProblem(r: { qualifier: Qualifier; value: number | null; lod: number | null; loq: number | null; unit: string; valueMeaning?: string | null; labQualifier?: string | null }): { code: string; message: string; fields: string[] } | null {
+  if (r.valueMeaning != null && !(VALUE_MEANINGS[r.qualifier] ?? []).includes(r.valueMeaning as ValueMeaning))
+    return { code: 'VALUE_MEANING', fields: ['qualifier', 'value_meaning'], message: `Value meaning "${r.valueMeaning}" is not valid for qualifier "${r.qualifier}" (allowed: ${(VALUE_MEANINGS[r.qualifier] ?? []).join(', ')}).` };
+  if (r.qualifier !== 'detected_below_loq') return null;
+  const u = r.unit, rep = r.labQualifier ? ` (laboratory text "${r.labQualifier}")` : '';
+  if (r.lod == null || r.loq == null || !isNum(r.lod) || !isNum(r.loq))
+    return { code: 'LIMITS', fields: ['lod', 'loq'], message: `A detected-below-LOQ result needs both limits as finite numbers (LOD ${r.lod ?? 'missing'}, LOQ ${r.loq ?? 'missing'}).` };
+  if (!(r.lod < r.loq)) return { code: 'LIMITS', fields: ['lod', 'loq'], message: `A detected-below-LOQ result needs the LOD below the LOQ (LOD ${r.lod} ${u}, LOQ ${r.loq} ${u}).` };
+  if (r.value == null) return null;
+  const meaning = (r.valueMeaning ?? 'estimate') as ValueMeaning;
+  const fields = `qualifier detected_below_loq${rep}, value ${r.value} ${u}${r.valueMeaning ? ` declared as ${meaning.replace(/_/g, ' ')}` : ''}, LOD ${r.lod} ${u}, LOQ ${r.loq} ${u}`;
+  const pending = 'No numerical result is produced from these inputs. Obtain the laboratory\'s clarification and record it as an amendment; the reported value is not changed or discarded.';
+  if (meaning === 'reporting_threshold' && r.value !== r.loq)
+    return { code: 'DBL_VALUE', fields: ['qualifier', 'value', 'value_meaning', 'loq'], message: `Contradictory inputs (${fields}): a reporting threshold for a detected-below-LOQ result must equal the LOQ. ${pending}` };
+  if (meaning === 'estimate' && (r.value < r.lod || r.value > r.loq))
+    return { code: 'DBL_VALUE', fields: ['qualifier', 'value', r.value > r.loq ? 'loq' : 'lod'], message: `Contradictory inputs (${fields}): the value is ${r.value > r.loq ? 'above the LOQ' : 'below the LOD'}, so it cannot be a detected-below-LOQ estimate (an estimate must lie between the LOD and the LOQ, both inclusive). ${pending}` };
+  return null;
+}
 
 function acceptanceCheck(s: SampleInput, criterion: AcceptanceCriterion, failed: boolean, detail: string, flags: Flag[]) {
   if (!failed) return;
@@ -281,6 +348,9 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
     if (v < 0) { invalid('NEGATIVE', `${k} is negative.`); return finalise(out); }
   }
   if (r.lod != null && r.loq != null && r.lod > r.loq) { invalid('LIMITS', `LOD (${r.lod} ${r.unit}) exceeds LOQ (${r.loq} ${r.unit}); the limits contradict each other.`); return finalise(out); }
+  // TR-07: value meaning and detected-below-LOQ consistency (same rule as laboratory entry, import and the database).
+  const vp = qualifierValueProblem(r);
+  if (vp) { invalid(vp.code, vp.message); return finalise(out); }
 
   const isMass = r.unit === 'ug' || r.unit === 'mg';
   if (s.method && (s.method.resultBasis === 'mass_on_sample') !== isMass)
@@ -314,11 +384,13 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
       break;
     }
     case 'detected_below_loq': {
-      // Laboratory confirms detection above the LOD but below the LOQ.
-      if (r.lod === null || r.loq === null) { invalid('LIMITS', 'A detected-below-LOQ result needs both the LOD and the LOQ.'); return finalise(out); }
-      if (!(r.lod < r.loq)) { invalid('LIMITS', 'A detected-below-LOQ result needs LOD below LOQ.'); return finalise(out); }
-      lo = r.lod; hi = r.loq;
-      flags.push({ code: 'DETECTED_BELOW_LOQ', severity: 'qualify', message: `Detected but below the limit of quantification${reported}; carried as LOD–LOQ (${formatValue(lo)}–${formatValue(hi)} ${r.unit}).` });
+      // Laboratory confirms detection at or above the LOD but below the LOQ. The interval is always [LOD, LOQ]; a reported
+      // value is never used as the result, but it must agree with the qualifier (TR-07).
+      // (Limits and the value were validated above by qualifierValueProblem.)
+      if ((r.valueMeaning ?? 'estimate') === 'estimate' && r.value != null && (r.value === r.lod || r.value === r.loq))
+        flags.push({ code: 'DBL_VALUE_AT_LIMIT', severity: 'info', message: `The laboratory estimate ${r.value} ${r.unit} equals the ${r.value === r.lod ? 'LOD' : 'LOQ'}; accepted (limits are inclusive).` });
+      lo = r.lod!; hi = r.loq!;
+      flags.push({ code: 'DETECTED_BELOW_LOQ', severity: 'qualify', message: `Detected but below the limit of quantification${reported}; carried as LOD–LOQ (${formatValue(lo)}–${formatValue(hi)} ${r.unit})${r.value != null && (r.valueMeaning ?? 'estimate') === 'estimate' ? `; the laboratory estimate ${formatValue(r.value)} ${r.unit} is recorded but not used as a quantified result` : ''}.` });
       break;
     }
     case '>':
@@ -676,7 +748,13 @@ export interface AssessmentInput {
   /** Molecular weight (g/mol) of the substance, used only for ppm ↔ mg/m³ conversion. */
   molecularWeight?: number | null;
 }
-export interface UnresolvedEvidence { sampleCode: string; subjectRef: string | null; why: string; interval: Interval | null; disposition: EvidenceDispositionKind | null }
+export interface UnresolvedEvidence {
+  sampleCode: string; subjectRef: string | null; why: string; interval: Interval | null; disposition: EvidenceDispositionKind | null;
+  /** Why the sample is not formal evidence: its exclusion, indicative and validation findings (1.5.0). */
+  reasons?: string[];
+  /** A disposition was recorded but not accepted (1.5.0): why, and what it claimed. */
+  rejectedDisposition?: { kind: EvidenceDispositionKind; duplicateType: string | null; relatedSampleCode: string | null; by: string; reason: string; problem: string; conflict: boolean } | null;
+}
 export interface AssessmentOutput {
   engineVersion: string;
   calcCode: string;
@@ -692,7 +770,7 @@ export interface AssessmentOutput {
   evidenceAdequacy: 'adequate' | 'adequate_with_accepted_gaps' | 'unresolved_evidence' | 'coverage_gap' | 'no_formal_evidence';
   unresolvedEvidence: UnresolvedEvidence[];
   /** Personal samples set aside by a valid disposition (always reported, with who and why). */
-  setAsideEvidence: { sampleCode: string; subjectRef: string | null; kind: EvidenceDispositionKind; by: string; reason: string; interval: Interval | null }[];
+  setAsideEvidence: { sampleCode: string; subjectRef: string | null; kind: EvidenceDispositionKind; by: string; reason: string; consequence: string; interval: Interval | null; reasons?: string[]; duplicateType?: string | null; relatedSampleCode?: string | null; relatedInterval?: Interval | null }[];
   /** Overall numerical comparison, gated by calculation availability and evidence adequacy (decision table in the specification). */
   benchmarkState: 'below_benchmark' | 'at_or_above_benchmark' | 'indeterminate' | 'not_comparable' | 'no_verified_benchmark';
   benchmarkNote: string;
@@ -701,20 +779,70 @@ export interface AssessmentOutput {
 }
 
 export const CALCULATIONS: Record<CalcCode, { code: CalcCode; version: string; averagingMinutes: number; label: string }> = {
-  twa_8h: { code: 'twa_8h', version: '1.3.0', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
-  stel_15: { code: 'stel_15', version: '1.2.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
+  twa_8h: { code: 'twa_8h', version: '1.4.0', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
+  stel_15: { code: 'stel_15', version: '1.3.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
 };
 
-function dispositionProblem(d: EvidenceDisposition | null | undefined, formalCodes: Set<string>, self?: SampleOutput, all?: SampleOutput[]): string | null {
-  if (!d) return 'no disposition recorded';
-  if (!(d.reason?.trim().length >= 10)) return 'disposition reason missing';
-  if (!(d.consequence?.trim().length >= 10)) return 'assessment of consequences missing';
-  if (!d.authorisedBy?.trim()) return 'disposition not authorised';
-  if (d.kind === 'duplicate' && !(d.relatedSampleCode && formalCodes.has(d.relatedSampleCode) && d.relatedSampleCode !== self?.sampleCode)) return 'duplicate disposition does not name another valid formal sample in this assessment';
-  if (d.kind === 'duplicate' && self && all) {
-    // N4 (R4): a duplicate must cover the same worker and the same shift or date.
-    const rel = all.find((x) => x.sampleCode === d.relatedSampleCode);
-    if (!rel || rel.subjectRef !== self.subjectRef || (rel.shiftRef ?? rel.shiftDate) !== (self.shiftRef ?? self.shiftDate)) return 'duplicate disposition names a sample for a different worker or shift';
+const normText = (x: string | null | undefined) => (x ?? '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/**
+ * Duplicate relationship check (1.5.0, TR-06). Returns null when the relationship is supported by the recorded evidence,
+ * otherwise the reason it is not; conflict = the relationship is supported but the results disagree adversely.
+ * Missing evidence never passes: it leaves the disposition unresolved.
+ */
+export function duplicateProblem(d: EvidenceDisposition, self: { input: SampleInput; output: SampleOutput }, rel: { input: SampleInput; output: SampleOutput } | undefined): { problem: string; conflict: boolean } | null {
+  const no = (problem: string) => ({ problem, conflict: false });
+  const type = d.duplicateType ?? null;
+  if (!type || !(DUPLICATE_TYPES as string[]).includes(type)) return no(`duplicate category ${type ? `"${type}" is not supported` : 'not stated'} (supported: same-event record, paired/co-located sampler). A different sample offered as evidence that the remaining coverage is adequate is not a duplicate; that needs a technical reviewer's "remaining coverage adequate" disposition`);
+  if (!rel) return no('the related sample is not part of this assessment');
+  const a = self.input, b = rel.input, ao = self.output, bo = rel.output;
+  if (a.sampleType !== 'personal' || b.sampleType !== 'personal') return no('both samples must be personal samples');
+  if (!a.subjectRef || a.subjectRef !== b.subjectRef) return no('the related sample is for a different worker');
+  if (!a.substanceRef || !b.substanceRef) return no('the assessed substance is not recorded for both samples');
+  if (a.substanceRef !== b.substanceRef) return no('the related sample is for a different substance');
+  if (!a.groupRef || !b.groupRef) return no('the exposure group at sampling is not recorded for both samples');
+  if (a.groupRef !== b.groupRef) return no('the related sample belongs to a different exposure group');
+  if (!normText(a.tasksPerformed) || !normText(b.tasksPerformed)) return no('the tasks performed are not recorded for both samples, so the exposure context cannot be confirmed');
+  if (normText(a.tasksPerformed) !== normText(b.tasksPerformed)) return no(`the tasks recorded differ ("${a.tasksPerformed}" / "${b.tasksPerformed}")`);
+  if ((ao.shiftRef ?? ao.shiftDate) !== (bo.shiftRef ?? bo.shiftDate)) return no('the related sample is associated with a different shift');
+  if (ao.startMs === null || ao.endMs === null || bo.startMs === null || bo.endMs === null) return no('the sampling window is not recorded for both samples');
+  if (type === 'same_event_record') {
+    const tol = DUPLICATE_RECORD_WINDOW_TOL_MIN * MIN;
+    if (Math.abs(ao.startMs - bo.startMs) > tol || Math.abs(ao.endMs - bo.endMs) > tol) return no(`the sampling windows differ by more than ${DUPLICATE_RECORD_WINDOW_TOL_MIN} min, so the records are not of the same sampling event`);
+    if (!a.instrument?.assetTag || !b.instrument?.assetTag) return no('the instrument is not recorded for both records');
+    if (a.instrument.assetTag !== b.instrument.assetTag) return no('the records name different instruments, so they are not of the same sampling event');
+  } else {
+    if (!a.pairRef?.trim() || !b.pairRef?.trim()) return no('no pair reference was recorded at capture for both samples, so they are not evidenced as paired samplers');
+    if (a.pairRef.trim() !== b.pairRef.trim()) return no('the pair references recorded at capture differ');
+    const overlap = Math.min(ao.endMs, bo.endMs) - Math.max(ao.startMs, bo.startMs);
+    const longer = Math.max(ao.endMs - ao.startMs, bo.endMs - bo.startMs);
+    if (!(overlap > 0) || overlap < PAIRED_MIN_OVERLAP_FRACTION * longer) return no(`the sampling windows overlap for ${formatValue(Math.max(0, overlap) / MIN)} min, less than ${PAIRED_MIN_OVERLAP_FRACTION * 100} % of the longer window, so the samples were not taken at the same time`);
+  }
+  // A duplicate label must not suppress adverse evidence (paired-result review policy, specification §0).
+  const x = ao.concentration, y = bo.concentration;
+  if (x && y) {
+    if (x.unit !== y.unit) return { problem: `the results are in different units (${x.unit} / ${y.unit}) and cannot be compared; a technical reviewer must review the pair`, conflict: true };
+    const close = (p: number, q: number) => p === q || (Number.isFinite(p) && Number.isFinite(q) && Math.abs(p - q) <= COMPARISON_REL_TOL * Math.max(Math.abs(p), Math.abs(q)));
+    const higher = x.upper > y.upper && !close(x.upper, y.upper);
+    const differs = !close(x.lower, y.lower) || !close(x.upper, y.upper);
+    if (type === 'same_event_record' && differs) return { problem: `the two records of one sampling event report different results (${formatInterval(x)} / ${formatInterval(y)}); the discrepancy must be resolved, not set aside`, conflict: true };
+    if (type === 'paired_colocated' && higher) return { problem: `the paired result set aside (${formatInterval(x)}) is higher than the retained result (${formatInterval(y)}); a duplicate label cannot suppress adverse evidence. A technical reviewer must review the pair`, conflict: true };
+  }
+  return null;
+}
+
+function dispositionProblem(d: EvidenceDisposition | null | undefined, formalCodes: Set<string>, self: { input: SampleInput; output: SampleOutput }, byCode: Map<string, { input: SampleInput; output: SampleOutput }>): { problem: string; conflict: boolean } | null {
+  const no = (problem: string) => ({ problem, conflict: false });
+  if (!d) return no('no disposition recorded');
+  if (!(d.reason?.trim().length >= 10)) return no('disposition reason missing');
+  if (!(d.consequence?.trim().length >= 10)) return no('assessment of consequences missing');
+  if (!d.authorisedBy?.trim()) return no('disposition not authorised');
+  // TR-07: contradictory or invalid inputs await correction by amendment; only "not replaced" (a coverage gap) applies.
+  if (d.kind !== 'not_replaced' && self.output.flags.some((f) => f.code.startsWith('INPUT_INVALID_'))) return no('the sample has contradictory or invalid inputs awaiting correction (laboratory clarification and amendment); it cannot be set aside');
+  if (d.kind === 'duplicate') {
+    if (!(d.relatedSampleCode && d.relatedSampleCode !== self.output.sampleCode)) return no('duplicate disposition does not name another sample');
+    if (!formalCodes.has(d.relatedSampleCode)) return no('duplicate disposition does not name a valid formal sample in this assessment');
+    return duplicateProblem(d, self, byCode.get(d.relatedSampleCode));
   }
   return null;
 }
@@ -742,7 +870,7 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
 
   // ── Evidence adequacy (TR-02): every personal sample in scope that is not formal evidence needs a disposition.
   const formalCodes = new Set(calculated.flatMap((s) => s.sampleCodes));
-  const inputByCode = new Map(input.samples.map((s) => [s.sampleCode, s]));
+  const byCode = new Map(input.samples.map((s, i) => [s.sampleCode, { input: s, output: samples[i] }]));
   const unresolved: UnresolvedEvidence[] = [];
   let acceptedGaps = 0, coverageGap = false;
   const setAside: AssessmentOutput['setAsideEvidence'] = [];
@@ -750,11 +878,22 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
     if (s.sampleType !== 'personal') continue;
     const why = !s.included ? 'excluded' : s.indicative ? 'indicative only' : !s.concentration ? 'not calculable' : !formalCodes.has(s.sampleCode) ? 'its worker-shift result could not be calculated' : null;
     if (!why) continue;
-    const d = inputByCode.get(s.sampleCode)?.evidenceDisposition ?? null;
-    const problem = dispositionProblem(d, formalCodes, s, samples);
-    if (problem) { unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; ${problem}`, interval: s.concentration, disposition: d?.kind ?? null }); continue; }
-    if (d!.kind === 'not_replaced') { coverageGap = true; unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; not replaced — the worker or task it covered remains unassessed (${d!.consequence})`, interval: s.concentration, disposition: d!.kind }); }
-    else { if (d!.kind === 'remaining_coverage_adequate') acceptedGaps++; setAside.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, kind: d!.kind, by: d!.authorisedBy, reason: d!.reason, interval: s.concentration }); }
+    const self = byCode.get(s.sampleCode)!;
+    const d = self.input.evidenceDisposition ?? null;
+    const reasons = s.flags.filter((f) => f.severity === 'exclude' || f.severity === 'incomplete' || (s.indicative && f.severity === 'qualify' && /^(NO_INSTRUMENT|CALIBRATION_|SCREENING_|METHOD_INDICATIVE)/.test(f.code))).map((f) => f.message);
+    const p = dispositionProblem(d, formalCodes, self, byCode);
+    if (p) {
+      unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; ${d ? `${d.kind.replace(/_/g, ' ')} disposition not accepted: ` : ''}${p.problem}`, interval: s.concentration, disposition: d?.kind ?? null, reasons,
+        rejectedDisposition: d ? { kind: d.kind, duplicateType: d.duplicateType ?? null, relatedSampleCode: d.relatedSampleCode ?? null, by: d.authorisedBy, reason: d.reason, problem: p.problem, conflict: p.conflict } : null });
+      continue;
+    }
+    if (d!.kind === 'not_replaced') { coverageGap = true; unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; not replaced — the worker or task it covered remains unassessed (${d!.consequence})`, interval: s.concentration, disposition: d!.kind, reasons }); }
+    else {
+      if (d!.kind === 'remaining_coverage_adequate') acceptedGaps++;
+      const rel = d!.relatedSampleCode ? byCode.get(d!.relatedSampleCode)?.output : undefined;
+      setAside.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, kind: d!.kind, by: d!.authorisedBy, reason: d!.reason, consequence: d!.consequence, interval: s.concentration, reasons,
+        ...(d!.kind === 'duplicate' ? { duplicateType: d!.duplicateType ?? null, relatedSampleCode: d!.relatedSampleCode ?? null, relatedInterval: rel?.concentration ?? null } : {}) });
+    }
   }
   const evidenceAdequacy: AssessmentOutput['evidenceAdequacy'] = !calculated.length ? 'no_formal_evidence'
     : unresolved.some((u) => u.disposition !== 'not_replaced') ? 'unresolved_evidence' : coverageGap ? 'coverage_gap' : acceptedGaps ? 'adequate_with_accepted_gaps' : 'adequate';
@@ -789,7 +928,7 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
       }
       if (benchmarkState === 'below_benchmark' && evidenceAdequacy === 'adequate_with_accepted_gaps') benchmarkNote += ` ${acceptedGaps} sample(s) were set aside with an authorised judgement that the remaining coverage is adequate.`;
       if (formal.some((s) => s.assumptionDependent)) benchmarkNote += ' Some results depend on a documented assumption about unsampled time.';
-      if (setAside.length) benchmarkNote += ` Set aside by disposition: ${setAside.map((x) => `${x.sampleCode} (${x.kind.replace(/_/g, ' ')}, ${x.by}${x.interval ? `, ${formatInterval(x.interval)}` : ''})`).join('; ')}.`;
+      if (setAside.length) benchmarkNote += ` Set aside by disposition: ${setAside.map((x) => `${x.sampleCode} (${x.kind.replace(/_/g, ' ')}${x.duplicateType ? ` — ${x.duplicateType.replace(/_/g, ' ')} of ${x.relatedSampleCode}` : ''}, ${x.by}${x.interval ? `, ${formatInterval(x.interval)}` : ''})`).join('; ')}.`;
       if (formal.some((s) => s.comparison?.converted)) benchmarkNote += ` Results were converted to ${b.unit} at 20 °C and 101.325 kPa (molar volume ${MOLAR_VOLUME_L} L/mol, EH40 para 68) using molecular weight ${input.molecularWeight} g/mol.`;
     }
     if (b.isSynthetic && !/synthetic/i.test(b.source)) benchmarkNote += ' SYNTHETIC DEMONSTRATION BENCHMARK — not a real exposure limit.';

@@ -1,5 +1,5 @@
-// Structured regression fixtures (engine 1.4.0): original worked examples E1–E14, the TR-01–TR-05 reproductions from
-// the technical review of ceec79f, and new methodological cases. Expected values come from an independent Python
+// Structured regression fixtures (engine 1.5.0): original worked examples E1–E14, the TR-01–TR-05 reproductions from
+// the technical review of ceec79f, TR-06/TR-07 from the review of 9b87c17, and new methodological cases. Expected values come from an independent Python
 // calculation (scripts/tr/build_fixtures.py) and hand-written statuses; they are NOT produced by this engine.
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
@@ -22,7 +22,14 @@ describe('fixtures metadata', () => {
   });
 });
 
-describe.each(['original', 'original-variant', 'TR', 'TR-variant', 'method'])('%s cases', (group) => {
+describe('fixture groups', () => {
+  it('every fixture belongs to a group that is run', () => {
+    expect(F.cases.filter((c: any) => !GROUPS.includes(c.group)).map((c: any) => c.id)).toEqual([]);
+  });
+});
+
+const GROUPS = ['original', 'original-variant', 'TR', 'TR-variant', 'method', 'TR-06', 'TR-07'];
+describe.each(GROUPS)('%s cases', (group) => {
   const cases: any[] = F.cases.filter((c: any) => c.group === group);
   it.each(cases.map((c: any) => ({ id: c.id, c })))('$id', ({ c }: { c: any }) => {
     const ex = c.expected, rel = c.tolerance.relative;
@@ -46,8 +53,16 @@ describe.each(['original', 'original-variant', 'TR', 'TR-variant', 'method'])('%
     if (ex.evidenceAdequacy) expect(out.evidenceAdequacy).toBe(ex.evidenceAdequacy);
     if (ex.unresolved) expect(out.unresolvedEvidence.map((u) => u.sampleCode).sort()).toEqual([...ex.unresolved].sort());
     if (ex.notePattern) expect(out.benchmarkNote).toMatch(new RegExp(ex.notePattern));
+    for (const [code, pattern] of Object.entries(ex.unresolvedWhy ?? {})) expect(out.unresolvedEvidence.find((u) => u.sampleCode === code)?.why ?? '').toMatch(new RegExp(pattern as string));
+    if (ex.rejectedConflict) expect(out.unresolvedEvidence.filter((u) => u.rejectedDisposition?.conflict).map((u) => u.sampleCode).sort()).toEqual([...ex.rejectedConflict].sort());
+    if (ex.setAside) {
+      expect(out.setAsideEvidence.map((x) => x.sampleCode).sort()).toEqual(ex.setAside.map((x: any) => x.code).sort());
+      for (const e of ex.setAside) { const a = out.setAsideEvidence.find((x) => x.sampleCode === e.code)!; expect(a.kind).toBe(e.kind); if (e.duplicateType) expect(a.duplicateType).toBe(e.duplicateType); }
+    }
     const flags = [...out.samples.flatMap((s) => s.flags), ...out.shifts.flatMap((s) => s.flags)].map((f) => f.code);
     for (const f of ex.flagsInclude ?? []) expect(flags).toContain(f);
+    const msgs = [...out.samples.flatMap((s) => s.flags), ...out.shifts.flatMap((s) => s.flags)];
+    for (const [code, pattern] of Object.entries(ex.flagMessage ?? {})) expect(msgs.find((f) => f.code === code)?.message ?? '').toMatch(new RegExp(pattern as string));
     for (const s of ex.samples ?? []) {
       const a = out.samples.find((x) => x.sampleCode === s.code)!;
       expect(a).toBeTruthy();
