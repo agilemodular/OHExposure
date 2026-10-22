@@ -1,0 +1,61 @@
+{
+  "commit": "1d9aa6b",
+  "run_at": "2026-10-22T14:03:03.476Z",
+  "scenarios": [
+    {
+      "scenario": "held record on a sample whose removal awaits confirmation",
+      "inCalculation": true,
+      "submit": "refused: Sample T8-2-e9340b6f (removal requested but not confirmed, so it is still part of the evidence) reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.",
+      "approve": "not reached"
+    },
+    {
+      "scenario": "suspension-review flag on a sample whose removal awaits confirmation",
+      "inCalculation": true,
+      "submit": "refused: Sample T8-4-e9340b6f (removal requested but not confirmed, so it is still part of the evidence) reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.",
+      "approve": "not reached"
+    },
+    {
+      "scenario": "approver recorded a QC disposition for a sample whose removal awaits confirmation",
+      "qcDispositionByApprover": "succeeded",
+      "inCalculation": true,
+      "submit": "succeeded",
+      "approve": "refused: You recorded a QC disposition for sample T8-6-e9340b6f (samples awaiting removal confirmation count as evidence) in this assessment, so another reviewer must approve it"
+    },
+    {
+      "scenario": "amendment of a pending-removal sample's evidence concurrent with approval",
+      "inCalculation": true,
+      "blockedByApproval": true,
+      "approval": "succeeded",
+      "write": "succeeded",
+      "finalStatus": "approved",
+      "evidenceChangedBeforeApprovalCommitted": false,
+      "sequence": [
+        "controller holds the previously approved revision row",
+        "approval paused after its evidence check (waiting to supersede r1)",
+        "amendment started",
+        "amendment is waiting for a lock held by the approval",
+        "controller released the row",
+        "approval finished: succeeded",
+        "amendment finished: succeeded"
+      ]
+    },
+    {
+      "scenario": "calibration of a pending-removal sample's evidence concurrent with approval",
+      "inCalculation": true,
+      "blockedByApproval": true,
+      "approval": "succeeded",
+      "write": "succeeded",
+      "finalStatus": "approved",
+      "evidenceChangedBeforeApprovalCommitted": false,
+      "sequence": [
+        "controller holds the previously approved revision row",
+        "approval paused after its evidence check (waiting to supersede r1)",
+        "calibration started",
+        "calibration is waiting for a lock held by the approval",
+        "controller released the row",
+        "approval finished: succeeded",
+        "calibration finished: succeeded"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,165 @@
+{
+  "generated": "2026-10-22T14:06:00.420Z",
+  "readOnly": true,
+  "scope": "revisions in review, approved or superseded whose frozen inputs include samples outside the selected list",
+  "summary": {
+    "revisionsFlagged": 4,
+    "concern": 2,
+    "needsInvestigation": 1,
+    "noConcernFound": 1,
+    "approved": 4,
+    "issuedReports": 4
+  },
+  "revisions": [
+    {
+      "organisation": "TR-08 Scenario Consultancy (synthetic)",
+      "assessment": "Case A — held record",
+      "revision": 1,
+      "status": "approved",
+      "submittedAt": "2026-10-22T14:05:58.221Z",
+      "approvedAt": "2026-10-22T14:05:58.257Z",
+      "reviewer": "Robin Reviewer",
+      "samplesInCalculationNotSelected": [
+        {
+          "sampleId": "be2436de-e02f-407f-9f88-762cca585f6b",
+          "sampleCode": "T8-S2",
+          "removalHistory": [
+            {
+              "action": "requested",
+              "by": "Pat Practitioner",
+              "at": "2026-10-22T14:05:58.132Z",
+              "reason": "Practitioner removes T8-S2; not confirmed by a reviewer"
+            }
+          ],
+          "concerns": [
+            "held field record outstanding now (received 2026-10-22T14:05:58.156Z)"
+          ],
+          "investigate": [],
+          "classification": "concern"
+        }
+      ],
+      "classification": "concern",
+      "reports": [
+        {
+          "id": "60fb625b-643d-4125-b67e-cc49b9de07d2",
+          "version": 1,
+          "status": "issued"
+        }
+      ],
+      "issuedReports": 1,
+      "action": "Review. If reassessment is needed, create a new revision with a reason (approval does not transfer) and supersede issued reports after re-approval. The approved revision and its reports are not altered."
+    },
+    {
+      "organisation": "TR-08 Scenario Consultancy (synthetic)",
+      "assessment": "Case B — reviewer QC disposition",
+      "revision": 1,
+      "status": "approved",
+      "submittedAt": "2026-10-22T14:05:58.488Z",
+      "approvedAt": "2026-10-22T14:05:58.519Z",
+      "reviewer": "Robin Reviewer",
+      "samplesInCalculationNotSelected": [
+        {
+          "sampleId": "e605bc1c-a08b-41a9-9608-39464e2e198e",
+          "sampleCode": "T8-S4",
+          "removalHistory": [
+            {
+              "action": "requested",
+              "by": "Pat Practitioner",
+              "at": "2026-10-22T14:05:58.459Z",
+              "reason": "Practitioner removes T8-S4; not confirmed by a reviewer"
+            }
+          ],
+          "concerns": [
+            "approving reviewer recorded a QC disposition (flow_check: accepted_with_justification) before approval"
+          ],
+          "investigate": [],
+          "classification": "concern"
+        }
+      ],
+      "classification": "concern",
+      "reports": [
+        {
+          "id": "7843ebca-b4ab-41a3-81f4-bc21ab0f739a",
+          "version": 1,
+          "status": "issued"
+        }
+      ],
+      "issuedReports": 1,
+      "action": "Review. If reassessment is needed, create a new revision with a reason (approval does not transfer) and supersede issued reports after re-approval. The approved revision and its reports are not altered."
+    },
+    {
+      "organisation": "TR-08 Scenario Consultancy (synthetic)",
+      "assessment": "Case C — pending removal only",
+      "revision": 1,
+      "status": "approved",
+      "submittedAt": "2026-10-22T14:05:58.724Z",
+      "approvedAt": "2026-10-22T14:05:58.742Z",
+      "reviewer": "Robin Reviewer",
+      "samplesInCalculationNotSelected": [
+        {
+          "sampleId": "cd359810-5814-441c-b92b-cea78cd63ad1",
+          "sampleCode": "T8-S6",
+          "removalHistory": [
+            {
+              "action": "requested",
+              "by": "Pat Practitioner",
+              "at": "2026-10-22T14:05:58.701Z",
+              "reason": "Practitioner removes T8-S6; not confirmed by a reviewer"
+            }
+          ],
+          "concerns": [],
+          "investigate": [],
+          "classification": "no concern found in the records"
+        }
+      ],
+      "classification": "potentially affected; no concern found in the records",
+      "reports": [
+        {
+          "id": "86767ca0-8728-4c6c-9113-aaddc33d84d3",
+          "version": 1,
+          "status": "issued"
+        }
+      ],
+      "issuedReports": 1,
+      "action": "Review. If reassessment is needed, create a new revision with a reason (approval does not transfer) and supersede issued reports after re-approval. The approved revision and its reports are not altered."
+    },
+    {
+      "organisation": "TR-08 Scenario Consultancy (synthetic)",
+      "assessment": "Case D — flag cleared after approval",
+      "revision": 1,
+      "status": "approved",
+      "submittedAt": "2026-10-22T14:05:58.923Z",
+      "approvedAt": "2026-10-22T14:05:58.943Z",
+      "reviewer": "Robin Reviewer",
+      "samplesInCalculationNotSelected": [
+        {
+          "sampleId": "6d293355-3262-4f8c-835c-0e1770ee6b79",
+          "sampleCode": "T8-S8",
+          "removalHistory": [
+            {
+              "action": "requested",
+              "by": "Pat Practitioner",
+              "at": "2026-10-22T14:05:58.897Z",
+              "reason": "Practitioner removes T8-S8; not confirmed by a reviewer"
+            }
+          ],
+          "concerns": [],
+          "investigate": [
+            "suspension-review flag reviewed after approval; when the flag was set is not recorded"
+          ],
+          "classification": "needs investigation"
+        }
+      ],
+      "classification": "needs investigation",
+      "reports": [
+        {
+          "id": "15493046-a6a2-4100-9797-500f2afe110c",
+          "version": 1,
+          "status": "issued"
+        }
+      ],
+      "issuedReports": 1,
+      "action": "Review. If reassessment is needed, create a new revision with a reason (approval does not transfer) and supersede issued reports after re-approval. The approved revision and its reports are not altered."
+    }
+  ]
+}
