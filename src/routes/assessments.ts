@@ -50,6 +50,7 @@ function draftForm(c: PageCtx, d: any) {
   return html`<form method="post" action="/assessments/rev/${r.id}/draft" class="stack panel">${csrfField(c)}<h2>Draft inputs</h2>
     <fieldset class="panel"><legend>Samples included</legend>
       ${d.candidates.length ? d.candidates.map((s: any) => html`<label class="check"><input type="checkbox" name="sample_ids" value="${s.id}" ${r.sample_ids.includes(s.id) ? html`checked` : ''}> ${s.sample_code} — ${label(s.sample_type)}, ${s.ref_code ?? 'no worker'}, ${fmtDate(s.start_at)} <span class="small muted">(${label(s.status)})</span></label>`) : html`<p class="muted">No samples for this substance.</p>`}
+      <label>Reason for removing samples <span class="hint">Required if you untick a sample that is in the list. A removal takes effect only when a technical reviewer confirms it; until then the sample stays in the evidence.</span><input name="removal_reason"></label>
     </fieldset>
     <label>Calculation<select name="calc_code">
       <option value="twa_8h" ${r.calc_code !== 'stel_15' ? html`selected` : ''}>8-hour time-weighted average (long-term benchmark, 480 min)</option>
@@ -132,6 +133,8 @@ export function assessmentRoutes(app: FastifyInstance) {
         ? html`<span class="badge b-ok">Method approved${d.method.status === 'approved_with_conditions' ? ' with conditions' : ''}</span> <span class="small muted">${d.method.reviewer}, ${fmtDate(d.method.reviewedOn)}${d.method.conditions ? ` — ${d.method.conditions}` : ''}</span>`
         : d.method.status === 'rejected' ? html`<span class="badge b-bad">Method rejected by professional review — unavailable for conclusions</span>`
         : html`<span class="badge b-warn">Method not reviewed</span> <span class="small">${d.controls.assuranceLevel === 'pilot' ? 'Results are shown for reconciliation only; this revision cannot be submitted or approved until the method is approved.' : 'Results are for discussion only and are labelled as unreviewed in reports.'}</span>`}</p>` : ''}
+      ${d.removals?.length ? html`<section class="panel"><h3>Samples removed from the sample list</h3><ul class="issues">${d.removals.map((x: any) => html`<li class="sev-${x.status === 'confirmed' ? 'info' : 'incomplete'}"><b>${x.sampleCode}</b>: ${x.status === 'confirmed' ? html`removal confirmed by ${x.confirmedBy} (${x.confirmation})` : html`removal requested — <b>awaiting a technical reviewer's confirmation; the sample stays in the evidence</b>`}. Requested by ${x.requestedBy}: “${x.reason}”
+        ${x.status !== 'confirmed' && isDraft && can(c.actor, 'assess.approve') ? html`<form method="post" action="/assessments/rev/${r.id}/removal" class="row">${csrfField(c)}<input type="hidden" name="sample_id" value="${x.sampleId}"><input name="reason" required minlength="10" placeholder="Why the sample is outside the scope of this assessment"><button class="secondary">Confirm removal</button></form>` : ''}</li>`)}</ul></section>` : ''}
       ${calcOutput(r.calc_output, isDraft && (can(c.actor, 'assess.write') || can(c.actor, 'assess.approve')) ? { c, revId: r.id, samples: d.candidates.filter((x: any) => r.sample_ids.includes(x.id)) } : null)}
       ${r.parameters?.unsampledAssumption && r.parameters.unsampledAssumption !== 'none' ? html`<p class="note">Unsampled-time assumption: ${label(r.parameters.unsampledAssumption)} — ${r.parameters.unsampledJustification}</p>` : ''}
 
@@ -176,6 +179,7 @@ export function assessmentRoutes(app: FastifyInstance) {
 
   action(app, '/assessments/rev/:id/draft', async (c) => { const r = await asmt.updateDraft(c.actor, c.params.id, c.body); return { to: `/assessments/${r.assessment_id}`, ok: 'Draft saved. Run the calculation to update results.' }; });
   action(app, '/assessments/rev/:id/calculate', async (c) => { const r = await asmt.calculate(c.actor, c.params.id); return { to: `/assessments/${r.assessment_id}`, ok: `Calculated: data ${label(r.data_quality_state)}, benchmark ${label(r.benchmark_state)}` }; });
+  action(app, '/assessments/rev/:id/removal', async (c) => { await asmt.confirmSampleRemoval(c.actor, c.params.id, c.body); return { to: back(c, '/assessments'), ok: 'Removal confirmed. Run the calculation again.' }; });
   action(app, '/assessments/rev/:id/disposition', async (c) => { await asmt.recordEvidenceDisposition(c.actor, c.params.id, c.body); return { to: back(c, '/assessments'), ok: 'Disposition recorded. Run the calculation again.' }; });
   action(app, '/assessments/rev/:id/submit', async (c) => { const r = await asmt.submitForReview(c.actor, c.params.id); return { to: `/assessments/${r.assessment_id}`, ok: 'Submitted for professional review' }; });
   action(app, '/assessments/rev/:id/approve', async (c) => { const r = await asmt.approve(c.actor, c.params.id, c.body); return { to: `/assessments/${r.assessment_id}`, ok: `Revision ${r.revision} approved` }; });

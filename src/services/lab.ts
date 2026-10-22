@@ -185,7 +185,9 @@ export async function stageImport(a: Actor, input: { filename: string; csv: stri
       if (raw.cas_number) sub = await one(tx, 'select id, name from substances where cas_number=$1 order by tenant_id nulls last limit 1', [raw.cas_number]);
       if (!sub && raw.analyte) sub = await one(tx, 'select id, name from substances where lower(name)=lower($1) order by tenant_id nulls last limit 1', [raw.analyte]);
       if (!sub) errs.push(`Unknown analyte "${raw.analyte || raw.cas_number}"`);
-      const num = (k: string) => (raw[k] === '' || raw[k] === undefined ? null : Number(raw[k]));
+      // R5-F6: decimal or scientific notation only; hexadecimal, "Infinity" and other text are rejected, not reinterpreted.
+      const DEC = /^[+-]?(\d+(\.\d*)?|\.\d+)([eE][+-]?\d+)?$/;
+      const num = (k: string) => (raw[k] === '' || raw[k] === undefined ? null : DEC.test(raw[k]) ? Number(raw[k]) : NaN);
       const parsed: any = {
         sampling_event_id: ev?.id, substance_id: sub?.id, value: num('value'), unit: raw.unit, qualifier: mapQualifier(raw.qualifier ?? '') ?? raw.qualifier, lab_qualifier: raw.qualifier || null, value_meaning: raw.value_meaning || null, lod: num('lod'), loq: num('loq'),
         analytical_method: raw.analytical_method || null, laboratory_id: input.laboratory_id ?? null, lab_report_ref: raw.lab_report_ref || null, uncertainty: raw.uncertainty || null,

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildWorld, type World } from './fixtures.js';
+import { buildWorld, type World, updateDraftConfirmed } from './fixtures.js';
 import { closePool, getPool, withActor } from '../src/db.js';
 import * as reg from '../src/services/register.js';
 import * as inst from '../src/services/instruments.js';
@@ -119,14 +119,14 @@ describe('end-to-end vertical workflow (Client One)', () => {
     const { assessment, revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: w.ref.substanceId, plan_id: S.plan.id, title: 'Grinders — Demo Dust X', assessment_question: 'Is grinder exposure to Demo Dust X adequately controlled?' });
     expect(revision.sample_ids).toHaveLength(2);
     S.assessment = assessment; S.rev1 = revision;
-    await asmt.updateDraft(w.a.prac, revision.id, { sample_ids: [S.sample.id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '240', unsampled_assumption: 'none' });
+    await updateDraftConfirmed(w.a.prac, revision.id, { sample_ids: [S.sample.id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '240', unsampled_assumption: 'none' });
     await expect(asmt.submitForReview(w.a.prac, revision.id)).rejects.toThrow(/calculation first/i);
     const calc = await asmt.calculate(w.a.prac, revision.id);
     expect(calc.data_quality_state).toBe('complete');
     expect(calc.benchmark_state).toBe('below_benchmark');
     expect(calc.calc_output.shifts[0].twa8h).toEqual({ lower: 0.125, upper: 0.125, unit: 'mg/m3' });
     await expect(asmt.submitForReview(w.a.prac, revision.id)).rejects.toThrow(/interpretation/);
-    await asmt.updateDraft(w.a.prac, revision.id, { sample_ids: [S.sample.id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '240', unsampled_assumption: 'none',
+    await updateDraftConfirmed(w.a.prac, revision.id, { sample_ids: [S.sample.id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '240', unsampled_assumption: 'none',
       interpretation: 'Single full-period sample below the synthetic benchmark; insufficient samples to characterise the group.', conclusion_category: 'insufficient_evidence', limitations: 'One worker, one day; not representative.' });
     await asmt.calculate(w.a.prac, revision.id);
     await asmt.submitForReview(w.a.prac, revision.id);
@@ -151,7 +151,7 @@ describe('end-to-end vertical workflow (Client One)', () => {
     const d = await asmt.assessmentDetail(w.a.prac, S.assessment.id);
     expect(d.approved!.calc_output.shifts[0].twa8h.upper).toBe(0.125);
     expect(d.staleApproved.join(' ')).toMatch(/changed since/);
-    await expect(asmt.updateDraft(w.a.prac, S.rev1.id, { sample_ids: [] })).rejects.toThrow(/Only draft/);
+    await expect(updateDraftConfirmed(w.a.prac, S.rev1.id, { sample_ids: [] })).rejects.toThrow(/Only draft/);
     const r2 = await asmt.newRevision(w.a.prac, S.assessment.id, { change_reason: 'Amended laboratory result received' });
     const c2 = await asmt.calculate(w.a.prac, r2.id);
     expect(c2.calc_output.shifts[0].twa8h.upper).toBe(0.3125);
@@ -165,7 +165,7 @@ describe('end-to-end vertical workflow (Client One)', () => {
     await asmt.returnToDraft(w.a.rev, S.rev2.id, { notes: 'New failed QC check requires disposition' });
     const c = await asmt.calculate(w.a.prac, S.rev2.id);
     expect(c.data_quality_state).toBe('failed');
-    await expect(asmt.updateDraft(w.a.prac, S.rev2.id, { sample_ids: [S.sample.id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '240', interpretation: 'x'.repeat(40), conclusion_category: 'exposure_adequately_controlled', limitations: 'x'.repeat(20) })
+    await expect(updateDraftConfirmed(w.a.prac, S.rev2.id, { sample_ids: [S.sample.id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '240', interpretation: 'x'.repeat(40), conclusion_category: 'exposure_adequately_controlled', limitations: 'x'.repeat(20) })
       .then(() => asmt.calculate(w.a.prac, S.rev2.id)).then(() => asmt.submitForReview(w.a.prac, S.rev2.id))).rejects.toThrow(/cannot be concluded/);
   });
 

@@ -25,7 +25,7 @@ export async function tr0607Impact(adminUrl: string) {
     const dups = (await c.query(`select d.id, d.revision_id, d.duplicate_type, d.reason, d.consequence, d.recorded_at, u.name recorded_by, u.role recorder_role,
         s.id s_id, s.sample_code s_code, s.worker_id s_worker, s.group_id_at_sampling s_group, s.tasks_performed s_tasks, s.pair_ref s_pair, s.shift_ref s_shift, s.timezone s_tz, s.start_at s_start, s.end_at s_end, s.instrument_id s_inst, s.sample_type s_type,
         t.id t_id, t.sample_code t_code, t.worker_id t_worker, t.group_id_at_sampling t_group, t.tasks_performed t_tasks, t.pair_ref t_pair, t.shift_ref t_shift, t.timezone t_tz, t.start_at t_start, t.end_at t_end, t.instrument_id t_inst, t.sample_type t_type,
-        a.substance_id, r.status revision_status, r.revision, a.title assessment, tn.name organisation,
+        a.substance_id, r.status revision_status, r.revision, a.title assessment, tn.name organisation, r.inputs_snapshot,
         exists (select 1 from lab_results x where x.sampling_event_id=s.id and x.substance_id=a.substance_id) s_has_result,
         exists (select 1 from lab_results x where x.sampling_event_id=t.id and x.substance_id=a.substance_id) t_has_result,
         d.seq = (select max(seq) from assessment_evidence_dispositions z where z.revision_id=d.revision_id and z.sampling_event_id=d.sampling_event_id) is_latest
@@ -39,12 +39,16 @@ export async function tr0607Impact(adminUrl: string) {
       return { input, output: sampleConcentration(input) };
     };
     const duplicateFindings = dups.map((x) => {
-      // Relationship evidence as recorded now (results are compared at calculation; see the revision section below).
-      const p = !x.t_id ? { problem: 'no related sample recorded', conflict: false }
-        : duplicateProblem({ kind: 'duplicate', reason: x.reason, consequence: x.consequence, authorisedBy: x.recorded_by, relatedSampleCode: x.t_code, duplicateType: x.duplicate_type }, ev('s', x), ev('t', x));
+      // Relationship evidence as recorded now; when the revision has frozen inputs containing both samples, the results
+      // are compared too (R5-F8), so a supported but conflicting pair is not counted as sufficient.
+      const disp = { kind: 'duplicate' as const, reason: x.reason, consequence: x.consequence, authorisedBy: x.recorded_by, relatedSampleCode: x.t_code, duplicateType: x.duplicate_type };
+      const snapS = x.inputs_snapshot?.samples?.find((y: any) => y.sampleId === x.s_id), snapT = x.inputs_snapshot?.samples?.find((y: any) => y.sampleId === x.t_id);
+      const recordsProblem = !x.t_id ? { problem: 'no related sample recorded', conflict: false } : duplicateProblem(disp, ev('s', x), ev('t', x));
+      const resultsProblem = snapS && snapT ? duplicateProblem(disp, { input: snapS, output: sampleConcentration(snapS) }, { input: snapT, output: sampleConcentration(snapT) }) : null;
+      const p = recordsProblem && !/no calculable result/.test(recordsProblem.problem) ? recordsProblem : resultsProblem ?? (snapS && snapT ? null : recordsProblem);
       return { dispositionId: x.id, organisation: x.organisation, assessment: x.assessment, revision: x.revision, revisionStatus: x.revision_status, sample: x.s_code, relatedSample: x.t_code,
         duplicateType: x.duplicate_type, recordedBy: x.recorded_by, recorderRole: x.recorder_role, recordedAt: x.recorded_at, reason: x.reason, consequence: x.consequence, latestForSample: x.is_latest,
-        sufficientRelationshipEvidence: !p, problem: p?.problem ?? null };
+        sufficientRelationshipEvidence: !p, problem: p?.problem ?? null, resultsCompared: !!(snapS && snapT) };
     });
 
     // ── 2. Contradictory detected-below-LOQ (and value-meaning) laboratory records.
@@ -83,14 +87,21 @@ export async function tr0607Impact(adminUrl: string) {
       }
       const confirmed = !!changed && markers.length > 0;
       const issued = (r.reports as any[]).filter((p) => p.status === 'issued');
+      // R5-F8: laboratory results amended after the frozen inputs were taken (an approved revision keeps the old result).
+      const current = snap ? (await c.query(`select v.id from lab_results r join lab_result_revisions v on v.result_id=r.id and v.revision=r.current_revision where r.id in (select result_id from lab_result_revisions where id = any($1::uuid[]))`, [(snap.refs ?? []).map((x: any) => x.resultRevisionId).filter(Boolean)])).rows.map((x) => x.id) : [];
+      const amendedSince = snap ? (snap.refs ?? []).filter((x: any) => x.resultRevisionId && !current.includes(x.resultRevisionId)).map((x: any) => snap.samples.find((y: any) => y.sampleId === x.sampleId)?.sampleCode ?? x.sampleId) : [];
+      const since140: Record<string, string[]> = { twa_8h: ['1.3.0', '1.4.0', '1.4.1'], stel_15: ['1.2.0', '1.3.0', '1.3.1'] };
+      const olderEngine = !!r.calc_version && !!calc && !(since140[calc.code] ?? []).includes(r.calc_version);
       revisions.push({
         organisation: r.organisation, assessment: r.assessment, revision: r.revision, status: r.status, calculatedWith: r.calc_version ? `${r.calc_code} ${r.calc_version}` : 'not calculated',
         dependsOn: [...(viaDup ? ['duplicate disposition (TR-06)'] : []), ...(viaLab || viaLabNoSnap ? ['contradictory detected-below-LOQ record (TR-07)'] : [])],
         stored: { benchmark: r.benchmark_state, dataQuality: r.data_quality_state }, recomputedFromFrozenInputs: recomputed, markers,
         classification: confirmed ? 'confirmed changed outcome' : 'potentially affected',
+        evidenceAmendedSinceCalculation: amendedSince,
+        attribution: olderEngine ? 'calculated before engine 1.4.0: the recomputed state also reflects earlier engine changes; the TR-06/TR-07 markers show which of these findings apply' : 'TR-06/TR-07 markers only (calculated with engine 1.4.0 or later)',
         reports: r.reports, issuedReports: issued.length,
         action: r.status === 'approved'
-          ? `${confirmed ? 'Outcome changes under 1.5.0. ' : ''}Review; reassess through a new revision with a reason (the approval does not transfer)${issued.length ? `; supersede the ${issued.length} issued report(s) once a new revision is approved` : ''}. The approved revision and its reports are not altered.`
+          ? `${confirmed ? `Outcome changes under engine ${ENGINE_VERSION}. ` : ''}Review; reassess through a new revision with a reason (the approval does not transfer)${issued.length ? `; supersede the ${issued.length} issued report(s) once a new revision is approved` : ''}. The approved revision and its reports are not altered.`
           : r.status === 'in_review' ? 'Return to draft and recalculate (the evidence hash will not match).'
           : r.status === 'draft' ? 'Recalculate; resolve the disposition or amend the laboratory result.' : 'Historical (superseded); no action beyond the current revision.',
       });

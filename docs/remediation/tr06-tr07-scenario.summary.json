@@ -2,8 +2,8 @@
   "approvedRevisionUnchanged": true,
   "issuedReportsUnchanged": true,
   "newRevision": {
-    "id": "7fa92f0c-9cbf-4bd3-adfa-bec2caefdbea",
-    "calc": "1.5.0 stel_15 1.3.0",
+    "id": "b4f6ea65-5fc4-45f4-b918-992499acc1b2",
+    "calc": "1.5.1 stel_15 1.3.1",
     "benchmark": "indeterminate",
     "dataQuality": "incomplete",
     "evidenceAdequacy": "unresolved_evidence",
@@ -43,12 +43,12 @@
   ],
   "auditTrail": [
     {
-      "at": "2026-10-22T12:55:47.598Z",
+      "at": "2026-10-22T13:31:44.420Z",
       "action": "lab_result.create",
       "actor": "Pat Practitioner",
       "detail": {
         "unit": "ug",
-        "batch": "0db77b46-5b78-4bfa-a37d-dc68503a135e",
+        "batch": "e54e3a47-9715-4d4c-954a-844f8bab8465",
         "value": 3,
         "sample": "SYN-AM",
         "revision": 1,
@@ -56,12 +56,12 @@
       }
     },
     {
-      "at": "2026-10-22T12:55:47.598Z",
+      "at": "2026-10-22T13:31:44.420Z",
       "action": "lab_result.create",
       "actor": "Pat Practitioner",
       "detail": {
         "unit": "ug",
-        "batch": "0db77b46-5b78-4bfa-a37d-dc68503a135e",
+        "batch": "e54e3a47-9715-4d4c-954a-844f8bab8465",
         "value": 60,
         "sample": "SYN-PM",
         "revision": 1,
@@ -69,12 +69,12 @@
       }
     },
     {
-      "at": "2026-10-22T12:55:47.598Z",
+      "at": "2026-10-22T13:31:44.420Z",
       "action": "lab_result.create",
       "actor": "Pat Practitioner",
       "detail": {
         "unit": "ug",
-        "batch": "0db77b46-5b78-4bfa-a37d-dc68503a135e",
+        "batch": "e54e3a47-9715-4d4c-954a-844f8bab8465",
         "value": 600,
         "sample": "SYN-DBL",
         "revision": 1,
@@ -82,40 +82,40 @@
       }
     },
     {
-      "at": "2026-10-22T12:55:47.646Z",
+      "at": "2026-10-22T13:31:44.480Z",
       "action": "assessment.evidence_disposition",
       "actor": "Pat Practitioner",
       "detail": {
         "kind": "duplicate",
         "reason": "Recorded as a duplicate of the morning sample",
-        "sample_id": "3b3f323a-477a-47c0-b1b5-0d8db66329cc",
+        "sample_id": "c82c9b44-fa62-473c-b42f-2759c8b9d279",
         "consequence": "The morning sample represents this worker and shift",
-        "related_sample_id": "41e332b8-10e1-46ec-8e10-dd7d04e49910"
+        "related_sample_id": "972bc729-ae17-49eb-ae38-380b64b94555"
       }
     },
     {
-      "at": "2026-10-22T12:55:47.720Z",
+      "at": "2026-10-22T13:31:44.561Z",
       "action": "assessment.approved",
       "actor": "Robin Reviewer",
       "detail": {
         "scope": "Synthetic scenario only",
         "superseded": [],
         "limitations": "Synthetic data; demonstration of a historical record",
-        "snapshot_hash": "346b899cd6c729469d362564a5285d4c53ccd2a8e6bac7c1d668000d42eb9cbc"
+        "snapshot_hash": "abe9936bf380b36aed7470c823263f6d4cb9ebecb46880b1fc49dce750365e11"
       }
     },
     {
-      "at": "2026-10-22T12:55:47.748Z",
+      "at": "2026-10-22T13:31:44.605Z",
       "action": "report.issued",
       "actor": "Robin Reviewer",
       "detail": {
-        "hash": "1f5c71e60f5bca92ba8cb6c0d0a84781bf8ce08e32464beccb599c86cf993ebe",
+        "hash": "600c8c310b9f6e4134445b4dff261133bca87279921a01e4fb5d62120d9d87b8",
         "revision": 1,
-        "assessment": "9f641bf1-5f9d-4102-8dd9-643ac7b116c0"
+        "assessment": "7c50e3b5-270d-43f8-8a75-df5213a02d73"
       }
     },
     {
-      "at": "2026-10-22T12:55:49.932Z",
+      "at": "2026-10-22T13:31:46.763Z",
       "action": "assessment.new_revision",
       "actor": "Pat Practitioner",
       "detail": {
@@ -124,13 +124,13 @@
       }
     },
     {
-      "at": "2026-10-22T12:55:50.009Z",
+      "at": "2026-10-22T13:31:46.862Z",
       "action": "assessment.evidence_disposition",
       "actor": "Pat Practitioner",
       "detail": {
         "kind": "not_replaced",
         "reason": "Laboratory result contradicts its qualifier; clarification requested from the laboratory.",
-        "sample_id": "8dfd2291-4571-48b6-ac7c-f8dc009f6be7",
+        "sample_id": "ba8942cb-ea19-451f-b5d5-75794834b976",
         "consequence": "Worker SYN-W2 has no formal short-term result until the laboratory clarifies the result.",
         "sample_code": "SYN-DBL",
         "sample_flags": [

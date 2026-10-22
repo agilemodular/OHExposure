@@ -1,9 +1,9 @@
 {
-  "generated": "2026-10-22T12:55:50.683Z",
-  "engine": "1.5.0",
+  "generated": "2026-10-22T13:31:47.678Z",
+  "engine": "1.5.1",
   "methods": {
-    "twa_8h": "1.4.0",
-    "stel_15": "1.3.0"
+    "twa_8h": "1.4.1",
+    "stel_15": "1.3.1"
   },
   "readOnly": true,
   "summary": {
@@ -19,7 +19,7 @@
   },
   "duplicateDispositions": [
     {
-      "dispositionId": "81238174-c042-4ea5-bc2a-d487cac24f04",
+      "dispositionId": "3d0656ea-93b8-44be-a25b-548b22e61838",
       "organisation": "TR-06/TR-07 Scenario Consultancy (synthetic)",
       "assessment": "Mixer charging — short-term exposure (synthetic)",
       "revision": 1,
@@ -29,17 +29,18 @@
       "duplicateType": null,
       "recordedBy": "Pat Practitioner",
       "recorderRole": "practitioner",
-      "recordedAt": "2026-10-22T12:55:47.654Z",
+      "recordedAt": "2026-10-22T13:31:44.485Z",
       "reason": "Recorded as a duplicate of the morning sample",
       "consequence": "The morning sample represents this worker and shift",
       "latestForSample": true,
       "sufficientRelationshipEvidence": false,
-      "problem": "duplicate category not stated (supported: same-event record, paired/co-located sampler). A different sample offered as evidence that the remaining coverage is adequate is not a duplicate; that needs a technical reviewer's \"remaining coverage adequate\" disposition"
+      "problem": "duplicate category not stated (supported: same-event record, paired/co-located sampler). A different sample offered as evidence that the remaining coverage is adequate is not a duplicate; that needs a technical reviewer's \"remaining coverage adequate\" disposition",
+      "resultsCompared": true
     }
   ],
   "contradictoryLabRecords": [
     {
-      "resultRevisionId": "d162de19-a6dc-4776-884c-76fe0d4d01c8",
+      "resultRevisionId": "410e9225-0e6a-44c7-883e-f86349132fff",
       "organisation": "TR-06/TR-07 Scenario Consultancy (synthetic)",
       "sample": "SYN-DBL",
       "substance": "Demo Dust X (synthetic)",
@@ -52,7 +53,7 @@
       "lod": 10,
       "loq": 30,
       "unit": "ug",
-      "enteredAt": "2026-10-22T12:55:47.598Z",
+      "enteredAt": "2026-10-22T13:31:44.420Z",
       "problem": "Contradictory inputs (qualifier detected_below_loq (laboratory text \"DET<LOQ\"), value 600 ug, LOD 10 ug, LOQ 30 ug): the value is above the LOQ, so it cannot be a detected-below-LOQ estimate (an estimate must lie between the LOD and the LOQ, both inclusive). No numerical result is produced from these inputs. Obtain the laboratory's clarification and record it as an amendment; the reported value is not changed or discarded.",
       "status": "current — awaiting laboratory clarification and amendment"
     }
@@ -73,8 +74,8 @@
         "dataQuality": "qualified"
       },
       "recomputedFromFrozenInputs": {
-        "engine": "1.5.0",
-        "calcVersion": "1.3.0",
+        "engine": "1.5.1",
+        "calcVersion": "1.3.1",
         "benchmark": "indeterminate",
         "dataQuality": "incomplete",
         "evidenceAdequacy": "unresolved_evidence",
@@ -85,22 +86,24 @@
         "TR-07: SYN-DBL INPUT_INVALID_DBL_VALUE"
       ],
       "classification": "confirmed changed outcome",
+      "evidenceAmendedSinceCalculation": [],
+      "attribution": "TR-06/TR-07 markers only (calculated with engine 1.4.0 or later)",
       "reports": [
         {
-          "id": "5bf28981-ee5a-46d7-a489-00006c87678b",
+          "id": "b5c4b5db-5571-4cf5-9f47-d063dc85dc6e",
           "status": "issued",
-          "generated_at": "2026-10-22T12:55:47.748872+00:00"
+          "generated_at": "2026-10-22T13:31:44.605244+00:00"
         }
       ],
       "issuedReports": 1,
-      "action": "Outcome changes under 1.5.0. Review; reassess through a new revision with a reason (the approval does not transfer); supersede the 1 issued report(s) once a new revision is approved. The approved revision and its reports are not altered."
+      "action": "Outcome changes under engine 1.5.1. Review; reassess through a new revision with a reason (the approval does not transfer); supersede the 1 issued report(s) once a new revision is approved. The approved revision and its reports are not altered."
     },
     {
       "organisation": "TR-06/TR-07 Scenario Consultancy (synthetic)",
       "assessment": "Mixer charging — short-term exposure (synthetic)",
       "revision": 2,
       "status": "draft",
-      "calculatedWith": "stel_15 1.3.0",
+      "calculatedWith": "stel_15 1.3.1",
       "dependsOn": [
         "contradictory detected-below-LOQ record (TR-07)"
       ],
@@ -109,8 +112,8 @@
         "dataQuality": "incomplete"
       },
       "recomputedFromFrozenInputs": {
-        "engine": "1.5.0",
-        "calcVersion": "1.3.0",
+        "engine": "1.5.1",
+        "calcVersion": "1.3.1",
         "benchmark": "indeterminate",
         "dataQuality": "incomplete",
         "evidenceAdequacy": "unresolved_evidence",
@@ -120,11 +123,13 @@
         "TR-07: SYN-DBL INPUT_INVALID_DBL_VALUE"
       ],
       "classification": "potentially affected",
+      "evidenceAmendedSinceCalculation": [],
+      "attribution": "TR-06/TR-07 markers only (calculated with engine 1.4.0 or later)",
       "reports": [
         {
-          "id": "9a9c453c-2d2f-45a1-9f4f-a4de8c922a59",
+          "id": "4f8cbc34-387f-44fe-a22c-723edcae7e0c",
           "status": "draft",
-          "generated_at": "2026-10-22T12:55:50.067849+00:00"
+          "generated_at": "2026-10-22T13:31:46.942656+00:00"
         }
       ],
       "issuedReports": 0,

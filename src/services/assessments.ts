@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { sha256 } from '../auth/crypto.js';
-import { CALCULATIONS, comparability, duplicateProblem, DUPLICATE_TYPES, runAssessment, sampleConcentration, serialiseOutput, STEL_REMAINDER_EVIDENCE, type BenchmarkRef, type CalcCode, type DuplicateType, type ExposureRecord, type SampleInput } from '../calc/engine.js';
+import { CALCULATIONS, comparability, duplicateProblem, relationshipEvidence, DUPLICATE_TYPES, runAssessment, sampleConcentration, serialiseOutput, STEL_REMAINDER_EVIDENCE, type BenchmarkRef, type CalcCode, type DuplicateType, type ExposureRecord, type SampleInput } from '../calc/engine.js';
 import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
@@ -50,12 +50,35 @@ export async function listBenchmarks(a: Actor, substanceId?: string) {
 }
 
 // ───── Inputs
-type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any; exposureRecords: ExposureRecord[]; molecularWeight?: number | null };
+type Removal = { sampleId: string; sampleCode: string; status: 'pending_reviewer_confirmation' | 'confirmed'; reason: string; requestedBy: string; requestedAt: string; confirmedBy: string | null; confirmation: string | null };
+type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any; exposureRecords: ExposureRecord[]; molecularWeight?: number | null; removals?: Removal[] };
+
+/**
+ * R5-F2 (engine 1.5.1): samples removed from a draft's sample list. A removal is a scope judgement: a practitioner's
+ * removal is a request and the sample stays in the evidence until a technical reviewer confirms it.
+ */
+async function sampleRemovals(tx: Tx, rev: any): Promise<Removal[]> {
+  const rows = await many(tx, `select x.sampling_event_id, x.action, x.reason, x.recorded_at, u.name, e.sample_code from assessment_sample_removals x join users u on u.id=x.recorded_by join sampling_events e on e.id=x.sampling_event_id
+    where x.revision_id=$1 and not (x.sampling_event_id = any($2::uuid[])) order by x.sampling_event_id, x.seq`, [rev.id, rev.sample_ids ?? []]);
+  const by = new Map<string, any[]>();
+  for (const x of rows) by.set(x.sampling_event_id, [...(by.get(x.sampling_event_id) ?? []), x]);
+  const out: Removal[] = [];
+  for (const [sid, xs] of by) {
+    const lastReq = [...xs].reverse().find((x) => x.action === 'requested');
+    if (!lastReq) continue;
+    const conf = xs.find((x) => x.action === 'confirmed' && x.recorded_at >= lastReq.recorded_at && xs.indexOf(x) > xs.indexOf(lastReq));
+    out.push({ sampleId: sid, sampleCode: lastReq.sample_code, status: conf ? 'confirmed' : 'pending_reviewer_confirmation', reason: lastReq.reason, requestedBy: lastReq.name, requestedAt: lastReq.recorded_at.toISOString(), confirmedBy: conf?.name ?? null, confirmation: conf?.reason ?? null });
+  }
+  return out.sort((a, b) => a.sampleCode.localeCompare(b.sampleCode));
+}
 
 async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Snapshot> {
   const samples: SampleInput[] = [];
   const refs: Snapshot['refs'] = [];
-  for (const sid of rev.sample_ids as string[]) {
+  const removals = rev.id ? await sampleRemovals(tx, rev) : [];
+  // Removals awaiting a technical reviewer's confirmation do not take effect: those samples stay in the evidence.
+  const effective = [...(rev.sample_ids as string[]), ...removals.filter((x) => x.status === 'pending_reviewer_confirmation').map((x) => x.sampleId)];
+  for (const sid of effective) {
     const e = await one(tx, `select e.*, w.ref_code from sampling_events e left join workers w on w.id=e.worker_id where e.id=$1`, [sid]);
     if (!e) throw notFound('Sample in assessment');
     const mv = e.method_version_id ? await one(tx, 'select v.*, m.code from sampling_method_versions v join sampling_methods m on m.id=v.method_id where v.id=$1', [e.method_version_id]) : null;
@@ -100,10 +123,10 @@ async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Sna
   const exposureRecords: ExposureRecord[] = recs.filter((r) => r.minutes != null || r.start_min != null)
     .map((r) => ({ ref: r.ref, minutes: r.minutes == null ? null : Number(r.minutes), basis: r.basis, startMin: r.start_min, endMin: r.end_min }));
   const mw = (await one(tx, 'select molecular_weight from substances where id=$1', [substanceId]))?.molecular_weight ?? null;
-  return { samples, refs, benchmark, parameters: rev.parameters, exposureRecords, molecularWeight: mw };
+  return { samples, refs, benchmark, parameters: rev.parameters, exposureRecords, molecularWeight: mw, removals };
 }
 const calcOf = (code: string | null | undefined) => CALCULATIONS[(code as CalcCode) ?? 'twa_8h'] ?? CALCULATIONS.twa_8h;
-const hashOf = (s: Snapshot, calcCode: string | null | undefined) => sha256(JSON.stringify({ samples: s.samples, refs: s.refs, benchmark: s.benchmark, parameters: s.parameters, exposure: s.exposureRecords, mw: s.molecularWeight ?? null, calc: calcOf(calcCode) }));
+const hashOf = (s: Snapshot, calcCode: string | null | undefined) => sha256(JSON.stringify({ samples: s.samples, refs: s.refs, benchmark: s.benchmark, parameters: s.parameters, exposure: s.exposureRecords, mw: s.molecularWeight ?? null, calc: calcOf(calcCode), removals: s.removals ?? [] }));
 
 // ───── Lifecycle
 export async function createAssessment(a: Actor, input: unknown) {
@@ -138,6 +161,8 @@ const draftSchema = z.object({
   interpretation_ai_assisted: bool.optional(),
   conclusion_category: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['exposure_adequately_controlled', 'improvement_required', 'urgent_action_required', 'insufficient_evidence']).optional()).transform((v) => v ?? null),
   limitations: optStr,
+  /** Required when samples are removed from the sample list (engine 1.5.1, R5-F2). */
+  removal_reason: optStr,
 });
 
 async function loadRev(tx: Tx, revId: string, lock = false) {
@@ -168,10 +193,17 @@ export async function updateDraft(a: Actor, revId: string, input: unknown) {
     const parameters = d.calc_code === 'stel_15'
       ? { shortSampleAssumption: d.short_sample_assumption, shortSampleJustification: d.short_sample_justification ?? undefined, shortSampleEvidenceBasis: d.short_sample_evidence_basis, shortSampleEvidenceRef: d.short_sample_evidence_ref }
       : { exposureMinutesPerShift: d.exposure_minutes_per_shift, unsampledAssumption: d.unsampled_assumption, unsampledJustification: d.unsampled_justification ?? undefined };
+    // R5-F2: removing a sample is a scope judgement. It is recorded with a reason; a practitioner's removal is a request
+    // that takes effect only when a technical reviewer confirms it (the sample stays in the evidence until then).
+    const removed = (r.sample_ids as string[]).filter((x) => !d.sample_ids.includes(x));
+    if (removed.length && !(d.removal_reason && d.removal_reason.trim().length >= 10))
+      throw invalid(`Give a reason (at least 10 characters) for removing ${removed.length} sample(s) from the sample list. A removal takes effect only when a technical reviewer confirms it; until then the sample stays in the evidence.`);
     const out = await one(tx, `update assessment_revisions set sample_ids=$2, benchmark_version_id=$3, parameters=$4, interpretation=$5, conclusion_category=$6, limitations=$7,
         calc_code=$8, calc_version=$9, calc_output=null, data_quality_state=null, benchmark_state=null, inputs_snapshot=null, inputs_hash=null where id=$1 returning *`,
       [revId, d.sample_ids, d.benchmark_version_id, parameters, d.interpretation, d.conclusion_category, d.limitations, d.calc_code, calcOf(d.calc_code).version]);
-    await audit(tx, a, 'assessment.draft_update', 'assessment_revision', revId, { ...d, interpretation: d.interpretation ? `[${d.interpretation.length} chars]` : null });
+    for (const sid of removed)
+      await tx.query(`insert into assessment_sample_removals (tenant_id,client_id,revision_id,sampling_event_id,action,reason,recorded_by) values ($1,$2,$3,$4,'requested',$5,$6)`, [r.tenant_id, r.client_id, revId, sid, d.removal_reason, a.userId]);
+    await audit(tx, a, 'assessment.draft_update', 'assessment_revision', revId, { ...d, removed_sample_ids: removed, interpretation: d.interpretation ? `[${d.interpretation.length} chars]` : null });
     return out;
   });
 }
@@ -224,7 +256,8 @@ export async function recordEvidenceDisposition(a: Actor, revId: string, input: 
     // The calculation no longer reflects the evidence: clear it so it must be rerun.
     await tx.query('update assessment_revisions set calc_output=null, data_quality_state=null, benchmark_state=null, inputs_snapshot=null, inputs_hash=null where id=$1', [revId]);
     await audit(tx, a, 'assessment.evidence_disposition', 'assessment_revision', revId, { ...d, sample_code: self.input.sampleCode, related_sample_code: d.related_sample_id ? pick(d.related_sample_id)?.input.sampleCode ?? null : null,
-      sample_interval: self.output.concentration, sample_flags: self.output.flags.map((f) => f.code) });
+      sample_interval: self.output.concentration, sample_flags: self.output.flags.map((f) => f.code),
+      ...(d.kind === 'duplicate' && d.related_sample_id ? (() => { const rel = pick(d.related_sample_id)!; return { related_interval: rel.output.concentration, relationship: relationshipEvidence(self.input, rel.input) }; })() : {}) });
     return row;
   });
 }
@@ -257,6 +290,23 @@ export async function priorDispositionReview(tx: Tx, rev: any) {
       interval: self?.output.concentration ?? null, inThisRevision: inThis, status };
   });
   return { revision: prev.revision, items };
+}
+
+/** R5-F2: a technical reviewer confirms that a removed sample is outside the scope of this assessment. */
+export async function confirmSampleRemoval(a: Actor, revId: string, input: unknown) {
+  if (!can(a, 'assess.approve')) throw forbidden('Only a technical reviewer can confirm that a sample is outside the scope of the assessment');
+  const d = parse(z.object({ sample_id: uuid, reason: reqStr(10) }), input);
+  return withActor(a, async (tx) => {
+    const r = await loadRev(tx, revId, true);
+    await assertAssessmentNotOnHold(tx, r.assessment_id);
+    if (r.status !== 'draft') throw invalid('Removals can only be confirmed on a draft revision');
+    const pending = (await sampleRemovals(tx, r)).find((x) => x.sampleId === d.sample_id && x.status === 'pending_reviewer_confirmation');
+    if (!pending) throw invalid('There is no pending removal of this sample to confirm');
+    const row = await one(tx, `insert into assessment_sample_removals (tenant_id,client_id,revision_id,sampling_event_id,action,reason,recorded_by) values ($1,$2,$3,$4,'confirmed',$5,$6) returning *`, [r.tenant_id, r.client_id, revId, d.sample_id, d.reason, a.userId]);
+    await tx.query('update assessment_revisions set calc_output=null, data_quality_state=null, benchmark_state=null, inputs_snapshot=null, inputs_hash=null where id=$1', [revId]);
+    await audit(tx, a, 'assessment.sample_removal_confirmed', 'assessment_revision', revId, { sample_id: d.sample_id, sample_code: pending.sampleCode, requested_by: pending.requestedBy, request_reason: pending.reason, reason: d.reason });
+    return row;
+  });
 }
 
 export async function calculate(a: Actor, revId: string) {
@@ -378,9 +428,11 @@ export async function newRevision(a: Actor, assessmentId: string, input: unknown
     const cur = await one(tx, 'select * from assessment_revisions where assessment_id=$1 and revision=$2', [assessmentId, as.current_revision]);
     if (['draft', 'in_review'].includes(cur.status)) throw invalid('The current revision is still open; edit it instead');
     const n = as.current_revision + 1;
+    // Removals still awaiting a reviewer's confirmation were part of the evidence of that revision; they stay in.
+    const pending = (await sampleRemovals(tx, cur)).filter((x) => x.status === 'pending_reviewer_confirmation').map((x) => x.sampleId);
     const rev = await one(tx, `insert into assessment_revisions (tenant_id,client_id,assessment_id,revision,sample_ids,calc_code,calc_version,parameters,benchmark_version_id,interpretation,conclusion_category,limitations,supersedes_revision_id,change_reason,created_by)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
-      [as.tenant_id, as.client_id, assessmentId, n, cur.sample_ids, cur.calc_code ?? 'twa_8h', calcOf(cur.calc_code).version, cur.parameters, cur.benchmark_version_id, cur.interpretation, cur.conclusion_category, cur.limitations, cur.id, d.change_reason, a.userId]);
+      [as.tenant_id, as.client_id, assessmentId, n, [...cur.sample_ids, ...pending], cur.calc_code ?? 'twa_8h', calcOf(cur.calc_code).version, cur.parameters, cur.benchmark_version_id, cur.interpretation, cur.conclusion_category, cur.limitations, cur.id, d.change_reason, a.userId]);
     await tx.query('update assessments set current_revision=$2 where id=$1', [assessmentId, n]);
     await audit(tx, a, 'assessment.new_revision', 'assessment', assessmentId, { revision: n, reason: d.change_reason });
     return rev;
@@ -434,7 +486,8 @@ export async function assessmentDetail(a: Actor, id: string) {
     const reports = await many(tx, 'select id, version, status, generated_at, assessment_revision_id from reports where assessment_id=$1 order by version desc', [id]);
     const method = current ? await methodReview(tx, current.calc_code ?? 'twa_8h', current.calc_version ?? CALCULATIONS.twa_8h.version) : null;
     const controls = await tenantControls(tx);
-    return { assessment: as, revisions, current, approved, candidates, benchmarks, staleCurrent, staleApproved, actions, reports, method, controls };
+    const removals = current ? await sampleRemovals(tx, current) : [];
+    return { assessment: as, revisions, current, approved, candidates, benchmarks, staleCurrent, staleApproved, actions, reports, method, controls, removals };
   });
 }
 

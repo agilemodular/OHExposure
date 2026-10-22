@@ -49,7 +49,10 @@
 //   TR-07 the numeric value field has a defined meaning per qualifier; a detected-below-LOQ value outside [LOD, LOQ]
 //         (or a threshold that is not the LOQ) is contradictory: no numerical result, and the sample cannot be set
 //         aside by disposition until the laboratory clarifies it through an amendment.
-export const ENGINE_VERSION = '1.5.0';
+// 1.5.1 (R5 re-check of 808f76b, an AI review agent): a duplicate needs a calculable result for BOTH samples (an unknown
+//   result can no longer be set aside without the conflict check, R5-F1); a void sample cannot be part of a duplicate at
+//   calculation either (R5-F3); set-aside duplicates carry their relationship evidence.
+export const ENGINE_VERSION = '1.5.1';
 
 export type Qualifier = '=' | '<LOD' | '<LOQ' | 'detected_below_loq' | '>' | 'estimated';
 export const QUALIFIERS: Qualifier[] = ['=', '<LOD', '<LOQ', 'detected_below_loq', '>', 'estimated'];
@@ -770,7 +773,7 @@ export interface AssessmentOutput {
   evidenceAdequacy: 'adequate' | 'adequate_with_accepted_gaps' | 'unresolved_evidence' | 'coverage_gap' | 'no_formal_evidence';
   unresolvedEvidence: UnresolvedEvidence[];
   /** Personal samples set aside by a valid disposition (always reported, with who and why). */
-  setAsideEvidence: { sampleCode: string; subjectRef: string | null; kind: EvidenceDispositionKind; by: string; reason: string; consequence: string; interval: Interval | null; reasons?: string[]; duplicateType?: string | null; relatedSampleCode?: string | null; relatedInterval?: Interval | null }[];
+  setAsideEvidence: { sampleCode: string; subjectRef: string | null; kind: EvidenceDispositionKind; by: string; reason: string; consequence: string; interval: Interval | null; reasons?: string[]; relationship?: ReturnType<typeof relationshipEvidence> | null; duplicateType?: string | null; relatedSampleCode?: string | null; relatedInterval?: Interval | null }[];
   /** Overall numerical comparison, gated by calculation availability and evidence adequacy (decision table in the specification). */
   benchmarkState: 'below_benchmark' | 'at_or_above_benchmark' | 'indeterminate' | 'not_comparable' | 'no_verified_benchmark';
   benchmarkNote: string;
@@ -779,11 +782,17 @@ export interface AssessmentOutput {
 }
 
 export const CALCULATIONS: Record<CalcCode, { code: CalcCode; version: string; averagingMinutes: number; label: string }> = {
-  twa_8h: { code: 'twa_8h', version: '1.4.0', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
-  stel_15: { code: 'stel_15', version: '1.3.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
+  twa_8h: { code: 'twa_8h', version: '1.4.1', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
+  stel_15: { code: 'stel_15', version: '1.3.1', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
 };
 
 const normText = (x: string | null | undefined) => (x ?? '').normalize('NFKC').trim().toLowerCase().replace(/\s+/g, ' ');
+
+/** The relationship evidence of a duplicate pair, as recorded (for the output, the audit trail and the report). */
+export function relationshipEvidence(a: SampleInput, b: SampleInput) {
+  const one = (x: SampleInput) => ({ sampleCode: x.sampleCode, worker: x.subjectRef, window: [x.startAt, x.endAt], shiftRef: x.shiftRef ?? null, instrument: x.instrument?.assetTag ?? null, pairRef: x.pairRef ?? null, tasks: x.tasksPerformed ?? null, group: x.groupRef ?? null, substance: x.substanceRef ?? null });
+  return { setAside: one(a), retained: one(b) };
+}
 
 /**
  * Duplicate relationship check (1.5.0, TR-06). Returns null when the relationship is supported by the recorded evidence,
@@ -797,6 +806,7 @@ export function duplicateProblem(d: EvidenceDisposition, self: { input: SampleIn
   if (!rel) return no('the related sample is not part of this assessment');
   const a = self.input, b = rel.input, ao = self.output, bo = rel.output;
   if (a.sampleType !== 'personal' || b.sampleType !== 'personal') return no('both samples must be personal samples');
+  if (a.voided || b.voided) return no('a void sample cannot be part of a duplicate relationship');
   if (!a.subjectRef || a.subjectRef !== b.subjectRef) return no('the related sample is for a different worker');
   if (!a.substanceRef || !b.substanceRef) return no('the assessed substance is not recorded for both samples');
   if (a.substanceRef !== b.substanceRef) return no('the related sample is for a different substance');
@@ -820,7 +830,9 @@ export function duplicateProblem(d: EvidenceDisposition, self: { input: SampleIn
   }
   // A duplicate label must not suppress adverse evidence (paired-result review policy, specification §0).
   const x = ao.concentration, y = bo.concentration;
-  if (x && y) {
+  // R5-F1: both results must be known; otherwise the pair cannot be compared and nothing is set aside.
+  if (!x || !y) return no(`the ${!x ? 'set-aside' : 'retained'} sample has no calculable result, so the two results cannot be compared; evidence whose result is unknown cannot be set aside as a duplicate`);
+  {
     if (x.unit !== y.unit) return { problem: `the results are in different units (${x.unit} / ${y.unit}) and cannot be compared; a technical reviewer must review the pair`, conflict: true };
     const close = (p: number, q: number) => p === q || (Number.isFinite(p) && Number.isFinite(q) && Math.abs(p - q) <= COMPARISON_REL_TOL * Math.max(Math.abs(p), Math.abs(q)));
     const higher = x.upper > y.upper && !close(x.upper, y.upper);
@@ -890,9 +902,10 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
     if (d!.kind === 'not_replaced') { coverageGap = true; unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; not replaced — the worker or task it covered remains unassessed (${d!.consequence})`, interval: s.concentration, disposition: d!.kind, reasons }); }
     else {
       if (d!.kind === 'remaining_coverage_adequate') acceptedGaps++;
-      const rel = d!.relatedSampleCode ? byCode.get(d!.relatedSampleCode)?.output : undefined;
+      const relPair = d!.relatedSampleCode ? byCode.get(d!.relatedSampleCode) : undefined;
+      const rel = relPair?.output;
       setAside.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, kind: d!.kind, by: d!.authorisedBy, reason: d!.reason, consequence: d!.consequence, interval: s.concentration, reasons,
-        ...(d!.kind === 'duplicate' ? { duplicateType: d!.duplicateType ?? null, relatedSampleCode: d!.relatedSampleCode ?? null, relatedInterval: rel?.concentration ?? null } : {}) });
+        ...(d!.kind === 'duplicate' ? { duplicateType: d!.duplicateType ?? null, relatedSampleCode: d!.relatedSampleCode ?? null, relatedInterval: rel?.concentration ?? null, relationship: relPair ? relationshipEvidence(self.input, relPair.input) : null } : {}) });
     }
   }
   const evidenceAdequacy: AssessmentOutput['evidenceAdequacy'] = !calculated.length ? 'no_formal_evidence'

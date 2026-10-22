@@ -1,9 +1,9 @@
 {
- "description": "Structured regression fixtures for engine 1.5.0. Expected values are independent of the engine (Python oracle + hand-written statuses).",
+ "description": "Structured regression fixtures for engine 1.5.1. Expected values are independent of the engine (Python oracle + hand-written statuses).",
  "engine": {
-  "engine": "1.5.0",
-  "twa_8h": "1.4.0",
-  "stel_15": "1.3.0"
+  "engine": "1.5.1",
+  "twa_8h": "1.4.1",
+  "stel_15": "1.3.1"
  },
  "molarVolumeLPerMol": 24.05526,
  "comparisonRelativeTolerance": 1e-09,
@@ -14,8 +14,8 @@
    "group": "original",
    "description": "Full-shift sample, 300 µg over 480 min at 2 L/min",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -106,8 +106,8 @@
    "group": "original",
    "description": "Interruption 30 min and flow drift 10 % (method tolerance 5 %, consequence not stated)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -200,8 +200,8 @@
    "group": "original-variant",
    "description": "E2 with the method stating flow drift as advisory",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -298,8 +298,8 @@
    "group": "original",
    "description": "Two consecutive samples 0.5 and 0.2 mg/m³",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -411,8 +411,8 @@
    "group": "original",
    "description": "Half-shift sample, 480-min exposure, no assumption",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -494,8 +494,8 @@
    "group": "original",
    "description": "Half-shift sample, zero exposure assumed (justified)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -578,8 +578,8 @@
    "group": "original",
    "description": "Half-shift sample, sampled mean assumed for the rest (justified)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -662,8 +662,8 @@
    "group": "original",
    "description": "Non-detect < 10 µg over 960 L; benchmark 0.05",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -752,8 +752,8 @@
    "group": "original",
    "description": "Non-detect < 10 µg over 960 L; benchmark 0.005",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -830,8 +830,8 @@
    "group": "original",
    "description": "10-hour shift, 360 µg over 600 min",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -912,8 +912,8 @@
    "group": "original",
    "description": "STEL, exact 15-minute sample, 45 µg",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -990,8 +990,8 @@
    "group": "original",
    "description": "STEL, 10-minute sample, zero-remainder with justification only",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -1074,8 +1074,8 @@
    "group": "original-variant",
    "description": "E7b with continuous observation recorded",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -1162,8 +1162,8 @@
    "group": "original",
    "description": "Conversion 20 ppm, MW 92.14 g/mol",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [],
@@ -1199,8 +1199,8 @@
    "group": "original",
    "description": "Overlapping samples for one worker",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1316,8 +1316,8 @@
    "group": "original",
    "description": "Calibration expired; indicative 0.3125 vs benchmark 1.0",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1393,8 +1393,8 @@
    "group": "original",
    "description": "Calibration expired; indicative 0.3125 vs benchmark 0.2",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1466,8 +1466,8 @@
    "group": "original",
    "description": "One valid worker below 0.2; another indicative (calibration expired)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1589,8 +1589,8 @@
    "group": "original",
    "description": "Static sample only",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1660,8 +1660,8 @@
    "group": "original",
    "description": "Screening-only instrument",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1736,8 +1736,8 @@
    "group": "original",
    "description": "Generic < LOQ (LOD 10 µg, LOQ 30 µg) over 960 L; benchmark 0.02",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1819,8 +1819,8 @@
    "group": "original-variant",
    "description": "Laboratory-confirmed detection below LOQ (LOD 10, LOQ 30)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1900,8 +1900,8 @@
    "group": "original",
    "description": "Failed QC check without disposition",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -1984,8 +1984,8 @@
    "group": "TR",
    "description": "16-minute sample averaging 0.975 mg/m³; 15-minute benchmark 1",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -2067,8 +2067,8 @@
    "group": "TR",
    "description": "Valid worker below 0.5; another worker excluded non-detect 0–2 mg/m³",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -2191,8 +2191,8 @@
    "group": "TR",
    "description": "<LOQ with LOD 1000 µg and LOQ 1 µg",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -2274,8 +2274,8 @@
    "group": "TR",
    "description": "0.000384 µg over 960 L; benchmark 3e-7 mg/m³",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -2353,8 +2353,8 @@
    "group": "TR",
    "description": "Flow 2.0 → 1.0 L/min; method tolerance 5 %; consequence not stated",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -2437,8 +2437,8 @@
    "group": "TR-variant",
    "description": "Exactly 15 min uninterrupted, 1.0 mg/m³ vs 1.0",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -2514,8 +2514,8 @@
    "group": "TR-variant",
    "description": "15 min + 0.05 s (numerical timestamp tolerance only)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -2591,8 +2591,8 @@
    "group": "TR-variant",
    "description": "15 min 1 s",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -2671,8 +2671,8 @@
    "group": "TR-variant",
    "description": "14 min, no assumption",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -2751,8 +2751,8 @@
    "group": "TR-variant",
    "description": "15 min sampled over a 20-min window (interrupted)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -2836,8 +2836,8 @@
    "group": "TR-variant",
    "description": "12 min sampled within a 15-min window, with assumption and evidence",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -2926,8 +2926,8 @@
    "group": "TR-variant",
    "description": "Adverse valid result alongside unresolved excluded evidence",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3037,8 +3037,8 @@
    "group": "TR-variant",
    "description": "Excluded sample dispositioned as \"duplicate\" of a valid sample, no duplicate category or relationship evidence",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3162,8 +3162,8 @@
    "group": "TR-variant",
    "description": "Excluded sample not replaced (worker unassessed)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3280,8 +3280,8 @@
    "group": "TR-variant",
    "description": "Reviewer judges remaining coverage adequate",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3398,8 +3398,8 @@
    "group": "TR-variant",
    "description": "Disposition without an assessment of consequences",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3516,8 +3516,8 @@
    "group": "TR-variant",
    "description": "Excluded sample outside the assessment scope",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3634,8 +3634,8 @@
    "group": "TR-variant",
    "description": "Indicative over-range result (upper bound unknown) beside a valid below result",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3742,8 +3742,8 @@
    "group": "TR-variant",
    "description": "R4 N4: \"duplicate\" naming a sample of a different worker",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3863,8 +3863,8 @@
    "group": "TR-variant",
    "description": "R4 N4: \"duplicate\" naming itself",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -3983,8 +3983,8 @@
    "group": "TR-variant",
    "description": "Negative value",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4063,8 +4063,8 @@
    "group": "TR-variant",
    "description": "Zero flow",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4143,8 +4143,8 @@
    "group": "TR-variant",
    "description": "Unknown unit",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4223,8 +4223,8 @@
    "group": "TR-variant",
    "description": "Detected below LOQ without an LOD",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4303,8 +4303,8 @@
    "group": "TR-variant",
    "description": "Unknown qualifier",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4383,8 +4383,8 @@
    "group": "TR-variant",
    "description": "Benchmark value zero",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4454,8 +4454,8 @@
    "group": "TR-variant",
    "description": "Over-range result: upper bound unknown and explicit",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4539,8 +4539,8 @@
    "group": "TR-variant",
    "description": "R4 N1: \"<LOQ\" reported with a value (600 µg) above the LOQ (30 µg)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4627,8 +4627,8 @@
    "group": "TR-variant",
    "description": "480 µg over 960 L vs 0.5 mg/m³",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4704,8 +4704,8 @@
    "group": "TR-variant",
    "description": "479.999 µg over 960 L vs 0.5 mg/m³",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4781,8 +4781,8 @@
    "group": "TR-variant",
    "description": "480.001 µg over 960 L vs 0.5 mg/m³",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4858,8 +4858,8 @@
    "group": "TR-variant",
    "description": "500 µg/m³ equals 0.5 mg/m³",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -4935,8 +4935,8 @@
    "group": "TR-variant",
    "description": "Round trip ppm → mg/m³ → ppm",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [],
@@ -4965,8 +4965,8 @@
    "group": "TR-variant",
    "description": "Tiny non-detect interval 0–3e-7 vs 3e-7",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5042,8 +5042,8 @@
    "group": "TR-variant",
    "description": "Flow drift: method says invalid; a disposition is present but cannot override",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5131,8 +5131,8 @@
    "group": "TR-variant",
    "description": "Flow drift: disposition required and recorded (criterion, evidence, reviewer, scope)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5221,8 +5221,8 @@
    "group": "TR-variant",
    "description": "Flow drift: disposition with free text only (no scope)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5310,8 +5310,8 @@
    "group": "TR-variant",
    "description": "Minimum volume 1000 L not met (960 L), advisory",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5391,8 +5391,8 @@
    "group": "TR-variant",
    "description": "Minimum volume not met, consequence not stated",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5470,8 +5470,8 @@
    "group": "method",
    "description": "Night shift across midnight without a shift reference",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5577,8 +5577,8 @@
    "group": "method",
    "description": "Night shift with an explicit shift reference",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5690,8 +5690,8 @@
    "group": "method",
    "description": "Split shift on one date, no reference (grouped by date, noted)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5804,8 +5804,8 @@
    "group": "method",
    "description": "Two task records without times (240 + 240), exposure entered 300",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5888,8 +5888,8 @@
    "group": "method",
    "description": "Timed overlapping tasks 0–240 and 120–360 (union 360), exposure entered 300",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -5976,8 +5976,8 @@
    "group": "method",
    "description": "Estimated task duration",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -6056,8 +6056,8 @@
    "group": "method",
    "description": "R4 N3: task times 0–60 but 120 recorded minutes; exposure entered 60",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -6138,8 +6138,8 @@
    "group": "TR-06",
    "description": "Review reproduction, before any disposition: AM valid 0.1 mg/m³; PM excluded 2 mg/m³ (failed QC, no disposition); 15-min benchmark 1",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -6259,8 +6259,8 @@
    "group": "TR-06",
    "description": "Review reproduction: PM dispositioned \"duplicate\" of AM (no category, no relationship evidence)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -6384,8 +6384,8 @@
    "group": "TR-06",
    "description": "As TR-06, disposition claims same_event_record with relationship evidence; windows 08:00 and 15:00",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -6515,8 +6515,8 @@
    "group": "TR-06",
    "description": "As TR-06, disposition claims paired_colocated with the same pair reference; windows do not overlap",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -6646,8 +6646,8 @@
    "group": "TR-06",
    "description": "Supported paired sampler: AM2 (excluded, 0.08) worn with AM (0.1), same pair reference and window",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -6788,8 +6788,8 @@
    "group": "TR-06",
    "description": "Paired sampler conflict: AM2 2 mg/m³ vs retained AM 0.1",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -6923,8 +6923,8 @@
    "group": "TR-06",
    "description": "Paired sampler conflict below the benchmark: AM2 0.5 vs retained 0.1",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -7055,8 +7055,8 @@
    "group": "TR-06",
    "description": "Supported duplicate record of one sampling event (same instrument, window and result)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -7188,8 +7188,8 @@
    "group": "TR-06",
    "description": "Two records of one event with different results (0.09 vs 0.1)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -7322,8 +7322,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: different worker",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -7453,8 +7453,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: different substance",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -7584,8 +7584,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: tasks not recorded for the set-aside sample",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -7715,8 +7715,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: different task context",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -7846,8 +7846,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: no pair reference recorded",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -7977,8 +7977,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: different exposure group",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -8108,8 +8108,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: same-event record naming a different instrument",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -8239,8 +8239,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: paired windows overlapping 80 % (08:03–08:18)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -8370,8 +8370,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: substance not recorded for either sample",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -8501,8 +8501,8 @@
    "group": "TR-06",
    "description": "Duplicate refused: different shift reference",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -8634,8 +8634,8 @@
    "group": "TR-06",
    "description": "Paired windows overlapping exactly 90 % (boundary, accepted)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -8766,8 +8766,8 @@
    "group": "TR-06",
    "description": "Same-event record with start and end 1 min apart (boundary, accepted)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -8891,8 +8891,8 @@
    "group": "TR-06",
    "description": "Same-event record with start and end 1 min 1 s apart (refused)",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -9019,8 +9019,8 @@
    "group": "TR-06",
    "description": "The coverage route: a technical reviewer judges the remaining coverage adequate for PM",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -9142,8 +9142,8 @@
    "group": "TR-06",
    "description": "Unsupported category text",
    "calc": "stel_15",
-   "methodVersion": "1.3.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "stel_15",
     "samples": [
@@ -9266,12 +9266,411 @@
    "derivation": "Only the two documented categories are supported."
   },
   {
+   "id": "TR-06w",
+   "group": "TR-06",
+   "description": "R5-F1: paired sampler whose result cannot be calculated (mass result on a concentration method; 1500 µg/30 L would be 50 mg/m³)",
+   "calc": "stel_15",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "AM",
+      "sampleCode": "AM",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T08:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": null,
+      "flowPostLpm": null,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "concentration",
+       "flowDriftTolerancePct": null,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 0.1,
+       "unit": "mg/m3",
+       "qualifier": "=",
+       "lod": null,
+       "loq": null
+      },
+      "substanceRef": "SUB",
+      "groupRef": "G1",
+      "tasksPerformed": "Main task",
+      "pairRef": "PAIR-1"
+     },
+     {
+      "sampleId": "AM2",
+      "sampleCode": "AM2",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T08:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": null,
+      "flowPostLpm": null,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "concentration",
+       "flowDriftTolerancePct": null,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": 1500,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": null,
+       "loq": null
+      },
+      "substanceRef": "SUB",
+      "groupRef": "G1",
+      "tasksPerformed": "Main task",
+      "pairRef": "PAIR-1",
+      "evidenceDisposition": {
+       "kind": "duplicate",
+       "reason": "Recorded as a duplicate of the morning sample",
+       "consequence": "The morning sample represents this worker and shift",
+       "authorisedBy": "Practitioner P",
+       "relatedSampleCode": "AM",
+       "duplicateType": "paired_colocated"
+      }
+     }
+    ],
+    "parameters": {
+     "shortSampleAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 1,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "indeterminate",
+    "evidenceAdequacy": "unresolved_evidence",
+    "unresolved": [
+     "AM2"
+    ],
+    "unresolvedWhy": {
+     "AM2": "no calculable result"
+    },
+    "setAside": []
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "An unknown result cannot be compared, so it cannot be set aside as a duplicate.",
+   "changeFrom_1_5_0": "1.5.0 skipped the conflict check when a result was missing and set the sample aside (below_benchmark / adequate)."
+  },
+  {
+   "id": "TR-06x",
+   "group": "TR-06",
+   "description": "R5-F1: paired sampler with the post-sampling flow missing",
+   "calc": "stel_15",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "AM",
+      "sampleCode": "AM",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T08:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": null,
+      "flowPostLpm": null,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "concentration",
+       "flowDriftTolerancePct": null,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 0.1,
+       "unit": "mg/m3",
+       "qualifier": "=",
+       "lod": null,
+       "loq": null
+      },
+      "substanceRef": "SUB",
+      "groupRef": "G1",
+      "tasksPerformed": "Main task",
+      "pairRef": "PAIR-1"
+     },
+     {
+      "sampleId": "AM2",
+      "sampleCode": "AM2",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T08:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": null,
+      "flowPostLpm": null,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": 1500,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      },
+      "substanceRef": "SUB",
+      "groupRef": "G1",
+      "tasksPerformed": "Main task",
+      "pairRef": "PAIR-1",
+      "evidenceDisposition": {
+       "kind": "duplicate",
+       "reason": "Recorded as a duplicate of the morning sample",
+       "consequence": "The morning sample represents this worker and shift",
+       "authorisedBy": "Practitioner P",
+       "relatedSampleCode": "AM",
+       "duplicateType": "paired_colocated"
+      }
+     }
+    ],
+    "parameters": {
+     "shortSampleAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 1,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "evidenceAdequacy": "unresolved_evidence",
+    "unresolved": [
+     "AM2"
+    ],
+    "unresolvedWhy": {
+     "AM2": "no calculable result"
+    }
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "No air volume, no result, no duplicate.",
+   "changeFrom_1_5_0": "1.5.0: set aside."
+  },
+  {
+   "id": "TR-06y",
+   "group": "TR-06",
+   "description": "R5-F3: supported pair, but the set-aside sample was voided after the disposition",
+   "calc": "stel_15",
+   "methodVersion": "1.3.1",
+   "engineVersion": "1.5.1",
+   "input": {
+    "calc": "stel_15",
+    "samples": [
+     {
+      "sampleId": "AM",
+      "sampleCode": "AM",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T08:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": null,
+      "flowPostLpm": null,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "concentration",
+       "flowDriftTolerancePct": null,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 0.1,
+       "unit": "mg/m3",
+       "qualifier": "=",
+       "lod": null,
+       "loq": null
+      },
+      "substanceRef": "SUB",
+      "groupRef": "G1",
+      "tasksPerformed": "Main task",
+      "pairRef": "PAIR-1"
+     },
+     {
+      "sampleId": "AM2",
+      "sampleCode": "AM2",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T08:15:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": null,
+      "flowPostLpm": null,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "concentration",
+       "flowDriftTolerancePct": null,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": 0.08,
+       "unit": "mg/m3",
+       "qualifier": "=",
+       "lod": null,
+       "loq": null
+      },
+      "substanceRef": "SUB",
+      "groupRef": "G1",
+      "tasksPerformed": "Main task",
+      "pairRef": "PAIR-1",
+      "voided": true,
+      "evidenceDisposition": {
+       "kind": "duplicate",
+       "reason": "Recorded as a duplicate of the morning sample",
+       "consequence": "The morning sample represents this worker and shift",
+       "authorisedBy": "Practitioner P",
+       "relatedSampleCode": "AM",
+       "duplicateType": "paired_colocated"
+      }
+     }
+    ],
+    "parameters": {
+     "shortSampleAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 15,
+     "value": 1,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "evidenceAdequacy": "unresolved_evidence",
+    "unresolved": [
+     "AM2"
+    ],
+    "unresolvedWhy": {
+     "AM2": "void sample"
+    }
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "A void sample cannot be part of a duplicate relationship (as at the service and the database).",
+   "changeFrom_1_5_0": "1.5.0: still set aside at calculation."
+  },
+  {
    "id": "TR-07",
    "group": "TR-07",
    "description": "Review reproduction: detected_below_loq, value 600 µg, LOD 10, LOQ 30, 960 L; 8-h benchmark 0.5",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -9357,8 +9756,8 @@
    "group": "TR-07",
    "description": "Valid estimate 20 µg inside [10, 30]",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -9445,8 +9844,8 @@
    "group": "TR-07",
    "description": "Boundary: estimate 10 µg equals a limit (inclusive)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -9525,8 +9924,8 @@
    "group": "TR-07",
    "description": "Boundary: estimate 30 µg equals a limit (inclusive)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -9605,8 +10004,8 @@
    "group": "TR-07",
    "description": "Estimate 9.999 µg below the LOD",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -9685,8 +10084,8 @@
    "group": "TR-07",
    "description": "Estimate 30.0001 µg above the LOQ",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -9765,8 +10164,8 @@
    "group": "TR-07",
    "description": "LOQ missing",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -9845,8 +10244,8 @@
    "group": "TR-07",
    "description": "LOD equal to LOQ (30, 30)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -9925,8 +10324,8 @@
    "group": "TR-07",
    "description": "LOD above LOQ (40, 30)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -10005,8 +10404,8 @@
    "group": "TR-07",
    "description": "Declared reporting threshold 600 µg is not the LOQ",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -10086,8 +10485,8 @@
    "group": "TR-07",
    "description": "Value declared \"measured\" with qualifier detected_below_loq",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -10167,8 +10566,8 @@
    "group": "TR-07",
    "description": "\"<LOQ\" with the value declared an estimate",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -10248,8 +10647,8 @@
    "group": "TR-07",
    "description": "Laboratory format with the LOQ in the value field, mapped explicitly as a reporting threshold",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -10326,8 +10725,8 @@
    "group": "TR-07",
    "description": "No value (limits only)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -10403,8 +10802,8 @@
    "group": "TR-07",
    "description": "Contradictory record (also excluded by QC) cannot be set aside, even by a reviewer",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -10526,8 +10925,8 @@
    "group": "TR-07",
    "description": "Contradictory record recorded as not replaced: coverage gap",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [
@@ -10643,8 +11042,8 @@
    "group": "TR-07",
    "description": "Estimated 150 µg with the default meaning stated explicitly (unchanged behaviour)",
    "calc": "twa_8h",
-   "methodVersion": "1.4.0",
-   "engineVersion": "1.5.0",
+   "methodVersion": "1.4.1",
+   "engineVersion": "1.5.1",
    "input": {
     "calc": "twa_8h",
     "samples": [

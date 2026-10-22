@@ -2,7 +2,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildWorld, type World } from './fixtures.js';
+import { buildWorld, type World, updateDraftConfirmed } from './fixtures.js';
 import { closePool, getPool, withActor } from '../src/db.js';
 import { runAssessment, sampleConcentration, stel15, twa8h, type SampleInput } from '../src/calc/engine.js';
 import { completeMfa, login, resolveSession } from '../src/auth/session.js';
@@ -72,7 +72,7 @@ describe('C2 void samples', () => {
     await lab.createSubmission(w.a.prac, { laboratory_id: S.lab.id, reference: `RS-${w.tag}`, sample_ids: [id], dispatched_at: '2026-04-02T09:00' });
     await lab.recordResult(w.a.prac, { sampling_event_id: id, substance_id: w.ref.substanceId, value: '10', unit: 'ug', qualifier: '=' });
     const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group1.id, substance_id: w.ref.substanceId, title: 'Void test', assessment_question: 'Does a void sample count?' });
-    await asmt.updateDraft(w.a.prac, revision.id, { sample_ids: [id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480' });
+    await updateDraftConfirmed(w.a.prac, revision.id, { sample_ids: [id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480' });
     await field.voidSamplingEvent(w.a.prac, id, { reason: 'Cassette contaminated' });
     const r = await asmt.calculate(w.a.prac, revision.id);
     expect(r.data_quality_state).toBe('failed');
@@ -241,7 +241,7 @@ describe('STEL through the assessment service', () => {
     await lab.createSubmission(w.a.prac, { laboratory_id: S.lab.id, reference: `STS-${w.tag}`, sample_ids: [id], dispatched_at: '2026-04-02T09:00' });
     await lab.recordResult(w.a.prac, { sampling_event_id: id, substance_id: w.ref.substanceId, value: '60', unit: 'ug', qualifier: '=' });
     const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group1.id, substance_id: w.ref.substanceId, title: 'Peak task', assessment_question: 'Short-term peaks during decanting?' });
-    await asmt.updateDraft(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: [id], benchmark_version_id: stelV });
+    await updateDraftConfirmed(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: [id], benchmark_version_id: stelV });
     const r = await asmt.calculate(w.a.prac, revision.id);
     expect(r.calc_code).toBe('stel_15');
     expect(r.calc_output.shifts[0].result).toEqual({ lower: 2, upper: 2, unit: 'mg/m3' });

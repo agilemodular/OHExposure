@@ -3,7 +3,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildWorld, type World } from './fixtures.js';
+import { buildWorld, type World, updateDraftConfirmed } from './fixtures.js';
 import { closePool, withActor } from '../src/db.js';
 import * as reg from '../src/services/register.js';
 import * as inst from '../src/services/instruments.js';
@@ -125,7 +125,7 @@ describe('pilot gating of calculation methods and reference data', () => {
     const draft = { sample_ids: [S.sample], benchmark_version_id: S.refBv, exposure_minutes_per_shift: '480', unsampled_assumption: 'none',
       interpretation: 'Single sample for the gating test; not representative of the group.', conclusion_category: 'insufficient_evidence', limitations: 'Automated test data only.' };
     S.draft = draft;
-    await asmt.updateDraft(w.a.prac, S.rev, draft);
+    await updateDraftConfirmed(w.a.prac, S.rev, draft);
     const calc = await asmt.calculate(w.a.prac, S.rev);
     expect(calc.calc_output.shifts[0].twa8h.lower).toBeCloseTo(0.1, 6); // 96 µg / 960 L
     await expect(asmt.submitForReview(w.a.prac, S.rev)).rejects.toThrow(/not reviewed by a competent occupational hygienist/);
@@ -157,13 +157,13 @@ describe('pilot gating of calculation methods and reference data', () => {
     // An organisation-entered benchmark, even once verified inside the organisation, is not professional reference data.
     const v = await asmt.createBenchmarkVersion(w.a.prac, { substance_id: S.refSub, jurisdiction: 'ORG', benchmark_type: 'IN-HOUSE', averaging_minutes: '480', value: '1', unit: 'mg/m3', source_title: 'In-house limit', source_version: '1', effective_from: '2020-01-01' });
     await asmt.verifyBenchmarkVersion(w.a.rev, v.id, { status: 'verified', note: 'Checked against the in-house standard' });
-    await asmt.updateDraft(w.a.prac, S.rev, { ...S.draft, benchmark_version_id: v.id });
+    await updateDraftConfirmed(w.a.prac, S.rev, { ...S.draft, benchmark_version_id: v.id });
     await asmt.calculate(w.a.prac, S.rev);
     await expect(asmt.submitForReview(w.a.prac, S.rev)).rejects.toThrow(/Organisation-entered and synthetic benchmarks/);
   });
 
   it('allows and freezes a pilot conclusion with an approved method and a reference benchmark', async () => {
-    await asmt.updateDraft(w.a.prac, S.rev, S.draft);
+    await updateDraftConfirmed(w.a.prac, S.rev, S.draft);
     await asmt.calculate(w.a.prac, S.rev);
     await asmt.submitForReview(w.a.prac, S.rev);
     const ap = await asmt.approve(w.a.rev, S.rev, { approval_scope: 'Pilot gating test scope', approval_limitations: 'Automated test only', confirm_reviewed: 'on' });
@@ -208,7 +208,7 @@ describe('pilot report issue gate', () => {
     const admin = new pg.Client({ connectionString: URL_ }); await admin.connect();
     await admin.query(`update tenants set assurance_level='evaluation' where id=$1`, [w.A.tenant.id]);
     const id = (await asmt.newRevision(w.a.prac, S.asmtId, { change_reason: 'Evaluation-level reassessment for test' })).id;
-    await asmt.updateDraft(w.a.prac, id, S.draft);
+    await updateDraftConfirmed(w.a.prac, id, S.draft);
     await asmt.calculate(w.a.prac, id);
     await asmt.submitForReview(w.a.prac, id);
     const ap = await asmt.approve(w.a.rev, id, { approval_scope: 'Evaluation approval for test', approval_limitations: 'Automated test only', confirm_reviewed: 'on' });

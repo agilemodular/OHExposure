@@ -7,7 +7,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildWorld, type World } from './fixtures.js';
+import { buildWorld, type World, updateDraftConfirmed } from './fixtures.js';
 import { closePool, withActor } from '../src/db.js';
 import * as reg from '../src/services/register.js';
 import * as inst from '../src/services/instruments.js';
@@ -81,7 +81,7 @@ async function buildEvidence() {
 }
 async function inReview(sampleIds: string[]) {
   const { assessment, revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: S.sub, plan_id: S.plan.id, title: `H2 assessment ${randomUUID().slice(0, 4)}`, assessment_question: 'Is exposure adequately controlled?' });
-  await asmt.updateDraft(w.a.prac, revision.id, { ...S.draft, sample_ids: sampleIds });
+  await updateDraftConfirmed(w.a.prac, revision.id, { ...S.draft, sample_ids: sampleIds });
   await asmt.calculate(w.a.prac, revision.id);
   await asmt.submitForReview(w.a.prac, revision.id);
   return { assessmentId: assessment.id, revId: revision.id };
@@ -180,7 +180,7 @@ describe('offline replay after a suspension', () => {
       await lab.recordResult(w.a.prac, { sampling_event_id: r2.server_id, substance_id: S.sub, value: '60', unit: 'ug', qualifier: '=', lod: '5' });
     });
     const { assessment, revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: S.sub, plan_id: S.plan.id, title: 'H2 replay', assessment_question: 'Does replayed evidence enter silently?' });
-    await asmt.updateDraft(w.a.prac, revision.id, { ...S.draft, sample_ids: [S.replayed] });
+    await updateDraftConfirmed(w.a.prac, revision.id, { ...S.draft, sample_ids: [S.replayed] });
     await asmt.calculate(w.a.prac, revision.id);
     await expect(asmt.submitForReview(w.a.prac, revision.id)).rejects.toThrow(/during a suspension and must be reviewed/);
     await expect(field.clearSuspensionReview(w.a.tech, S.replayed, { notes: 'Checked against the device' })).rejects.toThrow(/permission/);
@@ -282,7 +282,7 @@ describe('administrative and professional authority', () => {
     await recordMethodReview(URL_, { ...APPROVE, status: 'withdrawn', evidence: 'H2-WITHDRAWAL', evidenceFile: undefined, scope: undefined });
     // New use blocked: no new pilot conclusion, no further report issue for the withdrawn version.
     const second = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: S.sub, plan_id: S.plan.id, title: 'H2 after withdrawal', assessment_question: 'Is new use blocked after this change?' });
-    await asmt.updateDraft(w.a.prac, second.revision.id, { ...S.draft, sample_ids: [S.samples[0]] });
+    await updateDraftConfirmed(w.a.prac, second.revision.id, { ...S.draft, sample_ids: [S.samples[0]] });
     await asmt.calculate(w.a.prac, second.revision.id);
     await expect(asmt.submitForReview(w.a.prac, second.revision.id)).rejects.toThrow(/withdrawn/);
     await expect(rep.generateReport(w.a.prac, assessmentId, revId)).rejects.toThrow(/since been withdrawn/);
@@ -300,7 +300,7 @@ describe('administrative and professional authority', () => {
     expect((await c.query('select method_status_effective($1,$2) s', ['twa_8h', TWA])).rows[0].s).toBe('expired');
     await c.end();
     const third = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: S.sub, plan_id: S.plan.id, title: 'H2 expired', assessment_question: 'Is new use blocked after this change?' });
-    await asmt.updateDraft(w.a.prac, third.revision.id, { ...S.draft, sample_ids: [S.samples[0]] });
+    await updateDraftConfirmed(w.a.prac, third.revision.id, { ...S.draft, sample_ids: [S.samples[0]] });
     await asmt.calculate(w.a.prac, third.revision.id);
     await expect(asmt.submitForReview(w.a.prac, third.revision.id)).rejects.toThrow(/expired/);
     await recordMethodReview(URL_, NOT_REVIEWED);
@@ -423,7 +423,7 @@ describe('independent review R2 findings', () => {
     await resumeWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'H2 Operator', 'H2-REVAL');
     // While the hold is pending, an assessment using the sample cannot be submitted.
     const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: S.sub, plan_id: S.plan.id, title: 'H2 held update', assessment_question: 'Does a held update block use?' });
-    await asmt.updateDraft(w.a.prac, revision.id, { ...S.draft, sample_ids: [target] });
+    await updateDraftConfirmed(w.a.prac, revision.id, { ...S.draft, sample_ids: [target] });
     await asmt.calculate(w.a.prac, revision.id);
     await expect(asmt.submitForReview(w.a.prac, revision.id)).rejects.toThrow(/during a suspension/);
     // On reconnect it becomes a conflict (sample already analysed); applying the device copy flags the sample.

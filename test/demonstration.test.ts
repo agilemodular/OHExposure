@@ -10,7 +10,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildWorld, type World } from './fixtures.js';
+import { buildWorld, type World, updateDraftConfirmed } from './fixtures.js';
 import { closePool, withActor } from '../src/db.js';
 import * as reg from '../src/services/register.js';
 import * as inst from '../src/services/instruments.js';
@@ -151,12 +151,12 @@ describe('SYNTHETIC DEMONSTRATION: monitoring plan → verification decision, wi
     S.draft = { sample_ids: [S.s1], benchmark_version_id: S.refBv, exposure_minutes_per_shift: '480', unsampled_assumption: 'none',
       interpretation: 'One full-shift personal sample, below the synthetic benchmark; one day only, so the group is not characterised.', conclusion_category: 'insufficient_evidence', limitations: 'Single sample on a single day; synthetic demonstration data.' };
     // Incomplete evidence: include the sample with no finish time and try to conclude "adequately controlled".
-    await asmt.updateDraft(w.a.prac, S.rev, { ...S.draft, sample_ids: [S.s1, S.s2], conclusion_category: 'exposure_adequately_controlled' });
+    await updateDraftConfirmed(w.a.prac, S.rev, { ...S.draft, sample_ids: [S.s1, S.s2], conclusion_category: 'exposure_adequately_controlled' });
     const inc = await asmt.calculate(w.a.prac, S.rev);
     expect(inc.data_quality_state).toBe('incomplete');
     note('Calculation with incomplete evidence', `Data quality ${inc.data_quality_state}; comparison ${inc.benchmark_state}. ${inc.benchmark_note ?? ''}`.trim());
     await refused('Favourable conclusion on incomplete evidence', 'Practitioner', asmt.submitForReview(w.a.prac, S.rev), /cannot be concluded|complete|qualified/);
-    await asmt.updateDraft(w.a.prac, S.rev, S.draft);
+    await updateDraftConfirmed(w.a.prac, S.rev, S.draft);
     const c = await asmt.calculate(w.a.prac, S.rev);
     expect(c.data_quality_state).toBe('complete');
     expect(c.benchmark_state).toBe('below_benchmark');
@@ -176,16 +176,16 @@ describe('SYNTHETIC DEMONSTRATION: monitoring plan → verification decision, wi
     await recordMethodReview(URL_, { method: 'twa_8h', version: TWA, status: 'approved', reviewer: 'Demonstration Hygienist (synthetic)', competence: `${DEMO} — no real competence`, reviewedOn: yesterday, evidence: `${DEMO}-PACK`, evidenceFile: DOC, scope: `${DEMO} only`, recordedBy: 'Demonstration operator' });
     step('Method approval (demonstration)', 'Platform operator', `twa_8h ${TWA} recorded as approved by a synthetic reviewer, with scope and hashed document.`);
     // A method the reviewer has not approved (stel_15) for the same evidence.
-    await asmt.updateDraft(w.a.prac, S.rev, { ...S.draft, calc_code: 'stel_15' });
+    await updateDraftConfirmed(w.a.prac, S.rev, { ...S.draft, calc_code: 'stel_15' });
     await asmt.calculate(w.a.prac, S.rev);
     await refused('Calculation method stel_15 not approved (unsupported method)', 'Practitioner', asmt.submitForReview(w.a.prac, S.rev), /not reviewed|not comparable|averaging period|method/);
     // Missing benchmark approval: an organisation-entered benchmark that nobody has verified.
     const v = await asmt.createBenchmarkVersion(w.a.prac, { substance_id: S.sub, jurisdiction: 'ORG', benchmark_type: 'IN-HOUSE', averaging_minutes: '480', value: '1', unit: 'mg/m3', source_title: 'In-house target (synthetic)', source_version: '1', effective_from: '2020-01-01' });
-    await asmt.updateDraft(w.a.prac, S.rev, { ...S.draft, benchmark_version_id: v.id });
+    await updateDraftConfirmed(w.a.prac, S.rev, { ...S.draft, benchmark_version_id: v.id });
     const nb = await asmt.calculate(w.a.prac, S.rev);
     note('Calculation against an unverified benchmark', `Comparison state: ${nb.benchmark_state}.`);
     await refused('Benchmark without professional approval (missing benchmark approval)', 'Practitioner', asmt.submitForReview(w.a.prac, S.rev), /Organisation-entered and synthetic benchmarks|benchmark/);
-    await asmt.updateDraft(w.a.prac, S.rev, S.draft);
+    await updateDraftConfirmed(w.a.prac, S.rev, S.draft);
     await asmt.calculate(w.a.prac, S.rev);
     await asmt.submitForReview(w.a.prac, S.rev);
     step('Submission for review', 'Practitioner', 'Approved method (demonstration) and professional-reference benchmark (demonstration-only value): submission accepted.');

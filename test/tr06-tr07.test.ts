@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildWorld, type World } from './fixtures.js';
+import { buildWorld, type World, updateDraftConfirmed } from './fixtures.js';
 import { closePool, withActor } from '../src/db.js';
 import * as reg from '../src/services/register.js';
 import * as inst from '../src/services/instruments.js';
@@ -67,16 +67,21 @@ beforeAll(async () => {
   await cap('PN', { ...at, qcFail: true, tasks: null, pump: S.pump2 });              // no pair reference, no tasks
   await cap('PS', { ...at, pair: 'PR-1', qcFail: true, pump: S.pump2 });             // analysed for another substance only
   await cap('SE', { ...at, qcFail: true });                                           // second record of PA's event (same pump/window)
+  await cap('PX', { ...at, pair: 'PR-1', qcFail: true, pump: S.pump2 });             // R5-F1: result not calculable
+  await cap('PV', { ...at, pair: 'PR-1', qcFail: true, pump: S.pump2 });             // R5-F3: voided after its disposition
   await cap('DBL', { start: '2026-03-04T08:00', end: '2026-03-04T16:00', minutes: 480 });
   await cap('DBL2', { start: '2026-03-05T08:00', end: '2026-03-05T16:00' });
   S.lab = await inst.createLaboratory(prac, { name: `T67 lab ${w.tag}` });
-  const all = ['AM', 'PM', 'PA', 'PB', 'PC', 'PW2', 'PT', 'PN', 'PS', 'SE', 'DBL', 'DBL2'].map((k) => S[k]);
+  const all = ['AM', 'PM', 'PA', 'PB', 'PC', 'PW2', 'PT', 'PN', 'PS', 'SE', 'PX', 'PV', 'DBL', 'DBL2'].map((k) => S[k]);
   await lab.createSubmission(prac, { laboratory_id: S.lab.id, reference: `T67SUB-${w.tag}`, sample_ids: all, dispatched_at: '2026-03-06T09:00' });
   const sub = (await lab.listSubmissions(prac)).find((s) => s.reference === `T67SUB-${w.tag}`);
   await lab.receiveSubmission(prac, sub.id, { received_at: '2026-03-06T15:00', received_condition: 'Intact' });
   const res = async (key: string, value: number, substance = w.ref.substanceId) => lab.recordResult(prac, { sampling_event_id: S[key], substance_id: substance, value: String(value), unit: 'ug', qualifier: '=', lod: '0.1', loq: '0.3' });
   for (const [k, v] of [['AM', 3], ['PM', 60], ['PA', 3], ['PB', 2.4], ['PC', 60], ['PW2', 2.4], ['PT', 2.4], ['PN', 2.4], ['SE', 3]] as const) await res(k, v);
   await res('PS', 2.4, S.other.id);
+  await res('PV', 2.4);
+  // 50 mg/m³ entered as a concentration on a mass-on-sample method: not calculable (RESULT_BASIS_MISMATCH).
+  await lab.recordResult(prac, { sampling_event_id: S.PX, substance_id: w.ref.substanceId, value: '50', unit: 'mg/m3', qualifier: '=', lod: '0.1', loq: '0.3' });
   const b = await asmt.createBenchmarkVersion(prac, { substance_id: w.ref.substanceId, jurisdiction: 'ORG', benchmark_type: `STEL-${w.tag}`, averaging_minutes: '15', value: '1', unit: 'mg/m3', source_title: 'Synthetic 15-minute benchmark', source_version: '1', effective_from: '2020-01-01' });
   await asmt.verifyBenchmarkVersion(w.a.rev, b.id, { status: 'verified', note: 'Synthetic test benchmark verified' });
   S.bm15 = b.id;
@@ -85,7 +90,7 @@ afterAll(async () => { await closePool(); });
 
 const stelRevision = async (keys: string[]) => {
   const { assessment, revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: w.ref.substanceId, plan_id: S.plan.id, title: `T67 ${keys.join(' ')}`, assessment_question: 'Is short-term exposure adequately controlled?' });
-  await asmt.updateDraft(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: keys.map((k) => S[k]), benchmark_version_id: S.bm15 });
+  await updateDraftConfirmed(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: keys.map((k) => S[k]), benchmark_version_id: S.bm15 });
   return { assessmentId: assessment.id, revId: revision.id };
 };
 const dup = (sample: string, related: string, duplicate_type?: string) => ({ sample_id: S[sample], kind: 'duplicate', related_sample_id: S[related], duplicate_type, ...why });
@@ -198,7 +203,7 @@ describe('TR-07 contradictory detected-below-LOQ inputs (entry, amendment, impor
     await c.end();
     expect(revs).toEqual([{ revision: 1, value: 10, value_meaning: null, lab_qualifier: 'DET<LOQ', amendment_reason: null }, { revision: 2, value: 30, value_meaning: 'reporting_threshold', lab_qualifier: null, amendment_reason: 'Laboratory clarified: the value field holds the LOQ' }]);
     const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: w.ref.substanceId, plan_id: S.plan.id, title: 'T67 DBL', assessment_question: 'Is exposure adequately controlled for the group?' });
-    await asmt.updateDraft(w.a.prac, revision.id, { sample_ids: [S.DBL], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none' });
+    await updateDraftConfirmed(w.a.prac, revision.id, { sample_ids: [S.DBL], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none' });
     const s = (await asmt.calculate(w.a.prac, revision.id)).calc_output.samples[0];
     expect(s.concentration.lower).toBeCloseTo(10 / 1000 / 0.96, 12);
     expect(s.concentration.upper).toBeCloseTo(30 / 1000 / 0.96, 12);
@@ -255,7 +260,7 @@ describe('TR-07 contradictory detected-below-LOQ inputs (entry, amendment, impor
     await c.query(`alter table lab_result_revisions add constraint lab_result_value_meaning_valid ${def.replace(/ NOT VALID$/, '')} not valid`);
     await c.query('commit');
     const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: w.ref.substanceId, plan_id: S.plan.id, title: 'T67 historical', assessment_question: 'Is exposure adequately controlled for the group?' });
-    await asmt.updateDraft(w.a.prac, revision.id, { sample_ids: [ok.server_id, r.server_id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none' });
+    await updateDraftConfirmed(w.a.prac, revision.id, { sample_ids: [ok.server_id, r.server_id], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none' });
     const out = (await asmt.calculate(w.a.prac, revision.id)).calc_output;
     expect(out.benchmarkState).toBe('indeterminate');
     expect(out.samples.find((s: any) => s.sampleCode === `T67-H-${w.tag}`).flags.map((f: any) => f.code)).toContain('INPUT_INVALID_DBL_VALUE');
@@ -269,5 +274,76 @@ describe('TR-07 contradictory detected-below-LOQ inputs (entry, amendment, impor
     expect(kept).toEqual([{ revision: 1, value: 20 }, { revision: 2, value: 600 }, { revision: 3, value: 20 }]);
     const fixed = (await asmt.calculate(w.a.prac, revision.id)).calc_output;
     expect(fixed.samples.find((s: any) => s.sampleCode === `T67-H-${w.tag}`).concentration).toMatchObject({ unit: 'mg/m3' });
+  });
+});
+
+describe('R5 re-check fixes (engine 1.5.1)', () => {
+  it('F1: a paired sampler without a calculable result cannot be set aside as a duplicate', async () => {
+    const { revId } = await stelRevision(['PA', 'PX']);
+    await expect(asmt.recordEvidenceDisposition(w.a.prac, revId, dup('PX', 'PA', 'paired_colocated'))).rejects.toThrow(/no calculable result/);
+    const out = (await asmt.calculate(w.a.prac, revId)).calc_output;
+    expect([out.benchmarkState, out.evidenceAdequacy]).toEqual(['indeterminate', 'unresolved_evidence']);
+  });
+
+  it('F2: a practitioner removing samples from the list is a request; the samples stay in the evidence until a reviewer confirms', async () => {
+    const { assessment, revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: w.ref.substanceId, plan_id: S.plan.id, title: 'T67 F2', assessment_question: 'Is short-term exposure adequately controlled?' });
+    await updateDraftConfirmed(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: [S.AM, S.PM], benchmark_version_id: S.bm15 });
+    await expect(asmt.updateDraft(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: [S.AM], benchmark_version_id: S.bm15 })).rejects.toThrow(/Give a reason/);
+    await asmt.updateDraft(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: [S.AM], benchmark_version_id: S.bm15, removal_reason: 'Afternoon sample not needed for this question' });
+    const out = (await asmt.calculate(w.a.prac, revision.id)).calc_output;
+    expect(out.samples.map((x: any) => x.sampleCode)).toContain(S.PM_code); // still in the evidence
+    expect([out.benchmarkState, out.evidenceAdequacy]).toEqual(['indeterminate', 'unresolved_evidence']);
+    // Only a technical reviewer can confirm, in the service and in the database.
+    await expect(asmt.confirmSampleRemoval(w.a.prac, revision.id, { sample_id: S.PM, reason: 'Practitioner tries to confirm' })).rejects.toThrow(/technical reviewer/);
+    await expect(withActor(w.a.prac, (tx) => tx.query(`insert into assessment_sample_removals (tenant_id,client_id,revision_id,sampling_event_id,action,reason,recorded_by) select tenant_id, client_id, id, $2, 'confirmed', 'Direct write attempt', $3 from assessment_revisions where id=$1`, [revision.id, S.PM, w.a.prac.userId]))).rejects.toThrow(/technical reviewer/);
+    const d = await asmt.assessmentDetail(w.a.prac, assessment.id);
+    expect(d.removals.filter((x: any) => x.status === 'pending_reviewer_confirmation')).toEqual([expect.objectContaining({ sampleCode: S.PM_code, status: 'pending_reviewer_confirmation', reason: 'Afternoon sample not needed for this question' })]);
+    let html = (await rep.getReport(w.a.prac, (await rep.generateReport(w.a.prac, assessment.id, revision.id)).id)).content_html;
+    expect(html).toMatch(/removal requested but not confirmed by a technical reviewer/);
+    await asmt.confirmSampleRemoval(w.a.rev, revision.id, { sample_id: S.PM, reason: 'Reviewer: afternoon task is a different activity, outside this question' });
+    const after = (await asmt.calculate(w.a.prac, revision.id)).calc_output;
+    expect(after.samples.map((x: any) => x.sampleCode)).not.toContain(S.PM_code);
+    html = (await rep.getReport(w.a.prac, (await rep.generateReport(w.a.prac, assessment.id, revision.id)).id)).content_html;
+    expect(html).toMatch(/removal confirmed by technical_reviewer/);
+    await expect(withActor(w.a.prac, (tx) => tx.query('update assessment_sample_removals set reason=$2 where revision_id=$1', [revision.id, 'changed later']))).rejects.toThrow(/append-only|permission/);
+  });
+
+  it('F3: a duplicate stops applying when the set-aside sample is voided afterwards', async () => {
+    const { revId } = await stelRevision(['PA', 'PV']);
+    await asmt.recordEvidenceDisposition(w.a.prac, revId, dup('PV', 'PA', 'paired_colocated'));
+    expect((await asmt.calculate(w.a.prac, revId)).calc_output.evidenceAdequacy).toBe('adequate');
+    await field.voidSamplingEvent(w.a.prac, S.PV, { reason: 'Filter found damaged on re-inspection (synthetic test)' });
+    const out = (await asmt.calculate(w.a.prac, revId)).calc_output;
+    expect(out.evidenceAdequacy).toBe('unresolved_evidence');
+    expect(out.unresolvedEvidence[0].why).toMatch(/void sample/);
+  });
+
+  it('F4, F5: the database refuses non-finite laboratory values and a related sample on a non-duplicate disposition', async () => {
+    const c = new pg.Client({ connectionString: URL_ }); await c.connect();
+    const rid = (await c.query('select id, tenant_id, client_id from lab_results where sampling_event_id=$1', [S.AM])).rows[0];
+    await expect(c.query(`insert into lab_result_revisions (tenant_id,client_id,result_id,revision,value,unit,qualifier,lod,loq,amendment_reason) values ($1,$2,$3,98,600,'ug','detected_below_loq',10,'Infinity','test')`, [rid.tenant_id, rid.client_id, rid.id])).rejects.toThrow(/lab_result_values_finite/);
+    await expect(c.query(`insert into lab_result_revisions (tenant_id,client_id,result_id,revision,value,unit,qualifier,amendment_reason) values ($1,$2,$3,98,'NaN','ug','=','test')`, [rid.tenant_id, rid.client_id, rid.id])).rejects.toThrow(/lab_result_values_finite/);
+    await c.end();
+    const { revId } = await stelRevision(['AM', 'PM']);
+    await expect(withActor(w.a.prac, (tx) => tx.query(`insert into assessment_evidence_dispositions (tenant_id,client_id,revision_id,sampling_event_id,kind,reason,consequence,related_sampling_event_id,recorded_by)
+      select tenant_id, client_id, id, $2, 'not_replaced', 'Direct write attempt here', 'Direct write attempt here', $3, $4 from assessment_revisions where id=$1`, [revId, S.PM, S.AM, w.a.prac.userId]))).rejects.toThrow(/evidence_disposition_related_only_duplicate/);
+  });
+
+  it('F6: the CSV import rejects hexadecimal and other non-decimal numbers instead of reinterpreting them', async () => {
+    const b = await lab.stageImport(w.a.prac, { filename: 'hex.csv', laboratory_id: S.lab.id, csv: `sample_code,analyte,value,unit,qualifier,lod,loq,amendment_reason\n${S.DBL2_code},${AN},0x1E,ug,=,10,30,re-issue\n${S.DBL2_code},${AN},Infinity,ug,=,10,30,re-issue\n` });
+    const rows = (await lab.importDetail(w.a.prac, b.id)).rows;
+    expect(rows[0].errors.join(' ')).toMatch(/"0x1E" is not a number/);
+    expect(rows[1].errors.join(' ')).toMatch(/"Infinity" is not a number/);
+  });
+
+  it('F7: the audit event keeps the relationship evidence and the retained result', async () => {
+    const { revId } = await stelRevision(['PA', 'SE']);
+    await asmt.recordEvidenceDisposition(w.a.prac, revId, dup('SE', 'PA', 'same_event_record'));
+    const c = new pg.Client({ connectionString: URL_ }); await c.connect();
+    const a = (await c.query(`select detail from audit_events where action='assessment.evidence_disposition' and entity_id=$1 order by id desc limit 1`, [revId])).rows[0].detail;
+    await c.end();
+    expect(a.relationship.setAside).toMatchObject({ sampleCode: S.SE_code, instrument: S.pump.asset_tag, tasks: 'Main task', window: ['2026-03-03T08:00:00.000Z', '2026-03-03T08:15:00.000Z'] });
+    expect(a.relationship.retained).toMatchObject({ sampleCode: S.PA_code, instrument: S.pump.asset_tag, pairRef: 'PR-1' });
+    expect(a.related_interval).toMatchObject({ unit: 'mg/m3' });
   });
 });

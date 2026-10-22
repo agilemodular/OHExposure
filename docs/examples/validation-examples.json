@@ -1,16 +1,16 @@
 {
-  "generated": "2026-10-22T12:55:01.478Z",
-  "engine": "1.5.0",
+  "generated": "2026-10-22T13:31:02.800Z",
+  "engine": "1.5.1",
   "calculations": {
     "twa_8h": {
       "code": "twa_8h",
-      "version": "1.4.0",
+      "version": "1.4.1",
       "averagingMinutes": 480,
       "label": "8-hour time-weighted average"
     },
     "stel_15": {
       "code": "stel_15",
-      "version": "1.3.0",
+      "version": "1.3.1",
       "averagingMinutes": 15,
       "label": "15-minute short-term exposure"
     }

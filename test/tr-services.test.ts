@@ -3,7 +3,7 @@
 import { randomUUID, createHash } from 'node:crypto';
 import pg from 'pg';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { buildWorld, type World } from './fixtures.js';
+import { buildWorld, type World, updateDraftConfirmed } from './fixtures.js';
 import { closePool, withActor } from '../src/db.js';
 import * as reg from '../src/services/register.js';
 import * as inst from '../src/services/instruments.js';
@@ -93,7 +93,7 @@ describe('TR-05 acceptance dispositions', () => {
   it('a failed flow criterion excludes the sample until a technical reviewer accepts it with evidence and scope', async () => {
     const { assessment, revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: w.ref.substanceId, plan_id: S.plan.id, title: 'TR assessment', assessment_question: 'Is exposure adequately controlled for the TR group?' });
     S.as = assessment; S.rev = revision.id;
-    await asmt.updateDraft(w.a.prac, S.rev, { sample_ids: [S.s1, S.s2], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none' });
+    await updateDraftConfirmed(w.a.prac, S.rev, { sample_ids: [S.s1, S.s2], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none' });
     const c1 = await asmt.calculate(w.a.prac, S.rev);
     const s2 = c1.calc_output.samples.find((s: any) => s.sampleCode === S.codes[1]);
     expect(s2.included).toBe(false);
@@ -140,7 +140,7 @@ describe('TR-02 evidence dispositions', () => {
 
 describe('report consistency (section 8 of the brief)', () => {
   it('flags narrative contradictions, separates usage indicators and states when no actions are linked', async () => {
-    await asmt.updateDraft(w.a.prac, S.rev, { sample_ids: [S.s1, S.s2], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none',
+    await updateDraftConfirmed(w.a.prac, S.rev, { sample_ids: [S.s1, S.s2], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none',
       interpretation: 'Three workers were sampled over two days; results are roughly half the benchmark.', conclusion_category: 'improvement_required', limitations: 'Regression test data only.' });
     await asmt.recordEvidenceDisposition(w.a.prac, S.rev, { sample_id: S.s2, kind: 'not_replaced', reason: 'Recorded for the regression test', consequence: 'Worker 2 remains unassessed for this period' });
     const r = await asmt.calculate(w.a.prac, S.rev);
@@ -202,7 +202,7 @@ describe('R4 re-check fixes', () => {
     expect(narrativeChecks('Exposure was about 60 % of the WEL.', f).join(' ')).toMatch(/over range/);
   });
   it('an approved revision is unchanged by a later revision calculated with the current versions', async () => {
-    await asmt.updateDraft(w.a.prac, S.rev, { sample_ids: [S.s1, S.s2], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none',
+    await updateDraftConfirmed(w.a.prac, S.rev, { sample_ids: [S.s1, S.s2], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none',
       interpretation: 'Two workers were sampled on one day; one worker remains unassessed (flow failure).', conclusion_category: 'insufficient_evidence', limitations: 'Regression test data only.' });
     await asmt.recordEvidenceDisposition(w.a.prac, S.rev, { sample_id: S.s2, kind: 'not_replaced', reason: 'Recorded for the regression test', consequence: 'Worker 2 remains unassessed for this period' });
     await asmt.calculate(w.a.prac, S.rev);

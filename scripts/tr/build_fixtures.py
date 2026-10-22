@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds test/fixtures/worked-examples.fixtures.json: structured regression fixtures for engine 1.5.0.
+"""Builds test/fixtures/worked-examples.fixtures.json: structured regression fixtures for engine 1.5.1.
 
 INDEPENDENCE: expected numeric values are derived here, in Python, from the documented formulas (EH40/2005 4th ed.
 2020, Schedule paras 2 and 8 and para 68; the calculation specification), not by calling the TypeScript engine under
@@ -13,7 +13,7 @@ from datetime import datetime
 
 MOLAR_VOLUME = 24.05526  # L/mol, EH40 para 68 (20 degC, 1 atm)
 REL_TOL = 1e-9           # numeric comparison tolerance used by the fixtures test
-ENGINE = {'engine': '1.5.0', 'twa_8h': '1.4.0', 'stel_15': '1.3.0'}
+ENGINE = {'engine': '1.5.1', 'twa_8h': '1.4.1', 'stel_15': '1.3.1'}
 
 METHOD = {'code': 'M', 'version': '1', 'resultBasis': 'mass_on_sample', 'flowDriftTolerancePct': 5, 'minVolumeL': None, 'suitableForFormalAssessment': True}
 INST = {'assetTag': 'P1', 'screeningOnly': False, 'calibrationValidAtSampling': True}
@@ -109,13 +109,14 @@ def cmp_state(lo, hi, b):
 cases = []
 
 
-def case(id, group, description, calc, samples, parameters, benchmark, expect, derivation, change=None, mw=None, extra=None, change14=None):
+def case(id, group, description, calc, samples, parameters, benchmark, expect, derivation, change=None, mw=None, extra=None, change14=None, change15=None):
     c = {'id': id, 'group': group, 'description': description, 'calc': calc, 'methodVersion': ENGINE[calc], 'engineVersion': ENGINE['engine'],
          'input': {'calc': calc, 'samples': samples, 'parameters': parameters, 'benchmark': benchmark, 'molecularWeight': mw},
          'expected': expect, 'tolerance': {'relative': 1e-9, 'note': 'Numeric expectations from an independent Python calculation; double precision, no rounding.'},
          'derivation': derivation}
     if change: c['changeFrom_1_3_1'] = change
     if change14: c['changeFrom_1_4_0'] = change14
+    if change15: c['changeFrom_1_5_0'] = change15
     if extra: c.update(extra)
     cases.append(c)
 
@@ -424,6 +425,18 @@ case('TR-06u', 'TR-06', 'The coverage route: a technical reviewer judges the rem
 case('TR-06v', 'TR-06', 'Unsupported category text', 'stel_15', [AMc, {**PMc, 'evidenceDisposition': dd('AM', 'adequate_coverage')}], STEL15, bm(1, 15),
      {'evidenceAdequacy': 'unresolved_evidence', 'unresolvedWhy': {'PM': 'is not supported'}}, 'Only the two documented categories are supported.')
 
+# R5 re-check (engine 1.5.1): the set-aside sample must have a calculable result; a void sample is never a duplicate.
+a, b = pair(0.08, o2={'result': {'revision': 1, 'value': 1500, 'unit': 'ug', 'qualifier': '=', 'lod': None, 'loq': None}})
+case('TR-06w', 'TR-06', 'R5-F1: paired sampler whose result cannot be calculated (mass result on a concentration method; 1500 µg/30 L would be 50 mg/m³)', 'stel_15', [a, b], STEL15, bm(1, 15),
+     {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['AM2'], 'unresolvedWhy': {'AM2': 'no calculable result'}, 'setAside': []},
+     'An unknown result cannot be compared, so it cannot be set aside as a duplicate.', change15='1.5.0 skipped the conflict check when a result was missing and set the sample aside (below_benchmark / adequate).')
+a, b = pair(0.08, o2={'flowPostLpm': None, 'method': copy.deepcopy(METHOD), 'result': res(1500)})
+case('TR-06x', 'TR-06', 'R5-F1: paired sampler with the post-sampling flow missing', 'stel_15', [a, b], STEL15, bm(1, 15),
+     {'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['AM2'], 'unresolvedWhy': {'AM2': 'no calculable result'}}, 'No air volume, no result, no duplicate.', change15='1.5.0: set aside.')
+a, b = pair(0.08, o2={'voided': True})
+case('TR-06y', 'TR-06', 'R5-F3: supported pair, but the set-aside sample was voided after the disposition', 'stel_15', [a, b], STEL15, bm(1, 15),
+     {'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['AM2'], 'unresolvedWhy': {'AM2': 'void sample'}}, 'A void sample cannot be part of a duplicate relationship (as at the service and the database).', change15='1.5.0: still set aside at calculation.')
+
 # ── TR-07 contradictory detected_below_loq (independent review of 9b87c17) ──────────────────────────────────────
 # Value-field meaning (specification §0.7): detected_below_loq → an estimate in [LOD, LOQ] (both inclusive), or, when
 # declared as a reporting threshold, equal to the LOQ. Interval is always [LOD, LOQ]. Contradictory → no numeric result.
@@ -466,7 +479,7 @@ case('TR-07o', 'TR-07', 'Contradictory record recorded as not replaced: coverage
 es = sample(result={**res(150, 'estimated'), 'valueMeaning': 'estimate'})
 case('TR-07p', 'TR-07', 'Estimated 150 µg with the default meaning stated explicitly (unchanged behaviour)', 'twa_8h', [es], P, bm(0.5), {'results': [{'subject': 'W1', **twa([es], 480), 'comparison': 'below_benchmark'}], 'flagsInclude': ['ESTIMATED']}, '0.150/0.960 = 0.15625 mg/m³.')
 
-out = {'description': 'Structured regression fixtures for engine 1.5.0. Expected values are independent of the engine (Python oracle + hand-written statuses).',
+out = {'description': 'Structured regression fixtures for engine 1.5.1. Expected values are independent of the engine (Python oracle + hand-written statuses).',
        'engine': ENGINE, 'molarVolumeLPerMol': MOLAR_VOLUME, 'comparisonRelativeTolerance': REL_TOL, 'generatedBy': 'scripts/tr/build_fixtures.py', 'cases': cases}
 path = os.path.join(os.path.dirname(__file__), '..', '..', 'test', 'fixtures', 'worked-examples.fixtures.json')
 os.makedirs(os.path.dirname(path), exist_ok=True)
