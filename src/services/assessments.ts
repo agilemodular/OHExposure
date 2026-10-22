@@ -54,30 +54,41 @@ type Removal = { sampleId: string; sampleCode: string; status: 'pending_reviewer
 type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any; exposureRecords: ExposureRecord[]; molecularWeight?: number | null; removals?: Removal[] };
 
 /**
- * R5-F2 (engine 1.5.1): samples removed from a draft's sample list. A removal is a scope judgement: a practitioner's
- * removal is a request and the sample stays in the evidence until a technical reviewer confirms it.
+ * TR-08: the ONE resolver of a revision's effective evidence set, shared with the database (`assessment_effective_sample_ids`,
+ * migration 030, also used by the approval trigger):
+ *   effective = selected samples ∪ samples whose latest removal request has no later reviewer confirmation.
+ * Deduplicated; deterministic order (selected in stored order, then pending removals by id); removal rows of the
+ * revision's own tenant and client only; a re-added sample is simply selected; an earlier confirmation never authorises a
+ * later request. Call it inside the transaction that relies on it, after locking the revision row (every writer of
+ * sample_ids and removals locks that row first).
  */
-async function sampleRemovals(tx: Tx, rev: any): Promise<Removal[]> {
-  const rows = await many(tx, `select x.sampling_event_id, x.action, x.reason, x.recorded_at, u.name, e.sample_code from assessment_sample_removals x join users u on u.id=x.recorded_by join sampling_events e on e.id=x.sampling_event_id
-    where x.revision_id=$1 and not (x.sampling_event_id = any($2::uuid[])) order by x.sampling_event_id, x.seq`, [rev.id, rev.sample_ids ?? []]);
-  const by = new Map<string, any[]>();
-  for (const x of rows) by.set(x.sampling_event_id, [...(by.get(x.sampling_event_id) ?? []), x]);
-  const out: Removal[] = [];
-  for (const [sid, xs] of by) {
-    const lastReq = [...xs].reverse().find((x) => x.action === 'requested');
-    if (!lastReq) continue;
-    const conf = xs.find((x) => x.action === 'confirmed' && x.recorded_at >= lastReq.recorded_at && xs.indexOf(x) > xs.indexOf(lastReq));
-    out.push({ sampleId: sid, sampleCode: lastReq.sample_code, status: conf ? 'confirmed' : 'pending_reviewer_confirmation', reason: lastReq.reason, requestedBy: lastReq.name, requestedAt: lastReq.recorded_at.toISOString(), confirmedBy: conf?.name ?? null, confirmation: conf?.reason ?? null });
-  }
-  return out.sort((a, b) => a.sampleCode.localeCompare(b.sampleCode));
+export async function resolveEvidence(tx: Tx, rev: { id: string; sample_ids: string[] }) {
+  const selected = [...new Set((rev.sample_ids ?? []) as string[])];
+  const row = await one(tx, 'select assessment_effective_sample_ids($1::uuid, $2::uuid[]) eff', [rev.id, selected]);
+  const effective: string[] = row?.eff ?? selected;
+  return { selected, pending: effective.filter((x) => !selected.includes(x)), effective };
 }
 
-async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Snapshot> {
+/**
+ * R5-F2 (engine 1.5.1): samples removed from a draft's sample list, with their state from the shared resolver
+ * (`assessment_removal_state`): pending (still effective evidence) or confirmed by a technical reviewer.
+ */
+async function sampleRemovals(tx: Tx, rev: any): Promise<Removal[]> {
+  const rows = await many(tx, `select s.sampling_event_id, s.state, e.sample_code, q.reason, q.recorded_at, qu.name requested_by, c.reason confirmation, cu.name confirmed_by
+    from assessment_removal_state($1::uuid, $2::uuid[]) s join sampling_events e on e.id=s.sampling_event_id
+    join assessment_sample_removals q on q.revision_id=$1 and q.seq=s.requested_seq join users qu on qu.id=q.recorded_by
+    left join assessment_sample_removals c on c.revision_id=$1 and c.seq=s.confirmed_seq and s.state='confirmed' left join users cu on cu.id=c.recorded_by
+    where s.state in ('pending','confirmed') order by e.sample_code, s.sampling_event_id`, [rev.id, [...new Set((rev.sample_ids ?? []) as string[])]]);
+  return rows.map((x) => ({ sampleId: x.sampling_event_id, sampleCode: x.sample_code, status: x.state === 'confirmed' ? 'confirmed' : 'pending_reviewer_confirmation', reason: x.reason,
+    requestedBy: x.requested_by, requestedAt: x.recorded_at.toISOString(), confirmedBy: x.state === 'confirmed' ? x.confirmed_by : null, confirmation: x.state === 'confirmed' ? x.confirmation : null }));
+}
+
+async function buildSnapshot(tx: Tx, rev: any, substanceId: string, ids?: string[]): Promise<Snapshot> {
   const samples: SampleInput[] = [];
   const refs: Snapshot['refs'] = [];
   const removals = rev.id ? await sampleRemovals(tx, rev) : [];
-  // Removals awaiting a technical reviewer's confirmation do not take effect: those samples stay in the evidence.
-  const effective = [...(rev.sample_ids as string[]), ...removals.filter((x) => x.status === 'pending_reviewer_confirmation').map((x) => x.sampleId)];
+  // TR-08: the effective evidence set from the shared resolver (removals awaiting confirmation stay in the evidence).
+  const effective = ids ?? (await resolveEvidence(tx, rev)).effective;
   for (const sid of effective) {
     const e = await one(tx, `select e.*, w.ref_code from sampling_events e left join workers w on w.id=e.worker_id where e.id=$1`, [sid]);
     if (!e) throw notFound('Sample in assessment');
@@ -275,8 +286,8 @@ export async function priorDispositionReview(tx: Tx, rev: any) {
     from assessment_evidence_dispositions d join users u on u.id=d.recorded_by join sampling_events s on s.id=d.sampling_event_id left join sampling_events rs on rs.id=d.related_sampling_event_id
     where d.revision_id=$1 order by d.sampling_event_id, d.seq desc`, [prev.id]);
   if (!rows.length) return { revision: prev.revision, items: [] };
-  const ids = [...new Set([...(rev.sample_ids ?? []), ...prev.sample_ids])];
-  const snap = await buildSnapshot(tx, { ...rev, sample_ids: ids }, prev.substance_id);
+  const ids = [...new Set([...(await resolveEvidence(tx, rev)).effective, ...(await resolveEvidence(tx, prev)).effective])];
+  const snap = await buildSnapshot(tx, rev, prev.substance_id, ids);
   const pick = (id: string | null) => { const i = snap.samples.findIndex((x) => x.sampleId === id); return i < 0 ? undefined : { input: snap.samples[i], output: sampleConcentration(snap.samples[i]) }; };
   const items = rows.map((d) => {
     const self = pick(d.sampling_event_id);
@@ -326,19 +337,27 @@ export async function calculate(a: Actor, revId: string) {
   });
 }
 
+/**
+ * Freshness and safeguards for submission and approval, over the EFFECTIVE evidence set (TR-08). The caller holds the
+ * revision row FOR UPDATE, so membership cannot change (updateDraft and removal confirmation lock the same row).
+ * Locks are taken in a fixed order — sampling events by id, then instruments by id, then the benchmark version — and
+ * held to the end of the transaction, so a laboratory amendment, QC check or disposition, void, held-record placement
+ * (FOR NO KEY UPDATE on the sample) or calibration change (FOR UPDATE on the instrument) either commits before this check
+ * (and changes the hash) or waits until the approval has committed.
+ */
 async function assertCurrent(tx: Tx, r: any) {
   if (!r.calc_output || !r.inputs_hash) throw invalid('Run the calculation first');
-  // Share-lock the evidence so that no result amendment, QC disposition or void can commit between this check and the
-  // end of the transaction (writers take FOR UPDATE on the same sampling-event rows).
-  await tx.query('select id from sampling_events where id = any($1) order by id for share', [r.sample_ids ?? []]);
-  // Calibration evidence and the benchmark version also feed the calculation: lock them against concurrent change.
-  await tx.query('select i.id from instruments i join sampling_events e on e.instrument_id = i.id where e.id = any($1) order by i.id for share of i', [r.sample_ids ?? []]);
+  const ev = await resolveEvidence(tx, r);
+  const ids = [...ev.effective].sort();
+  await tx.query('select id from sampling_events where id = any($1) order by id for share', [ids]);
+  await tx.query('select i.id from instruments i join sampling_events e on e.instrument_id = i.id where e.id = any($1) order by i.id for share of i', [ids]);
   if (r.benchmark_version_id) await tx.query('select id from benchmark_versions where id=$1 for share', [r.benchmark_version_id]);
-  const pending = await one(tx, `select e.sample_code from sampling_events e where e.id = any($1) and ((e.suspension_review_required and e.suspension_reviewed_at is null)
-      or exists (select 1 from field_intake_holds h where h.status in ('held','in_conflict') and (h.server_id = e.id or h.sampling_event_id = e.id))) limit 1`, [r.sample_ids ?? []]);
-  if (pending) throw invalid(`Sample ${pending.sample_code} reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.`);
-  const snap = await buildSnapshot(tx, r, r.substance_id);
+  const pending = await one(tx, `select e.id, e.sample_code from sampling_events e where e.id = any($1) and ((e.suspension_review_required and e.suspension_reviewed_at is null)
+      or exists (select 1 from field_intake_holds h where h.status in ('held','in_conflict') and (h.server_id = e.id or h.sampling_event_id = e.id))) order by e.sample_code limit 1`, [ids]);
+  if (pending) throw invalid(`Sample ${pending.sample_code}${ev.pending.includes(pending.id) ? ' (removal requested but not confirmed, so it is still part of the evidence)' : ''} reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.`);
+  const snap = await buildSnapshot(tx, r, r.substance_id, ev.effective);
   if (hashOf(snap, r.calc_code) !== r.inputs_hash) throw conflict('Underlying evidence has changed since the calculation was run (e.g. an amended laboratory result or QC disposition). Recalculate before continuing.');
+  return ev;
 }
 
 function checkConclusion(r: any) {
@@ -388,10 +407,11 @@ export async function approve(a: Actor, revId: string, input: unknown) {
     if (r.status !== 'in_review') throw invalid('Only revisions in review can be approved');
     await assertWorkflowActive(tx, 'assessment_approval');
     if (r.submitted_by === a.userId || r.created_by === a.userId) throw forbidden('An assessment must be approved by someone other than its author or submitter');
-    await assertCurrent(tx, r);
+    const ev = await assertCurrent(tx, r);
     checkConclusion(r);
-    const ownDisposition = await one(tx, `select 1 from sample_qc_checks where sampling_event_id = any($1) and disposition_by=$2 limit 1`, [r.sample_ids, a.userId]);
-    if (ownDisposition) throw forbidden('You recorded a QC disposition for a sample in this assessment, so another reviewer must approve it');
+    // TR-08: independence over the effective evidence set (also enforced by the approval trigger, migration 030).
+    const ownDisposition = await one(tx, `select e.sample_code from sample_qc_checks q join sampling_events e on e.id=q.sampling_event_id where q.sampling_event_id = any($1) and q.disposition_by=$2 order by e.sample_code limit 1`, [ev.effective, a.userId]);
+    if (ownDisposition) throw forbidden(`You recorded a QC disposition for sample ${ownDisposition.sample_code}${ev.pending.length ? ' (samples awaiting removal confirmation count as evidence)' : ''} in this assessment, so another reviewer must approve it`);
     if (r.calc_output?.issues?.some((f: any) => f.code === 'CALCULATION_PENDING')) throw invalid('Calculation incomplete');
     // Re-checked at approval: the method review status and benchmark provenance are frozen into the approved revision.
     const gate = await assertConclusionAllowed(tx, (r.calc_code ?? 'twa_8h') as CalcCode, r.calc_version, r.benchmark_version_id);
@@ -429,7 +449,7 @@ export async function newRevision(a: Actor, assessmentId: string, input: unknown
     if (['draft', 'in_review'].includes(cur.status)) throw invalid('The current revision is still open; edit it instead');
     const n = as.current_revision + 1;
     // Removals still awaiting a reviewer's confirmation were part of the evidence of that revision; they stay in.
-    const pending = (await sampleRemovals(tx, cur)).filter((x) => x.status === 'pending_reviewer_confirmation').map((x) => x.sampleId);
+    const pending = (await resolveEvidence(tx, cur)).pending;
     const rev = await one(tx, `insert into assessment_revisions (tenant_id,client_id,assessment_id,revision,sample_ids,calc_code,calc_version,parameters,benchmark_version_id,interpretation,conclusion_category,limitations,supersedes_revision_id,change_reason,created_by)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
       [as.tenant_id, as.client_id, assessmentId, n, [...cur.sample_ids, ...pending], cur.calc_code ?? 'twa_8h', calcOf(cur.calc_code).version, cur.parameters, cur.benchmark_version_id, cur.interpretation, cur.conclusion_category, cur.limitations, cur.id, d.change_reason, a.userId]);
@@ -504,7 +524,8 @@ export async function compareRevisions(a: Actor, beforeId: string, afterId: stri
     for (const id of [beforeId, afterId]) {
       const r = await loadRev(tx, id);
       if (!r.inputs_snapshot) throw invalid('Both revisions must be calculated');
-      const evs = await many(tx, 'select tasks_performed, operating_conditions, control_status, sample_type from sampling_events where id = any($1)', [r.sample_ids]);
+      // TR-08: the evidence actually used by the calculation (frozen snapshot), not only the selected list.
+      const evs = await many(tx, 'select tasks_performed, operating_conditions, control_status, sample_type from sampling_events where id = any($1) order by id', [r.inputs_snapshot.samples.map((x: SampleInput) => x.sampleId)]);
       const mins = (r.calc_output?.samples ?? []).map((s: any) => s.sampledMinutes).filter((x: any) => typeof x === 'number');
       sides.push({
         rev: r,
