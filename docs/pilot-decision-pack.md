@@ -12,7 +12,7 @@
 | P4 | Substances | — | Choose the substances (airborne contaminants only) | Pilot organisation, advised by the reviewer | G4 (reference data), P7 | Substance list; completed `docs/templates/reference-data.template.json` |
 | P4a | Reference benchmarks and verification owner | — | Verify a benchmark for each pilot substance; name who verifies | Reviewer (P6) + platform operator | G4; pilot level (database requires a professional reference benchmark) | Rows imported as *professional reference* with reviewer, date, source, permitted use, licence note |
 | P5 | Similar exposure groups | — | Define groups and their rationale (during set-up) | Practitioner; reviewed by the hygienist | Pilot workflow step 1 | Group records with rationale, reviewed |
-| P6 | Reviewing occupational hygienist | — | Appoint a named competent hygienist, independent of development | SHEQ Experts director | G2 → G3, G4, H1-F01 disposition | Appointment letter; competence statement (e.g. chartered status, membership number); independence confirmed |
+| P6 | Reviewing occupational hygienist | — (scope of work for quotation prepared 22 Oct 2026, `docs/procurement/`; not yet issued; response deadline and contact to be inserted) | Appoint a named competent hygienist, independent of development | SHEQ Experts director | G2 → G3, G4, H1-F01 disposition | Appointment letter; competence statement (e.g. chartered status, membership number); independence confirmed; accepted quotation against the scope of work |
 | P7 | Monitoring and analytical methods | — | Confirm sampling and analytical methods and their parameters for each substance | Reviewer (P6) | G4 | Method versions configured and checked against the publications, signed by the reviewer |
 | P8 | Calculation methods and versions requiring approval | Candidates only: `twa_8h` 1.2.1; `stel_15` 1.1.1 if short-term limits apply; unit conversion if ppm limits apply | Approve, approve with conditions, or reject each; disposition H1-F01 | Reviewer (P6) | G3; pilot level (database requires an approved method) | Signed validation pack; approvals recorded with `platform-controls method-review` (scope, expiry, hashed document) |
 | P9 | Laboratory arrangements | — | Choose the laboratory; confirm accreditation and result file format | Pilot lead | Pilot workflow step 3 | Laboratory name, accreditation reference, sample result file tested against the CSV import |
@@ -34,6 +34,7 @@
 - **Online-only pilot configuration** with verification results and proposed G8/G9 scope (`online-only-pilot-configuration.md`).
 - **Synthetic demonstration walkthrough** for reviewers and decision-makers (`docs/examples/demonstration-walkthrough.synthetic.md`); not evidence of field validation.
 - **User guides, training record, and support and incident templates.**
+- **Scope of work for quotation** for the reviewing hygienist (`docs/procurement/Scope-of-Work-Professional-Review.docx`); response deadline and contact still to be inserted before issue.
 
 ## Order of decisions
 

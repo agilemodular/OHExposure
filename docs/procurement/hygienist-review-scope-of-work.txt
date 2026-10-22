@@ -1,0 +1,135 @@
+SHEQ EXPERTS LIMITED
+OCCUPATIONAL HYGIENE & EXPOSURE ASSURANCE — BY ASSURENTRA
+
+Independent Professional Review and Controlled Pilot Support
+Scope of Work for Quotation
+
+PURPOSE
+
+SHEQ Experts Limited seeks a competent occupational hygienist to review the methods and outputs of an occupational exposure assessment platform and support preparation of a controlled pilot.
+
+The platform currently has internal-prototype status. Software testing has been reported, but professional suitability and pilot readiness remain subject to review.
+
+INITIAL SCOPE
+
+Airborne-contaminant personal exposure assessment for one participating organisation and one site.
+
+The pilot organisation, tasks and substances are not yet confirmed. The initial review should distinguish general calculation validation from substance-specific and site-specific work.
+
+The proposed pilot will use online-only capture and run alongside the hygienist’s established assessment process.
+
+REQUIRED SERVICES
+
+1. Initial technical review
+
+Review the supplied validation pack, calculation specifications, worked examples, report outputs and documented limitations.
+
+Assess the candidate calculation versions:
+- Eight-hour time-weighted average: twa_8h 1.2.1.
+- Fifteen-minute short-term exposure: stel_15 1.1.1, where applicable.
+- Unit conversions, where required by the selected methods and benchmarks.
+
+Identify assumptions, restrictions and circumstances in which outputs should not be used.
+
+Review and provide a documented disposition for finding H1-F01. The finding affected both candidate methods (corrected in twa_8h 1.2.1 and stel_15 1.1.1): where no formal result could be calculated, the overall comparison was reported as "not comparable" instead of "indeterminate".
+
+As part of the same disposition, confirm or change the related convention: where every personal sample is excluded, or only indicative results are available, the comparison is currently reported as "not comparable" rather than "indeterminate".
+
+2. Pilot scope and monitoring strategy
+
+Once the participating site is confirmed:
+- Review the proposed processes, tasks and substances.
+- Define or review similar exposure groups and their rationale.
+- Confirm suitable sampling and analytical methods.
+- Identify instrument, calibration and laboratory requirements.
+- Document sampling representativeness and interpretation limitations.
+
+The platform calculates each worker-shift separately. It does not assess whether samples are representative of the group, task variability or day-to-day variation, and it performs no statistical compliance test (for example, approaches under BS EN 689). Representativeness and any statistical assessment remain matters for the reviewer's professional judgement and should be addressed in the monitoring strategy and quotation.
+
+3. Reference-data verification
+
+Verify the proposed benchmarks and method parameters for the selected substances.
+
+Record source, version, units, averaging period, relevant annotations and limitations. Identify any licensing or permitted-use matters requiring resolution.
+
+4. Assessment and reporting review
+
+Review how the platform presents:
+- Measurement quality and incomplete evidence.
+- Non-detect and qualified results.
+- Partial-shift assumptions.
+- Benchmark comparisons.
+- Professional interpretation.
+- Corrective actions.
+- Control-effectiveness verification.
+
+Assess whether users can distinguish measured results, calculated values, assumptions and professional conclusions.
+
+5. Pilot support and reconciliation
+
+Agree a proportionate sample of pilot cases for comparison with the reviewer’s established assessment process.
+
+Investigate discrepancies and record their significance, required correction and verification.
+
+This work involves access to pilot records about workers. The quotation should confirm confidentiality arrangements and the reviewer's proposed data-protection role (for example, processor or independent controller), consistent with the privacy roles to be agreed for the pilot.
+
+Review the evidence supporting control-effectiveness decisions where follow-up monitoring forms part of the pilot.
+
+DELIVERABLES
+
+- Initial review report with findings and priorities.
+- Completed calculation-validation record.
+- H1-F01 disposition.
+- Pilot monitoring and assessment scope.
+- Verified reference-data schedule for selected substances.
+- Reviewed example assessment report.
+- Method decisions: approved, approved with conditions, or rejected.
+- Pilot reconciliation report, if commissioned.
+
+Each approval must be provided as a signed document and must identify the method version, scope, conditions, limitations, reviewer, date of review and a review or expiry date. The platform records an approval only with these details and a copy of the signed document. An approval must not imply approval of unreviewed capabilities or general certification of the platform.
+
+COMPETENCE AND INDEPENDENCE
+
+Please provide:
+- Relevant qualifications and professional memberships.
+- Experience with the proposed exposure-assessment work.
+- Examples of comparable method review or monitoring assignments.
+- Confirmation of independence from the software development.
+- Relevant professional indemnity arrangements.
+- Any conflicts of interest.
+
+QUOTATION STRUCTURE
+
+Please quote separately for:
+
+A. Initial document and calculation review.
+B. Site-specific pilot planning and reference verification.
+C. Fieldwork or site attendance, if required.
+D. Pilot reconciliation and final review.
+
+State assumptions, exclusions, availability, estimated effort, expenses and the information needed to confirm your price.
+
+Laboratory analysis, monitoring equipment and travel should be identified separately where applicable.
+
+DOCUMENTS TO BE SUPPLIED
+
+On appointment, and subject to confidentiality, the reviewer will receive:
+- Professional review handover pack, including the H1-F01 brief.
+- Hygienist review and validation pack, including conventions, worked examples and sign-off record.
+- Calculation and benchmark specifications.
+- Engine outputs for every worked example.
+- Example assessment report (synthetic data).
+- Reference-data workflow and verification template.
+- Online-only pilot configuration.
+
+RESPONSES
+
+Response deadline: [to be inserted]
+Contact: [name, role and email to be inserted]
+Questions about this scope should be sent to the contact above. Answers of general relevance may be shared with all parties invited to quote.
+
+ACCEPTANCE
+
+Completion requires delivery of the agreed review evidence and disposition of findings within the commissioned scope.
+
+Professional method approval is separate from hosting, privacy, security and organisational pilot authorisation. No reviewer is expected to approve matters outside their competence or appointment.
