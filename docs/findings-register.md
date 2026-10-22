@@ -247,3 +247,24 @@ Source: an AI-assisted technical review of the evidence package `OHEA-technical-
 
 **H1-F01 (technical disposition updated).** The roll-up was replaced in 1.4.0 by the decision table in specification §0.8. The H1-F01 rule is retained: when no formal result can be calculated, the comparison is *indeterminate*. Professional disposition is still pending (G3).
 
+### 7.1 Re-check of engine 1.4.0 (R4, 22 Oct 2026, commit `8f601b9`)
+
+R4 was a separate AI review agent with no part in writing the code. It is not a human or external professional review. It worked in its own worktree and database, and the full suite passed (248).
+- **Reproductions:** the before outputs reproduce exactly on `ceec79f` and the after outputs match. Inputs are unchanged.
+- **Fixture independence:** confirmed for the numbers. The builder imports only standard Python modules, regenerates byte-identical output, and six values matched hand checks. Limitation: the oracle follows the same rules as the engine, so it checks the arithmetic, not the design.
+- **Historical integrity:** confirmed. Approved revisions are unchanged, new revisions use the new versions, approvals do not transfer, and the impact script is read-only.
+
+Verdicts: TR-01, TR-02 (see N4), TR-03, TR-04, TR-05, A, D and the report closed; B not fully closed (N3); C closed as specified (see N1). New findings and treatment (fixed in commit after `8f601b9`, with tests; not re-reviewed):
+
+| ID | Finding | Severity | Treatment | Evidence | Status |
+|---|---|---|---|---|---|
+| TR-N1 | "<LOQ" used the LOQ even when the reported value was higher (and "<LOD" mirrored the reverse); 600 µg "<LOQ" with LOQ 30 gave 0–0.031 mg/m³, below 0.5. Existed before 1.4.0 | High | Upper bound = larger of reported value and limit; difference flagged; oracle rule changed the same way independently | Fixture TR-03h (0–0.625, indeterminate) | Fixed (tests); awaiting re-review |
+| TR-N2 | Highest-result summary ignored an over-range formal result (ratio ∞) | Medium | Over-range result reported as the highest with unknown upper bound; percentage claims flagged against it | `tr-services.test.ts` (N2) | Fixed (tests); awaiting re-review |
+| TR-N3 | Task times shorter than the task's recorded minutes made the minutes ignored, so unsampled exposure could vanish | Medium | Recorded minutes bound the total; inconsistency flagged | Fixture B-4 | Fixed (tests); awaiting re-review |
+| TR-N4 | A practitioner could set aside adverse excluded evidence as "duplicate" (any sample) or "outside scope"; set-aside evidence not shown | Medium | Duplicate must be another formal sample of the same worker and shift; outside scope is reviewer-only (service and database, migration 027); set-aside evidence listed in the note, page and report | Fixtures TR-02h, TR-02i; `tr-services.test.ts` (N4) | Fixed (tests); awaiting re-review |
+| TR-N5 | Narrative check false positives ("within 5 %", ranges, "within 28 days") and misses ("the five operators", "0.68 times") | Low | Percent and multiple claims only in benchmark/limit sentences, not after "within", largest per sentence; day counts only after on/over/across/during/for; "the N workers were" added. Documented as heuristic and advisory | Phrase probes; report tests | Fixed; residual: heuristic by nature |
+| TR-N6 | A formal sample in a shift made indicative by another sample showed "not compared" without the reason | Low | Reason stated | Code | Fixed |
+| TR-N7 | Acceptance dispositions are sample-level (also on samples of approved revisions) and did not check the criterion had failed; database checks trust the `app.user_id` set by the application role | Low | Criterion must have failed (service). Sample-level by design: a later disposition changes the evidence hash, so approved revisions are flagged stale, not altered. `app.user_id` trust is the existing application-credential boundary (R2-N9), with the same controls | `tr-services.test.ts` (N7) | Partly fixed; residual accepted with R2-N9 (proposed, §6) |
+| TR-N8 | Documentation gave 76.6064 for E8; correct 76.6069 | Low (documentation) | Corrected | — | Fixed |
+| R4-T | The "approved revision unchanged" test checked only the version | Low (test) | Full-row hash compared before and after a new revision is calculated | `tr-services.test.ts` | Fixed |
+

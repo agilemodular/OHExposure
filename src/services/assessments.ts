@@ -187,7 +187,8 @@ export async function recordEvidenceDisposition(a: Actor, revId: string, input: 
   if (!can(a, 'assess.write') && !can(a, 'assess.approve')) throw forbidden('Only a practitioner or technical reviewer can disposition evidence');
   const d = parse(z.object({ sample_id: uuid, kind: z.enum(['duplicate', 'outside_scope', 'not_replaced', 'remaining_coverage_adequate']), reason: reqStr(10), consequence: reqStr(10), related_sample_id: optUuid }), input);
   if (d.kind === 'duplicate' && !d.related_sample_id) throw invalid('A duplicate must name the valid sample it duplicates');
-  if (d.kind === 'remaining_coverage_adequate' && !can(a, 'assess.approve')) throw forbidden('Only a technical reviewer can accept that the remaining coverage is adequate');
+  if ((d.kind === 'remaining_coverage_adequate' || d.kind === 'outside_scope') && !can(a, 'assess.approve')) throw forbidden('Only a technical reviewer can set evidence aside as outside scope or accept that the remaining coverage is adequate');
+  if (d.related_sample_id && d.related_sample_id === d.sample_id) throw invalid('A sample cannot be a duplicate of itself');
   return withActor(a, async (tx) => {
     const r = await loadRev(tx, revId, true);
     await assertAssessmentNotOnHold(tx, r.assessment_id);

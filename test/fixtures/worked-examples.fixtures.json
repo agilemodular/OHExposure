@@ -1191,7 +1191,7 @@
     "relative": 1e-09,
     "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
    },
-   "derivation": "20 × 92.14 / 24.05526 = 76.6064… mg/m³ (EH40 para 68 molar volume).",
+   "derivation": "20 × 92.14 / 24.05526 = 76.6069… mg/m³ (EH40 para 68 molar volume).",
    "changeFrom_1_3_1": "1.3.1 used 24.0551 rounded from R·T/P (76.6075). 1.4.0 uses the value stated in EH40 para 68 (24.05526) without rounding; relative difference 6.5 × 10⁻⁶."
   },
   {
@@ -3731,6 +3731,247 @@
    "derivation": "Unknown upper bound cannot be ruled out."
   },
   {
+   "id": "TR-02h",
+   "group": "TR-variant",
+   "description": "R4 N4: \"duplicate\" naming a sample of a different worker",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W2",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      },
+      "evidenceDisposition": {
+       "kind": "duplicate",
+       "reason": "Recorded reason for the disposition.",
+       "consequence": "Stated consequence for the assessment scope.",
+       "authorisedBy": "Reviewer R",
+       "relatedSampleCode": "A"
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "indeterminate",
+    "evidenceAdequacy": "unresolved_evidence",
+    "unresolved": [
+     "B"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "A duplicate must cover the same worker and shift."
+  },
+  {
+   "id": "TR-02i",
+   "group": "TR-variant",
+   "description": "R4 N4: \"duplicate\" naming itself",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "A",
+      "sampleCode": "A",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 300,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     },
+     {
+      "sampleId": "B",
+      "sampleCode": "B",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [
+       {
+        "checkType": "flow_check",
+        "outcome": "fail",
+        "disposition": null
+       }
+      ],
+      "result": {
+       "revision": 1,
+       "value": null,
+       "unit": "ug",
+       "qualifier": "<LOD",
+       "lod": 1920,
+       "loq": 5000
+      },
+      "evidenceDisposition": {
+       "kind": "duplicate",
+       "reason": "Recorded reason for the disposition.",
+       "consequence": "Stated consequence for the assessment scope.",
+       "authorisedBy": "Reviewer R",
+       "relatedSampleCode": "B"
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "benchmarkState": "indeterminate",
+    "unresolved": [
+     "B"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "A sample cannot duplicate itself."
+  },
+  {
    "id": "TR-03a",
    "group": "TR-variant",
    "description": "Negative value",
@@ -4285,6 +4526,94 @@
     "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
    },
    "derivation": "0.500/0.960 = 0.520833 ≥ 0.5; upper bound unknown, serialised as \"Infinity\" with upperUnbounded = true."
+  },
+  {
+   "id": "TR-03h",
+   "group": "TR-variant",
+   "description": "R4 N1: \"<LOQ\" reported with a value (600 µg) above the LOQ (30 µg)",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T16:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 600,
+       "unit": "ug",
+       "qualifier": "<LOQ",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 480,
+     "unsampledAssumption": "none"
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "samples": [
+     {
+      "code": "S",
+      "lower": 0,
+      "upper": 0.625
+     }
+    ],
+    "results": [
+     {
+      "subject": "W1",
+      "lower": 0.0,
+      "upper": 0.625,
+      "comparison": "indeterminate"
+     }
+    ],
+    "flagsInclude": [
+     "LIMIT_VALUE_DIFFERS"
+    ]
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Upper bound = max(600, 30) µg / 960 L = 0.625 mg/m³; interval 0–0.625 spans 0.5.",
+   "changeFrom_1_3_1": "Before the R4 fix the LOQ (30 µg) was used and the result was 0–0.03125, below benchmark."
   },
   {
    "id": "TR-04a",
@@ -5714,6 +6043,88 @@
     "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
    },
    "derivation": "Estimates are recorded as uncertainty."
+  },
+  {
+   "id": "B-4",
+   "group": "method",
+   "description": "R4 N3: task times 0–60 but 120 recorded minutes; exposure entered 60",
+   "calc": "twa_8h",
+   "methodVersion": "1.3.0",
+   "engineVersion": "1.4.0",
+   "input": {
+    "calc": "twa_8h",
+    "samples": [
+     {
+      "sampleId": "S",
+      "sampleCode": "S",
+      "sampleType": "personal",
+      "subjectRef": "W1",
+      "startAt": "2026-03-02T08:00:00Z",
+      "endAt": "2026-03-02T09:00:00Z",
+      "timezone": "UTC",
+      "interruptions": [],
+      "flowPreLpm": 2,
+      "flowPostLpm": 2,
+      "method": {
+       "code": "M",
+       "version": "1",
+       "resultBasis": "mass_on_sample",
+       "flowDriftTolerancePct": 5,
+       "minVolumeL": null,
+       "suitableForFormalAssessment": true
+      },
+      "instrument": {
+       "assetTag": "P1",
+       "screeningOnly": false,
+       "calibrationValidAtSampling": true
+      },
+      "qc": [],
+      "result": {
+       "revision": 1,
+       "value": 60,
+       "unit": "ug",
+       "qualifier": "=",
+       "lod": 10,
+       "loq": 30
+      }
+     }
+    ],
+    "parameters": {
+     "exposureMinutesPerShift": 60,
+     "unsampledAssumption": "none",
+     "exposureRecords": [
+      {
+       "ref": "T1",
+       "minutes": 120,
+       "basis": "recorded_fact",
+       "startMin": 0,
+       "endMin": 60
+      }
+     ]
+    },
+    "benchmark": {
+     "versionId": "b",
+     "type": "EXAMPLE",
+     "averagingMinutes": 480,
+     "value": 0.5,
+     "unit": "mg/m3",
+     "verificationStatus": "verified",
+     "isSynthetic": true,
+     "source": "synthetic example"
+    },
+    "molecularWeight": null
+   },
+   "expected": {
+    "flagsInclude": [
+     "EXPOSURE_BELOW_RECORDED"
+    ],
+    "calculationAvailability": "none"
+   },
+   "tolerance": {
+    "relative": 1e-09,
+    "note": "Numeric expectations from an independent Python calculation; double precision, no rounding."
+   },
+   "derivation": "Recorded minutes (120) bound the total even when the times say 60; 60 entered is too short."
   }
  ]
 }

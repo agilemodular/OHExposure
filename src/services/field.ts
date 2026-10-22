@@ -222,9 +222,16 @@ export async function recordAcceptanceDisposition(a: Actor, sampleId: string, in
   const d = parse(z.object({ criterion: z.enum(['flow_drift', 'min_volume']), evidence: reqStr(10), scope: reqStr(5) }), input);
   return withActor(a, async (tx) => {
     await assertWorkflowActive(tx, 'field_sync');
-    const e = await one(tx, 'select e.*, v.flow_drift_consequence, v.min_volume_consequence from sampling_events e left join sampling_method_versions v on v.id=e.method_version_id where e.id=$1 for update of e', [sampleId]);
+    const e = await one(tx, 'select e.*, v.flow_drift_consequence, v.min_volume_consequence, v.flow_drift_tolerance_pct, v.min_volume_l from sampling_events e left join sampling_method_versions v on v.id=e.method_version_id where e.id=$1 for update of e', [sampleId]);
     if (!e) throw notFound('Sampling event');
     const consequence = d.criterion === 'flow_drift' ? e.flow_drift_consequence : e.min_volume_consequence;
+    // R4 (N7): only a criterion that actually failed can be accepted.
+    const drift = e.flow_pre_lpm && e.flow_post_lpm ? Math.abs(e.flow_post_lpm - e.flow_pre_lpm) / e.flow_pre_lpm * 100 : null;
+    const minutes = e.start_at && e.end_at ? (new Date(e.end_at).getTime() - new Date(e.start_at).getTime()) / 60000 : null;
+    const failed = d.criterion === 'flow_drift'
+      ? e.flow_drift_tolerance_pct != null && drift != null && drift > Number(e.flow_drift_tolerance_pct)
+      : e.min_volume_l != null && minutes != null && drift != null && ((e.flow_pre_lpm + e.flow_post_lpm) / 2) * minutes < Number(e.min_volume_l);
+    if (!failed) throw invalid('This criterion has not failed for this sample; there is nothing to accept');
     if (consequence === 'invalid') throw invalid('The method treats this criterion as invalid; a failed sample cannot be accepted by disposition');
     if (await one(tx, 'select 1 from sample_acceptance_dispositions where sampling_event_id=$1 and criterion=$2', [sampleId, d.criterion])) throw invalid('This criterion already has a disposition for this sample');
     const r = await one(tx, `insert into sample_acceptance_dispositions (tenant_id,client_id,sampling_event_id,criterion,evidence,scope,authorised_by) values ($1,$2,$3,$4,$5,$6,$7) returning *`,

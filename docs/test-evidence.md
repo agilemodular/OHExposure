@@ -2,12 +2,12 @@
 
 Latest run: **22 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.4.0** (`twa_8h` 1.3.0, `stel_15` 1.2.0), 26 migrations, reviewed commit range `1fce123..` (Phase H2 and post-H2). Command: `npm test` (Vitest, files run sequentially). The test schema is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security and every trigger are active. Environment: development workspace (Linux container). **Not the hosting environment.**
 
-**Result: 248 passed, 0 failed, across 9 suites** (169 before the engine 1.4.0 remediation; added: 66 structured fixture tests with independently derived expected values and 13 service/database tests; existing tests updated where behaviour changed intentionally — see `docs/remediation/remediation-summary.md` §5).
+**Result: 256 passed, 0 failed, across 9 suites** (169 before the engine 1.4.0 remediation; added: 70 structured fixture tests with independently derived expected values and 17 service/database tests (including the R4 re-check fixes); existing tests updated where behaviour changed intentionally — see `docs/remediation/remediation-summary.md` §5).
 
 | Suite | Tests | Covers |
 |---|---|---|
-| `worked-examples.test.ts` | 66 | **Engine 1.4.0 fixtures**: E1–E14 and variants, TR-01–TR-05 reproductions and variants, items A–B; expected values from `scripts/tr/build_fixtures.py` (independent Python calculation), not from the engine |
-| `tr-services.test.ts` | 13 | Engine 1.4.0 at the application level: import/API validation shown separately from the engine, qualifier mapping, database constraint, acceptance and evidence dispositions (roles, draft-only, append-only), shift references, task records, report consistency, approval non-transfer |
+| `worked-examples.test.ts` | 70 | **Engine 1.4.0 fixtures**: E1–E14 and variants, TR-01–TR-05 reproductions and variants, items A–B; expected values from `scripts/tr/build_fixtures.py` (independent Python calculation), not from the engine |
+| `tr-services.test.ts` | 17 | Engine 1.4.0 at the application level: import/API validation shown separately from the engine, qualifier mapping, database constraint, acceptance and evidence dispositions (roles, draft-only, append-only), shift references, task records, report consistency, approval non-transfer |
 | `calc.test.ts` | 42 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values; 1.3.1 roll-up |
 | `workflow.test.ts` | 22 | End-to-end workflow, tenant and client isolation, attachments, append-only evidence, governance, integrations |
 | `http.test.ts` | 13 | Sign-in, TOTP MFA, lockout, CSRF, forced password change, headers, every page for every role, provisioning, readiness, shared throttle |

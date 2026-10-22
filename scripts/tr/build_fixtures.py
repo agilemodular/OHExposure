@@ -70,8 +70,9 @@ def concentration(s):
     to_mg = 1 / 1000 if r['unit'] == 'ug' else 1
     q = r['qualifier']
     if q in ('=', 'estimated'): lo = hi = r['value']
-    elif q == '<LOD': lo, hi = 0, (r['value'] if r['value'] is not None else r['lod'])
-    elif q == '<LOQ': lo, hi = 0, (r['loq'] if r['loq'] is not None else r['value'])
+    # A reported '<' value and a stated limit both bound the result; the larger is the conservative upper bound (R4 N1).
+    elif q == '<LOD': lo, hi = 0, max(x for x in (r['value'], r['lod']) if x is not None)
+    elif q == '<LOQ': lo, hi = 0, max(x for x in (r['value'], r['loq']) if x is not None)
     elif q == 'detected_below_loq': lo, hi = r['lod'], r['loq']
     elif q == '>': lo, hi = r['value'], math.inf
     return {'lower': lo * to_mg / v_m3, 'upper': hi * to_mg / v_m3 if hi != math.inf else 'Infinity', 'sampledMinutes': t, 'volumeL': v_m3 * 1000}
@@ -184,7 +185,7 @@ case('E7b-evidence', 'original-variant', 'E7b with continuous observation record
      'C = 0.045/0.020 = 2.25 mg/m³; 15-min value = 2.25 × 10 / 15 = 1.5 mg/m³ (assumption-dependent).')
 
 case('E8', 'original', 'Conversion 20 ppm, MW 92.14 g/mol', 'twa_8h', [], P, None, {'conversion': {'from': {'lower': 20, 'upper': 20, 'unit': 'ppm'}, 'to': 'mg/m3', 'molecularWeight': 92.14, 'lower': 20 * 92.14 / MOLAR_VOLUME, 'upper': 20 * 92.14 / MOLAR_VOLUME}},
-     '20 × 92.14 / 24.05526 = 76.6064… mg/m³ (EH40 para 68 molar volume).',
+     '20 × 92.14 / 24.05526 = 76.6069… mg/m³ (EH40 para 68 molar volume).',
      change='1.3.1 used 24.0551 rounded from R·T/P (76.6075). 1.4.0 uses the value stated in EH40 para 68 (24.05526) without rounding; relative difference 6.5 × 10⁻⁶.')
 
 a9 = sample(sampleCode='A', endAt='2026-03-02T12:00:00Z', result=res(240)); b9 = sample(sampleCode='B', startAt='2026-03-02T11:00:00Z', result=res(240))
@@ -278,6 +279,11 @@ case('TR-02f', 'TR-variant', 'Excluded sample outside the assessment scope', 'tw
 ov = sample(sampleCode='B', subjectRef='W2', result=res(100, '>'), instrument=cal)
 case('TR-02g', 'TR-variant', 'Indicative over-range result (upper bound unknown) beside a valid below result', 'twa_8h', [v, ov], P, bm(0.5), {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['B']}, 'Unknown upper bound cannot be ruled out.')
 
+xw = copy.deepcopy(x); xw['evidenceDisposition'] = disp('duplicate', 'A')
+case('TR-02h', 'TR-variant', 'R4 N4: "duplicate" naming a sample of a different worker', 'twa_8h', [v, xw], P, bm(0.5), {'benchmarkState': 'indeterminate', 'evidenceAdequacy': 'unresolved_evidence', 'unresolved': ['B']}, 'A duplicate must cover the same worker and shift.')
+xs = copy.deepcopy(x); xs['subjectRef'] = 'W1'; xs['evidenceDisposition'] = disp('duplicate', 'B')
+case('TR-02i', 'TR-variant', 'R4 N4: "duplicate" naming itself', 'twa_8h', [v, xs], P, bm(0.5), {'benchmarkState': 'indeterminate', 'unresolved': ['B']}, 'A sample cannot duplicate itself.')
+
 # ── TR-03 variants (input validation) ─────────────────────────────────────────────────────────────────────────
 for cid, desc, s, flag in [
     ('TR-03a', 'Negative value', sample(result=res(-5)), 'INPUT_INVALID_NEGATIVE'),
@@ -289,6 +295,11 @@ for cid, desc, s, flag in [
 case('TR-03f', 'TR-variant', 'Benchmark value zero', 'twa_8h', [sample()], P, {**bm(0.5), 'value': 0}, {'benchmarkState': 'not_comparable', 'notePattern': 'Benchmark rejected'}, 'A benchmark must be a positive finite number.')
 o3 = sample(result=res(500, '>'))
 case('TR-03g', 'TR-variant', 'Over-range result: upper bound unknown and explicit', 'twa_8h', [o3], P, bm(0.5), {'samples': [{'code': 'S', 'lower': concentration(o3)['lower'], 'upper': 'Infinity', 'upperUnbounded': True}], 'results': [{'subject': 'W1', 'lower': concentration(o3)['lower'], 'upper': 'Infinity', 'comparison': 'at_or_above_benchmark'}]}, '0.500/0.960 = 0.520833 ≥ 0.5; upper bound unknown, serialised as "Infinity" with upperUnbounded = true.')
+
+n1 = sample(result=res(600, '<LOQ', 10, 30))
+case('TR-03h', 'TR-variant', 'R4 N1: "<LOQ" reported with a value (600 µg) above the LOQ (30 µg)', 'twa_8h', [n1], P, bm(0.5),
+     {'samples': [{'code': 'S', 'lower': 0, 'upper': concentration(n1)['upper']}], 'results': [{'subject': 'W1', **twa([n1], 480), 'comparison': 'indeterminate'}], 'flagsInclude': ['LIMIT_VALUE_DIFFERS']},
+     'Upper bound = max(600, 30) µg / 960 L = 0.625 mg/m³; interval 0–0.625 spans 0.5.', change='Before the R4 fix the LOQ (30 µg) was used and the result was 0–0.03125, below benchmark.')
 
 # ── TR-04 variants (precision and boundaries) ─────────────────────────────────────────────────────────────────
 for cid, mass, state in [('TR-04a', 480, 'at_or_above_benchmark'), ('TR-04b', 479.999, 'below_benchmark'), ('TR-04c', 480.001, 'at_or_above_benchmark')]:
@@ -323,6 +334,9 @@ case('B-1', 'method', 'Two task records without times (240 + 240), exposure ente
 case('B-2', 'method', 'Timed overlapping tasks 0–240 and 120–360 (union 360), exposure entered 300', 'twa_8h', [sample(endAt='2026-03-02T13:00:00Z', result=res(300))], {**P, 'exposureMinutesPerShift': 300, 'exposureRecords': [{'ref': 'T1', 'minutes': 240, 'basis': 'recorded_fact', 'startMin': 0, 'endMin': 240}, {'ref': 'T2', 'minutes': 240, 'basis': 'recorded_fact', 'startMin': 120, 'endMin': 360}]}, bm(0.5),
      {'flagsInclude': ['EXPOSURE_BELOW_RECORDED']}, 'Overlap counted once: 360 min; 300 is too short.')
 case('B-3', 'method', 'Estimated task duration', 'twa_8h', [sample()], {**P, 'exposureRecords': [{'ref': 'T1', 'minutes': 480, 'basis': 'user_estimate'}]}, bm(0.5), {'flagsInclude': ['EXPOSURE_DURATION_ESTIMATED'], 'dataQuality': 'qualified'}, 'Estimates are recorded as uncertainty.')
+
+case('B-4', 'method', 'R4 N3: task times 0–60 but 120 recorded minutes; exposure entered 60', 'twa_8h', [sample(endAt='2026-03-02T09:00:00Z', result=res(60))], {**P, 'exposureMinutesPerShift': 60, 'exposureRecords': [{'ref': 'T1', 'minutes': 120, 'basis': 'recorded_fact', 'startMin': 0, 'endMin': 60}]}, bm(0.5),
+     {'flagsInclude': ['EXPOSURE_BELOW_RECORDED'], 'calculationAvailability': 'none'}, 'Recorded minutes (120) bound the total even when the times say 60; 60 entered is too short.')
 
 out = {'description': 'Structured regression fixtures for engine 1.4.0. Expected values are independent of the engine (Python oracle + hand-written statuses).',
        'engine': ENGINE, 'molarVolumeLPerMol': MOLAR_VOLUME, 'comparisonRelativeTolerance': REL_TOL, 'generatedBy': 'scripts/tr/build_fixtures.py', 'cases': cases}

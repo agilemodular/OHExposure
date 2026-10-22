@@ -296,7 +296,9 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
       if (r.value === null) { flags.push({ code: 'VALUE_INVALID', severity: 'incomplete', message: 'Estimated value missing.' }); return finalise(out); }
       lo = hi = r.value; flags.push({ code: 'ESTIMATED', severity: 'qualify', message: `Laboratory reported an estimated quantitative value${reported}.` }); break;
     case '<LOD': {
-      const bound = r.value ?? r.lod;
+      // N1 (R4): when both a reported "<" value and an LOD are given, the larger bounds the result (conservative).
+      const bound = r.value != null && r.lod != null ? Math.max(r.value, r.lod) : r.value ?? r.lod;
+      if (r.value != null && r.lod != null && r.value !== r.lod) flags.push({ code: 'LIMIT_VALUE_DIFFERS', severity: 'qualify', message: `Reported limit ${formatValue(r.value)} differs from the LOD ${formatValue(r.lod)} ${r.unit}; the larger is used as the upper bound.` });
       if (bound === null) { flags.push({ code: 'ND_NO_LIMIT', severity: 'incomplete', message: 'Non-detect reported without a detection limit.' }); return finalise(out); }
       lo = 0; hi = bound;
       flags.push({ code: 'NON_DETECT', severity: 'qualify', message: `Not detected (< ${formatValue(bound)} ${r.unit})${reported}. Carried as an interval from 0 to the reported limit; not replaced by zero.` });
@@ -304,7 +306,8 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
     }
     case '<LOQ': {
       // Generic "less than LOQ": detection is NOT confirmed, even if the laboratory also states an LOD (1.4.0, item C).
-      const upper = r.loq ?? r.value;
+      const upper = r.value != null && r.loq != null ? Math.max(r.value, r.loq) : r.loq ?? r.value;
+      if (r.value != null && r.loq != null && r.value !== r.loq) flags.push({ code: 'LIMIT_VALUE_DIFFERS', severity: 'qualify', message: `Reported value ${formatValue(r.value)} differs from the LOQ ${formatValue(r.loq)} ${r.unit}; the larger is used as the upper bound.` });
       if (upper === null) { flags.push({ code: 'LOQ_NO_LIMIT', severity: 'incomplete', message: 'Below-LOQ result reported without a quantification limit.' }); return finalise(out); }
       lo = 0; hi = upper;
       flags.push({ code: 'BELOW_LOQ', severity: 'qualify', message: `Less than the limit of quantification (< ${formatValue(upper)} ${r.unit})${reported}; detection not confirmed, carried as 0–LOQ.` });
@@ -406,7 +409,11 @@ export function exposureRange(records: ExposureRecord[]) {
   if (b > a) union += b - a;
   const maxUntimed = untimed.reduce((m, r) => Math.max(m, r.minutes!), 0);
   const sumUntimed = untimed.reduce((s, r) => s + r.minutes!, 0);
-  return { lower: Math.max(union, maxUntimed), upper: union + sumUntimed, overlapUnknown: untimed.length > 1 || (untimed.length > 0 && timed.length > 0), estimated: records.filter((r) => r.basis && r.basis !== 'recorded_fact'), count: timed.length + untimed.length };
+  // N3 (R4): a timed record whose stated minutes exceed its interval is inconsistent; its minutes still bound the total.
+  const inconsistent = timed.filter((r) => isNum(r.minutes) && r.minutes! > r.endMin! - r.startMin! + TIME_EPS_MIN);
+  const maxTimedMinutes = timed.reduce((m, r) => Math.max(m, isNum(r.minutes) ? r.minutes! : 0), 0);
+  const extraTimed = inconsistent.reduce((s, r) => s + (r.minutes! - (r.endMin! - r.startMin!)), 0);
+  return { lower: Math.max(union, maxUntimed, maxTimedMinutes), upper: union + extraTimed + sumUntimed, inconsistent, overlapUnknown: untimed.length > 1 || (untimed.length > 0 && timed.length > 0), estimated: records.filter((r) => r.basis && r.basis !== 'recorded_fact'), count: timed.length + untimed.length };
 }
 
 /** Groups a worker's samples into shifts: by explicit shift reference, or by local date only when unambiguous (item A). */
@@ -483,6 +490,7 @@ export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
       }
       if (range.overlapUnknown && E < range.upper - TIME_EPS_MIN)
         flags.push({ code: 'EXPOSURE_OVERLAP_UNKNOWN', severity: 'qualify', message: `Task records without times imply a total exposure between ${formatValue(range.lower)} and ${formatValue(range.upper)} min depending on overlap; ${E} min was entered. Record task times or confirm the overlap.` });
+      if (range.inconsistent.length) flags.push({ code: 'EXPOSURE_RECORD_INCONSISTENT', severity: 'qualify', message: `Recorded minutes exceed the recorded task times for ${range.inconsistent.map((r) => r.ref).join(', ')}; the larger is used.` });
       if (range.estimated.length) flags.push({ code: 'EXPOSURE_DURATION_ESTIMATED', severity: 'qualify', message: `Exposure durations for ${range.estimated.map((r) => r.ref).join(', ')} are estimates, not recorded facts.` });
     }
     out.coveragePct = Math.min(100, (sampled / E) * 100);
@@ -683,6 +691,8 @@ export interface AssessmentOutput {
   /** Whether all personal evidence in scope is either formal or dispositioned (TR-02). */
   evidenceAdequacy: 'adequate' | 'adequate_with_accepted_gaps' | 'unresolved_evidence' | 'coverage_gap' | 'no_formal_evidence';
   unresolvedEvidence: UnresolvedEvidence[];
+  /** Personal samples set aside by a valid disposition (always reported, with who and why). */
+  setAsideEvidence: { sampleCode: string; subjectRef: string | null; kind: EvidenceDispositionKind; by: string; reason: string; interval: Interval | null }[];
   /** Overall numerical comparison, gated by calculation availability and evidence adequacy (decision table in the specification). */
   benchmarkState: 'below_benchmark' | 'at_or_above_benchmark' | 'indeterminate' | 'not_comparable' | 'no_verified_benchmark';
   benchmarkNote: string;
@@ -695,12 +705,17 @@ export const CALCULATIONS: Record<CalcCode, { code: CalcCode; version: string; a
   stel_15: { code: 'stel_15', version: '1.2.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
 };
 
-function dispositionProblem(d: EvidenceDisposition | null | undefined, formalCodes: Set<string>): string | null {
+function dispositionProblem(d: EvidenceDisposition | null | undefined, formalCodes: Set<string>, self?: SampleOutput, all?: SampleOutput[]): string | null {
   if (!d) return 'no disposition recorded';
   if (!(d.reason?.trim().length >= 10)) return 'disposition reason missing';
   if (!(d.consequence?.trim().length >= 10)) return 'assessment of consequences missing';
   if (!d.authorisedBy?.trim()) return 'disposition not authorised';
-  if (d.kind === 'duplicate' && !(d.relatedSampleCode && formalCodes.has(d.relatedSampleCode))) return 'duplicate disposition does not name a valid formal sample in this assessment';
+  if (d.kind === 'duplicate' && !(d.relatedSampleCode && formalCodes.has(d.relatedSampleCode) && d.relatedSampleCode !== self?.sampleCode)) return 'duplicate disposition does not name another valid formal sample in this assessment';
+  if (d.kind === 'duplicate' && self && all) {
+    // N4 (R4): a duplicate must cover the same worker and the same shift or date.
+    const rel = all.find((x) => x.sampleCode === d.relatedSampleCode);
+    if (!rel || rel.subjectRef !== self.subjectRef || (rel.shiftRef ?? rel.shiftDate) !== (self.shiftRef ?? self.shiftDate)) return 'duplicate disposition names a sample for a different worker or shift';
+  }
   return null;
 }
 
@@ -730,15 +745,16 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
   const inputByCode = new Map(input.samples.map((s) => [s.sampleCode, s]));
   const unresolved: UnresolvedEvidence[] = [];
   let acceptedGaps = 0, coverageGap = false;
+  const setAside: AssessmentOutput['setAsideEvidence'] = [];
   for (const s of samples) {
     if (s.sampleType !== 'personal') continue;
     const why = !s.included ? 'excluded' : s.indicative ? 'indicative only' : !s.concentration ? 'not calculable' : !formalCodes.has(s.sampleCode) ? 'its worker-shift result could not be calculated' : null;
     if (!why) continue;
     const d = inputByCode.get(s.sampleCode)?.evidenceDisposition ?? null;
-    const problem = dispositionProblem(d, formalCodes);
+    const problem = dispositionProblem(d, formalCodes, s, samples);
     if (problem) { unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; ${problem}`, interval: s.concentration, disposition: d?.kind ?? null }); continue; }
     if (d!.kind === 'not_replaced') { coverageGap = true; unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; not replaced — the worker or task it covered remains unassessed (${d!.consequence})`, interval: s.concentration, disposition: d!.kind }); }
-    else if (d!.kind === 'remaining_coverage_adequate') acceptedGaps++;
+    else { if (d!.kind === 'remaining_coverage_adequate') acceptedGaps++; setAside.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, kind: d!.kind, by: d!.authorisedBy, reason: d!.reason, interval: s.concentration }); }
   }
   const evidenceAdequacy: AssessmentOutput['evidenceAdequacy'] = !calculated.length ? 'no_formal_evidence'
     : unresolved.some((u) => u.disposition !== 'not_replaced') ? 'unresolved_evidence' : coverageGap ? 'coverage_gap' : acceptedGaps ? 'adequate_with_accepted_gaps' : 'adequate';
@@ -773,6 +789,7 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
       }
       if (benchmarkState === 'below_benchmark' && evidenceAdequacy === 'adequate_with_accepted_gaps') benchmarkNote += ` ${acceptedGaps} sample(s) were set aside with an authorised judgement that the remaining coverage is adequate.`;
       if (formal.some((s) => s.assumptionDependent)) benchmarkNote += ' Some results depend on a documented assumption about unsampled time.';
+      if (setAside.length) benchmarkNote += ` Set aside by disposition: ${setAside.map((x) => `${x.sampleCode} (${x.kind.replace(/_/g, ' ')}, ${x.by}${x.interval ? `, ${formatInterval(x.interval)}` : ''})`).join('; ')}.`;
       if (formal.some((s) => s.comparison?.converted)) benchmarkNote += ` Results were converted to ${b.unit} at 20 °C and 101.325 kPa (molar volume ${MOLAR_VOLUME_L} L/mol, EH40 para 68) using molecular weight ${input.molecularWeight} g/mol.`;
     }
     if (b.isSynthetic && !/synthetic/i.test(b.source)) benchmarkNote += ' SYNTHETIC DEMONSTRATION BENCHMARK — not a real exposure limit.';
@@ -791,7 +808,7 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
 
   return {
     engineVersion: ENGINE_VERSION, calcCode: calc.code, calcVersion: calc.version,
-    samples, shifts: withCmp, staticSamples, dataQualityState: dq, calculationAvailability, evidenceAdequacy, unresolvedEvidence: unresolved,
+    samples, shifts: withCmp, staticSamples, dataQualityState: dq, calculationAvailability, evidenceAdequacy, unresolvedEvidence: unresolved, setAsideEvidence: setAside,
     benchmarkState, benchmarkNote, issues,
     disclaimer: 'Calculated outputs and benchmark comparisons are not a compliance conclusion. Professional interpretation by a competent person is required.',
   };

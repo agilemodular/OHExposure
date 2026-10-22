@@ -45,12 +45,12 @@ Sampling tolerance: **0 min** (`STEL_SAMPLING_TOLERANCE_MIN`). A non-zero tolera
 |---|---|---|
 | `=` | Quantified result | [v, v] |
 | `estimated` | Estimated quantitative result (laboratory says so) | [v, v], qualified |
-| `<LOD` | Not detected | [0, LOD or reported limit] |
-| `<LOQ` | Less than LOQ; **detection not confirmed** (even when an LOD is supplied) | [0, LOQ] |
+| `<LOD` | Not detected | [0, max(reported limit, LOD)] |
+| `<LOQ` | Less than LOQ; **detection not confirmed** (even when an LOD is supplied) | [0, max(reported value, LOQ)] |
 | `detected_below_loq` | Laboratory confirms detection between LOD and LOQ | [LOD, LOQ]; needs LOD < LOQ |
 | `>` | Over range | [v, ∞), upper bound unknown |
 
-The laboratory's own qualifier text is stored and shown beside the interpretation. CSV mapping: `ND`, `n.d.`, `not detected`, `<DL` → `<LOD`; `<LOR`, `below LOQ` → `<LOQ`; `DET<LOQ`, `detected <LOQ`, `detected below LOQ`, `trace` → `detected_below_loq`; unrecognised text is rejected.
+When a reported "<" value and the stated limit differ, the larger bounds the result and the difference is flagged (LIMIT_VALUE_DIFFERS). The laboratory's own qualifier text is stored and shown beside the interpretation. CSV mapping: `ND`, `n.d.`, `not detected`, `<DL` → `<LOD`; `<LOR`, `below LOQ` → `<LOQ`; `DET<LOQ`, `detected <LOQ`, `detected below LOQ`, `trace` → `detected_below_loq`; unrecognised text is rejected.
 
 ### 0.5 Input validation (TR-03)
 
@@ -72,13 +72,13 @@ Dispositions: `sample_acceptance_dispositions` (append-only; database requires a
 ### 0.7 Shift association (item A) and exposure duration (item B)
 
 - A sample can carry an explicit **shift reference**. Samples with the same worker and shift reference form one shift. Without references, samples are grouped by local start date only when unambiguous; a sample crossing midnight, samples within 16 h of a sample on another date, or a mix of referenced and unreferenced samples give SHIFT_ASSOCIATION_REQUIRED (no result). No silent merging or splitting.
-- The register supplies one record per task linked to the group and substance (hazard duration where stated, else task duration; optional typical start and end within the shift). Timed records are combined as a union (overlaps counted once); untimed records give a range from the longest (full overlap) to the sum (sequential). Entered exposure below the lower bound → no TWA; within an unknown-overlap range → qualified; estimated durations → qualified.
+- The register supplies one record per task linked to the group and substance (hazard duration where stated, else task duration; optional typical start and end within the shift). Timed records are combined as a union (overlaps counted once), and a record's stated minutes still bound the total if they exceed its times (flagged as inconsistent); untimed records give a range from the longest (full overlap) to the sum (sequential). Entered exposure below the lower bound → no TWA; within an unknown-overlap range → qualified; estimated durations → qualified.
 
 ### 0.8 Evidence disposition and the decision table (TR-02, item D)
 
 Status axes are kept separate: **calculation availability** (complete, partial, none), **evidence adequacy** (adequate, adequate with accepted gaps, unresolved evidence, coverage gap, no formal evidence), **numerical comparison** per result, overall **benchmark state**, and the **professional conclusion** (people only).
 
-A personal sample that is excluded, indicative or not calculable needs a disposition before a favourable overall comparison: `duplicate` (names a valid formal sample in the revision), `outside_scope`, `not_replaced` (worker or task remains unassessed), or `remaining_coverage_adequate` (technical reviewer only). Each needs a reason and an assessment of consequences (≥ 10 characters each). Recorded on draft revisions only, append-only, in `assessment_evidence_dispositions`.
+A personal sample that is excluded, indicative or not calculable needs a disposition before a favourable overall comparison: `duplicate` (names another valid formal sample of the **same worker and shift** in the revision), `outside_scope` (technical reviewer only), `not_replaced` (worker or task remains unassessed), or `remaining_coverage_adequate` (technical reviewer only). Each needs a reason and an assessment of consequences (≥ 10 characters each). Recorded on draft revisions only, append-only, in `assessment_evidence_dispositions`. Every set-aside sample is listed with who set it aside and why, in the comparison note and the report.
 
 | Situation | Overall benchmark state |
 |---|---|

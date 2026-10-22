@@ -8,7 +8,7 @@
 
 Status labels:
 - **Fixed and tested** — remediation in place with regression tests.
-- **Awaiting technical re-review** — not yet re-reviewed independently. An internal AI review agent check (R4) is recorded in the findings register; it is not external professional validation.
+- **Awaiting technical re-review** — fixed and tested, but not yet re-reviewed by you. A separate AI review agent re-checked the first version of this remediation (R4, findings register §7.1). It is not external professional validation, and its eight new findings (TR-N1–N8) were fixed afterwards without a further re-check.
 - **Awaiting professional judgement** — a methodological choice needs the appointed hygienist.
 - **Still open**.
 
@@ -22,6 +22,7 @@ Status labels:
 | A shift identity | Design | Night shifts clustered by gap inference | Yes | Yes | — |
 | B exposure duration | Design | Longest task taken as total exposure | Yes | Yes | Overlap of untimed tasks |
 | C below-LOQ semantics | Yes | Generic "<LOQ" with an LOD read as detected | Yes | Yes | Laboratory qualifier mapping |
+| TR-N1–N8 (found by R4) | N1 engine; N3 engine; others service/report | N1: "<LOQ" value above LOQ ignored (High) | Yes | Yes | — |
 | D status logic | Design | Single roll-up state | Yes (separate axes, decision table) | Yes | — |
 | H1-F01 | — | — | Technical disposition updated | — | **Professional disposition still pending** |
 | Synthetic report contradictions | Report | Narrative vs records; "roughly half"; "Used: Yes"; no linked action | Yes | Yes | — |
@@ -70,14 +71,14 @@ Still open: none of the above as software defects. Professional approval of ever
 |---|---|---|---|
 | E2 | Flagged flow drift 10 % > 5 % | Sample excluded until a reviewer's disposition (method consequence not stated) | TR-05. E2-advisory shows the qualified result when the method states "advisory" |
 | E7b | 1.5 mg/m³ (flagged) | No result without supporting evidence; 1.5 mg/m³ assumption-dependent with evidence (E7b-evidence) | TR-01 |
-| E8 | 76.607 mg/m³ (24.0551) | 76.6064 mg/m³ (24.05526, EH40 para 68) | TR-04 and authoritative constant; within the pack's ±0.1 % tolerance |
+| E8 | 76.607 mg/m³ (24.0551) | 76.6069 mg/m³ (24.05526, EH40 para 68) | TR-04 and authoritative constant; within the pack's ±0.1 % tolerance |
 | E13 | 0.010417–0.03125, indeterminate | 0–0.03125, indeterminate (same state) | Item C; E13-detected keeps the LOD lower bound when detection is confirmed |
 | E10c | W2 below; overall indeterminate | Same; W1's indicative result is listed as unresolved evidence | TR-02 (state unchanged) |
 | E14 | "No usable personal results" | Not comparable; evidence adequacy *no formal evidence* | Item D (state unchanged) |
 
 ## 5. Test results (development workspace)
 
-`npm test`: 9 suites, all passing (see `../test-evidence.md`), including 66 fixture tests, 13 service and database tests for the remediation, and the existing suites with intentional updates. The updated tests are: night shift, H5 unconvertible indicative evidence, flow drift, short STEL sample, version assertions, and "every sample excluded". Browser checks were re-run on desktop Chromium; they are not device evidence.
+`npm test`: 256 tests in 9 suites, all passing (see `../test-evidence.md`). This includes 70 fixture tests (69 cases), 17 service and database tests for the remediation, and the existing suites with intentional updates. The updated tests are: night shift, H5 unconvertible indicative evidence, flow drift, short STEL sample, version assertions, and "every sample excluded". Browser checks were re-run on desktop Chromium; they are not device evidence.
 
 ## 6. Report corrections
 
@@ -92,3 +93,13 @@ Still open: none of the above as software defects. Professional approval of ever
   - the action is linked before approval.
 
   Synthetic labelling and the distinction between the demonstration workflow approval and professional method approval are unchanged.
+
+## 7. Re-check by a separate AI review agent (R4)
+
+R4 re-checked commit `8f601b9`. It closed TR-01–TR-05, A, D and the report. It confirmed that the reproductions are unchanged and that the fixture numbers are independent. It also found eight new issues:
+- **High:** TR-N1 — a "<LOQ" value above the LOQ was ignored; this existed before 1.4.0.
+- **Medium:** TR-N2–N4 — an over-range result was missing from the summary; recorded task minutes were ignored when shorter task times were given; a practitioner could set aside adverse evidence.
+- **Low:** TR-N5–N8.
+
+All were fixed with tests, apart from the residual of N7, which is accepted with the application-credential boundary. Details are in the findings register §7.1. R4 also noted a limitation: the Python oracle follows the same rules as the engine, so it checks arithmetic, not design choices. Design choices remain for the hygienist (specification §0).
+

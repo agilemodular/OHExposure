@@ -183,3 +183,38 @@ describe('versioning (section 9 of the brief)', () => {
     expect(d.current.calc_version).toBe(CALCULATIONS.twa_8h.version);
   });
 });
+
+describe('R4 re-check fixes', () => {
+  it('N4: setting evidence aside as outside scope is a reviewer decision (service and database)', async () => {
+    await expect(asmt.recordEvidenceDisposition(w.a.prac, S.rev, { sample_id: S.s2, kind: 'outside_scope', reason: 'Not part of the scope here', consequence: 'No effect on the assessment' })).rejects.toThrow(/technical reviewer/);
+    await expect(withActor(w.a.prac, (tx) => tx.query(`insert into assessment_evidence_dispositions (tenant_id,client_id,revision_id,sampling_event_id,kind,reason,consequence,recorded_by) select tenant_id, client_id, id, $2, 'outside_scope', 'Direct write attempt', 'Direct write attempt', $3 from assessment_revisions where id=$1`, [S.rev, S.s2, w.a.prac.userId]))).rejects.toThrow(/technical reviewer/);
+    await expect(asmt.recordEvidenceDisposition(w.a.prac, S.rev, { sample_id: S.s2, kind: 'duplicate', related_sample_id: S.s2, reason: 'Duplicate of itself attempt', consequence: 'Should be refused here' })).rejects.toThrow(/itself/);
+  });
+  it('N7: only a criterion that actually failed can be accepted', async () => {
+    await expect(field.recordAcceptanceDisposition(w.a.rev, S.s1, { criterion: 'flow_drift', evidence: 'Nothing failed on this sample', scope: 'This sample' })).rejects.toThrow(/has not failed/);
+  });
+  it('N2: an over-range formal result is the highest result and makes percentage statements questionable', () => {
+    const out = { samples: [], unresolvedEvidence: [], shifts: [
+      { subjectRef: 'W1', shiftDate: 'd', result: { lower: 0.3125, upper: 0.3125, unit: 'mg/m3' }, comparison: { state: 'below_benchmark', ratio: { lower: 0.625, upper: 0.625 } }, indicative: false },
+      { subjectRef: 'W2', shiftDate: 'd', result: { lower: 0.2083, upper: 'Infinity', unit: 'mg/m3', upperUnbounded: true }, comparison: { state: 'indeterminate', ratio: { lower: 0.4167, upper: 'Infinity' } }, indicative: false }] };
+    const f = evidenceFacts(out);
+    expect(f.highestRatio).toBe(Infinity);
+    expect(narrativeChecks('Exposure was about 60 % of the WEL.', f).join(' ')).toMatch(/over range/);
+  });
+  it('an approved revision is unchanged by a later revision calculated with the current versions', async () => {
+    await asmt.updateDraft(w.a.prac, S.rev, { sample_ids: [S.s1, S.s2], benchmark_version_id: w.ref.benchmarkVersionId, exposure_minutes_per_shift: '480', unsampled_assumption: 'none',
+      interpretation: 'Two workers were sampled on one day; one worker remains unassessed (flow failure).', conclusion_category: 'insufficient_evidence', limitations: 'Regression test data only.' });
+    await asmt.recordEvidenceDisposition(w.a.prac, S.rev, { sample_id: S.s2, kind: 'not_replaced', reason: 'Recorded for the regression test', consequence: 'Worker 2 remains unassessed for this period' });
+    await asmt.calculate(w.a.prac, S.rev);
+    await asmt.submitForReview(w.a.prac, S.rev);
+    await asmt.approve(w.a.rev, S.rev, { approval_scope: 'TR regression test scope', approval_limitations: 'Automated test only', confirm_reviewed: 'on' });
+    const c = new pg.Client({ connectionString: URL_ }); await c.connect();
+    const h = async () => (await c.query('select md5(r::text) h from assessment_revisions r where id=$1', [S.rev])).rows[0].h;
+    const before = await h();
+    const n = await asmt.newRevision(w.a.prac, S.as.id, { change_reason: 'Reassessment after engine change' });
+    await asmt.calculate(w.a.prac, n.id);
+    expect(await h()).toBe(before);
+    expect((await c.query('select calc_version, supersedes_revision_id from assessment_revisions where id=$1', [n.id])).rows[0]).toEqual({ calc_version: (await import('../src/calc/engine.js')).CALCULATIONS.twa_8h.version, supersedes_revision_id: S.rev });
+    await c.end();
+  });
+});
