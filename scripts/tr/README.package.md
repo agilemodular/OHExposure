@@ -41,3 +41,7 @@ npx tsx scripts/export-example-report.ts              # rebuilds the synthetic r
 - The Python oracle implements the same documented rules as the engine; it verifies arithmetic and status logic against the specification, not whether the rules are methodologically right.
 - All runs are in a development workspace; browser checks are desktop Chromium, not device evidence.
 - The reviewing hygienist's scope of work (`docs/procurement/`) was written before this change and names `twa_8h` 1.2.1 and `stel_15` 1.1.1; the candidate versions are now 1.3.0 and 1.2.0.
+
+## Exclusions
+
+No secrets, keys, environment files, database dumps or real worker data are included. The source and test files contain the repository's published **development defaults** (local disposable test databases, the synthetic demonstration accounts and test-fixture passwords). They give no access to any real system, and the server refuses to start in production with the development database password. Workers appear only as synthetic reference codes or fictional demonstration names.
