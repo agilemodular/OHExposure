@@ -25,13 +25,23 @@ REQUIRED SERVICES
 Review the supplied validation pack, calculation specifications, worked examples, report outputs and documented limitations.
 
 Assess the candidate calculation versions:
-- Eight-hour time-weighted average: twa_8h 1.2.1.
-- Fifteen-minute short-term exposure: stel_15 1.1.1, where applicable.
+- Eight-hour time-weighted average: twa_8h 1.3.0.
+- Fifteen-minute short-term exposure: stel_15 1.2.0, where applicable.
 - Unit conversions, where required by the selected methods and benchmarks.
+
+These versions (calculation engine 1.4.0) replace twa_8h 1.2.1 and stel_15 1.1.1 following a technical review on 22 October 2026. Neither earlier version was approved; no approval carries over between versions.
+
+Confirm or change the conventions introduced in these versions:
+- Short-term results only from an uninterrupted sample of exactly 15 minutes, with no sampling tolerance; shorter samples only with a documented zero-remainder assumption supported by evidence.
+- A generic "less than LOQ" result carried as zero to the LOQ unless the laboratory confirms detection.
+- The consequence of each method acceptance failure (advisory, disposition required or invalid) for each method version, and the flow rate used to calculate air volume.
+- The molar volume used for ppm to mg/m3 conversion (24.05526 L/mol, EH40 paragraph 68).
+- The rules for setting aside excluded or indicative evidence, and the resulting comparison states.
+- The rules for associating samples with shifts and for checking exposure duration against task records.
 
 Identify assumptions, restrictions and circumstances in which outputs should not be used.
 
-Review and provide a documented disposition for finding H1-F01. The finding affected both candidate methods (corrected in twa_8h 1.2.1 and stel_15 1.1.1): where no formal result could be calculated, the overall comparison was reported as "not comparable" instead of "indeterminate".
+Review and provide a documented disposition for finding H1-F01. The finding affected both candidate methods (corrected in twa_8h 1.2.1 and stel_15 1.1.1, and retained in 1.3.0 and 1.2.0): where no formal result could be calculated, the overall comparison was reported as "not comparable" instead of "indeterminate".
 
 As part of the same disposition, confirm or change the related convention: where every personal sample is excluded, or only indicative results are available, the comparison is currently reported as "not comparable" rather than "indeterminate".
 
@@ -115,6 +125,7 @@ DOCUMENTS TO BE SUPPLIED
 
 On appointment, and subject to confidentiality, the reviewer will receive:
 - Professional review handover pack, including the H1-F01 brief.
+- Remediation summary for calculation engine 1.4.0, with structured worked examples and independently derived expected results.
 - Hygienist review and validation pack, including conventions, worked examples and sign-off record.
 - Calculation and benchmark specifications.
 - Engine outputs for every worked example.
