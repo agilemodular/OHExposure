@@ -8,7 +8,7 @@
 | Item | State |
 |---|---|
 | TR-06, TR-07 engine reproductions; 113 fixtures; TR-01–TR-05 outputs | **Verified by the independent technical re-review of `b5eb070`** — retained; all still pass |
-| TR-08 effective sample list not used by the approval safeguards | **Implemented — awaiting technical re-review** (application 1.1.1, after the R6 AI-agent re-check, §7) |
+| TR-08 effective sample list not used by the approval safeguards | **Corrected by source review; supplied integration evidence reviewed; independent runtime verification outstanding** (application 1.1.1, after the R6 AI-agent re-check, §7; technical review of `21a6d0f`, §8) |
 | Historical records | Read-only check provided; nothing flagged in the development database; any hosted database needs its own run |
 
 The evidence classes are kept apart:
@@ -28,7 +28,7 @@ Since 1.5.1, a practitioner's removal of a sample from the list is a request, an
 | Source inspection (at registration) | Verified by source inspection; end-to-end impact awaiting integration reproduction |
 | Integration reproduction on `b5eb070` (services and database roles of normal users) | **Reproduced end to end** for all five paths (`tr08.before-b5eb070.json`) |
 
-| Path | Before (`b5eb070`) | After (application 1.1.0, `tr08.after.json` and `test/tr08.test.ts`) |
+| Path | Before (`b5eb070`) | After (application **1.1.1**: `tr08.after.json` at `b1f4dd0`, `test/tr08.test.ts`, and the handover candidate's own run) |
 |---|---|---|
 | Held record on a pending-removal sample | Submission and approval **succeeded** | Submission refused; if the hold appears after submission, approval refused by the service **and** the database trigger |
 | Suspension-review flag on a pending-removal sample | Submission and approval **succeeded** | Refused at submission, approval and in the trigger |
@@ -81,7 +81,7 @@ The concurrency tests do not rely on comparing a hash. An approval is paused aft
 
 - **No calculation behaviour changed.** The same inputs give the same outputs, and the TR-01–TR-07 reproductions, E1–E14 and all 113 fixtures are unchanged.
 - **Engine and methods stay** at 1.5.1, `twa_8h` 1.4.1 and `stel_15` 1.3.1. No method version has a professional approval, so nothing needs to transfer.
-- **Application version** (`package.json`) goes from 1.0.0 to **1.1.0** for the safeguard change and schema migration 030.
+- **Application version** (`package.json`) went from 1.0.0 to 1.1.0 for the safeguard change and schema migration 030, then to **1.1.1** for the R6 fixes and migration 031 (§7). The current candidate is **1.1.1**.
 - **Snapshot hash.** Pending removals are now ordered by id. A revision **in review** whose frozen inputs include a pending removal may fail the freshness check and need recalculation. Approved revisions are not affected.
 
 ## 5. Historical impact (read-only)
@@ -103,7 +103,7 @@ In the scenario, approved revisions had the same row hash before and after the c
 
 ## 6. Tests actually executed (development workspace)
 
-See `docs/test-evidence.md`. The packaged run's per-test results are in the package's `03-fixtures-and-tests/results/test-run.json`. `test/tr08.test.ts` has 13 integration and concurrency tests.
+See `docs/test-evidence.md`. `test/tr08.test.ts` has **20** integration and concurrency tests: the 13 written for application 1.1.0, plus 7 added in 1.1.1 for the R6 fixes (§7). The current evidence for the handover candidate comes from its own verification run (`docs/verification-runbook.md`); earlier outputs keep their original commit identifiers.
 
 Mutation checks were run by hand. Each of these broke the expected tests:
 - the service resolver use reverted to the selected list;
@@ -127,3 +127,19 @@ Corrected statements:
 - evidence dispositions and `client_uuid` holds also use the effective set.
 
 The scenario and development-database checks were re-run, with the same classifications plus separate "at approval" and "now" counts. The engine and method versions are unchanged.
+
+## 8. Technical review of `21a6d0f` and evidence identifiers
+
+The technical review of `21a6d0f` (application 1.1.1) found the TR-08 source inconsistency corrected and no further blocking defect within its scope. It could not run the application because the archive lacked the complete source and runtime setup. **Status: Corrected by source review; supplied integration evidence reviewed; independent runtime verification outstanding.**
+
+**Evidence identifiers.**
+- `tr08.after.json` (commit `b1f4dd0`) is the reproduction run when the 1.1.1 code was committed.
+- `21a6d0f` added documentation and packaging only. No application, migration, test, dependency or configuration file differs, and neither do the TR-08 scenario or impact scripts. The reproduction is therefore unaffected, and `tr08.after.json` keeps its original identifier.
+
+**Handover candidate.** It adds only verification tooling and documentation:
+- `verification/` and `docs/verification-runbook.md`;
+- `.env.verification.example` and the `package.json` `engines` field;
+- `tsconfig.json` now including `verification`;
+- the report and scenario scripts deriving the application-role URL from the given server URL rather than assuming the `postgres_dev` password.
+
+It makes no application, migration, test or calculation change. Its own clean-environment run is in the handover package, under its own identifiers.

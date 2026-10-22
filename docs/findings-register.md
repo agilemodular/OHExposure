@@ -134,7 +134,7 @@ Closed since the H2 report: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2, R2-P
 | TR-01–TR-05, TR-A–D, TR-R | High/Medium (calculation and reporting) | Fixed and tested; TR-01–TR-05 reproduction outputs verified to match by the independent technical re-review of `b5eb070`; the rest awaiting technical re-review (§7) | Re-review of engine 1.4.0; professional judgement on the conventions listed in §7 |
 | TR-N1–N3, TR-N5–N8 | High–Low | Fixed and tested; awaiting technical re-review (§7.1) | As above |
 | TR-06 (supersedes TR-N4), TR-07; R5-F1–F8 | High (calculation; reachable through the application) | Engine reproductions and fixtures verified by the independent technical re-review of `b5eb070`; R5 fixes awaiting re-review (§7.2, §7.3), engine 1.5.1 | Re-review of the R5 fixes; professional judgement on the duplicate thresholds and conflict rule, and the value-field boundaries |
-| TR-08 (with R6-N1–N5, M1–M2) | High (approval safeguards; reproduced end to end) | **Implemented — awaiting technical re-review** (§7.4, §7.5), application 1.1.1 | Re-review of the resolver, locks and trigger |
+| TR-08 (with R6-N1–N5, M1–M2) | High (approval safeguards; reproduced end to end) | **Corrected by source review; supplied integration evidence reviewed; independent runtime verification outstanding** (§7.4–§7.6), application 1.1.1 | Re-review of the resolver, locks and trigger |
 | R2-Q5 | Low | Partly fixed (tests); remaining edge cases fall under R-X1 | Accept with R-X1 (§6) |
 | R-H2a, R-M5, R-M6, R-M8, R-L1, OO-R7 | Low | Open / mitigated (offline capability) | Defer while offline capture is off |
 | R-X1 (with R2-Q5) | Low | Mitigated | Accept for the pilot with controls |
@@ -328,7 +328,7 @@ Source: application inconsistency raised with the independent technical re-revie
 
 Controls that do work for **selected** samples (unchanged, for comparison): held records and suspension flags block submission and approval (`h2.test.ts` "H2/M3", "holds records received while suspended …"); a laboratory amendment waits for the approval's share lock (`h2.test.ts` "a laboratory amendment cannot commit between the approval check and the approval").
 
-**Treatment (application 1.1.0, migration 030; engine 1.5.1 and method versions unchanged because no calculation behaviour changed).**
+**Treatment (application 1.1.0, migration 030, completed in 1.1.1 with migration 031 — §7.5; engine 1.5.1 and method versions unchanged because no calculation behaviour changed).**
 - **One shared resolver** of the effective evidence set: SQL functions `assessment_removal_state` and `assessment_effective_sample_ids` (migration 030), called by the service (`resolveEvidence`) and by the approval trigger. It returns selected samples plus samples whose latest removal request has no later reviewer confirmation. It removes duplicates and gives a deterministic order (selected in stored order, then pending by id). It reads only removal rows of the revision's own tenant and client, and samples of that tenant and client, under row-level security. A re-added sample is simply selected, and an earlier confirmation never authorises a later request (sequence order). The removal history and confirmations are kept.
 - **Used consistently** in:
   - snapshot and calculation;
@@ -346,7 +346,7 @@ Controls that do work for **selected** samples (unchanged, for comparison): held
   - Laboratory amendments, QC checks, dispositions and voids lock the sample `FOR UPDATE`; calibrations lock the instrument `FOR UPDATE`. These wait for the approval's share locks on the effective set.
   - **Related writer-path fix:** placing a held field record on an existing sample took no lock on the sample, so a hold could appear between an approval's hold check and its commit (also for selected samples). It now takes `FOR NO KEY UPDATE` on the sample.
   - The trigger re-checks holds, suspension review and independence on the effective set inside the approving transaction.
-- **Tests** (`test/tr08.test.ts`, 13; scenarios shared with the before-fix reproduction):
+- **Tests** (`test/tr08.test.ts`: 13 tests in application 1.1.0; **20** from 1.1.1, after 7 were added for the R6 fixes (§7.5); scenarios shared with the before-fix reproduction):
   - held record and suspension flag, at submission, at approval and through the trigger;
   - approver QC disposition (pending and selected samples);
   - concurrent amendment and calibration (coordinated transactions, sequence captured);
@@ -382,4 +382,21 @@ R6 was a separate AI review agent, working in its own worktree and database. **I
 | R6-M2 | Impact check: laboratory writes for any substance counted; "now" and "at approval" concerns mixed in the counts | Low | Assessed substance only; separate counts (`concernEstablishedAtApproval`, `concernOutstandingNowOnly`) | Scenario re-run | Fixed |
 | R6-D | Documentation overclaims: hold placement always locks (only with server id); deterministic lock order system-wide (not for writers); later amendment "reported as staleness" (staleness always fired); every safeguard uses the effective set (dispositions and client_uuid holds did not) | Low (documentation) | Corrected with the fixes above (`remediation-summary-tr08.md` §7) | — | Fixed |
 
-**Status of TR-08 after R6: implemented — awaiting technical re-review** (application 1.1.1).
+**Status of TR-08 after R6: implemented — awaiting technical re-review** (application 1.1.1); superseded by §7.6.
+
+### 7.6 Technical review of `21a6d0f` (application 1.1.1, engine 1.5.1) — TR-08 status
+
+The latest technical review found the TR-08 source inconsistency corrected and identified no further blocking defect within its focused scope. It could not execute the application independently, because the supplied archive did not contain the complete application and runtime setup.
+
+| Item | Status |
+|---|---|
+| **TR-08** (with the R6 fixes) | **Corrected by source review; supplied integration evidence reviewed; independent runtime verification outstanding.** |
+| TR-06 and TR-07 engine reproductions; 113 fixtures; TR-01–TR-05 outputs | Verified by the independent technical re-review of `b5eb070` (§7.2) — retained; unchanged since |
+| Professional method approval | None, for any version (G3) |
+| Pilot authorisation | None; internal prototype; no gate accepted |
+
+**Evidence identifiers.**
+- `docs/remediation/tr08.after.json` records commit **`b1f4dd0`**. It was generated when the 1.1.1 code was committed, and is kept with that identifier as a historical output.
+- The 1.1.1 package and its full-suite results record **`21a6d0f`**. That is a later commit containing only documentation and packaging changes.
+- Between the two commits, **no file under `src/`, `db/`, `test/`, `package.json`, `package-lock.json`, `tsconfig.json` or `vitest.config.ts` differs**, and neither do the TR-08 scenario or impact scripts. Only documentation, `tr08.after.json` itself and the package builder changed. So the `b1f4dd0` reproduction applies unchanged to the `21a6d0f` source.
+- The final handover candidate's own run produces new evidence with its own identifiers (`docs/verification-runbook.md`). Historical outputs keep theirs, and no earlier result is relabelled.

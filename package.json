@@ -33,5 +33,8 @@
     "typescript": "^7.0.2",
     "vitest": "^5.0.5"
   },
-  "type": "module"
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0 <23"
+  }
 }

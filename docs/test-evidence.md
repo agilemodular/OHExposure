@@ -4,7 +4,7 @@ Latest run: **22 October 2026**, Node 22.22, PostgreSQL 16.15, application **1.1
 
 **Result: 340 passed, 0 failed, across 11 suites** (333 on application 1.1.0; 1.1.1 added 7 tests for the R6 re-check fixes; 169 before the engine 1.4.0 remediation; 256 after it; 311 on engine 1.5.0; 320 on 1.5.1; application 1.1.0 added 13 TR-08 integration and concurrency tests; engine 1.5.1 added 3 fixtures and 6 application tests for the R5 re-check fixes, `findings-register.md` §7.3. Engine 1.5.0 added 42 fixture tests (TR-06 and TR-07 groups, plus a check that every fixture group runs) and 13 application tests in `tr06-tr07.test.ts`; one fixture expectation changed intentionally (TR-02b) — see `docs/remediation/remediation-summary-tr06-tr07.md` §6).
 
-These are **supplied test evidence** from the development workspace. They are not independent technical verification and not professional approval.
+The current evidence for the handover candidate comes from a clean-environment run of `verification/run-verification.sh` (`docs/verification-runbook.md`); it is in the handover package under the candidate commit and its own evidence manifest. These are **supplied test evidence** from the development team. They are not independent technical verification and not professional approval.
 
 | Suite | Tests | Covers |
 |---|---|---|

@@ -13,7 +13,7 @@ LEGACY=${1:-9b87c17}
 SUPER=${EXAMPLE_SUPER_URL:-postgres://postgres:postgres_dev@localhost:5432/postgres}
 DB=ohea_tr0607_scenario
 ADMIN=${SUPER%/*}/$DB
-APP=${ADMIN/postgres:postgres_dev/ohea_app:ohea_app_dev}
+APP=$(node -e 'const u=new URL(process.argv[1]); u.username="ohea_app"; u.password=process.env.OHEA_APP_PASSWORD||"ohea_app_dev"; console.log(u.toString())' "$ADMIN")
 ROOT=$(pwd)
 WT=$(mktemp -d)/legacy
 psql "$SUPER" -qc "drop database if exists $DB with (force)" -c "create database $DB"
