@@ -1,0 +1,74 @@
+// Probe (engine 1.4.0, before the fix): is TR-06 / TR-07 reachable through the application, not only the engine?
+import { randomUUID } from 'node:crypto';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { buildWorld, type World } from './fixtures.js';
+import { closePool } from '../src/db.js';
+import * as reg from '../src/services/register.js';
+import * as inst from '../src/services/instruments.js';
+import * as plans from '../src/services/plans.js';
+import * as field from '../src/services/field.js';
+import * as lab from '../src/services/lab.js';
+import * as asmt from '../src/services/assessments.js';
+
+let w: World;
+const S: Record<string, any> = {};
+beforeAll(async () => {
+  w = await buildWorld();
+  const { prac } = w.a;
+  const site = await reg.createSite(prac, { client_id: w.A.clients['Client One'], name: 'Probe site', reference: `PR-${w.tag}` });
+  const area = await reg.createWorkArea(prac, { site_id: site.id, name: 'Bay' });
+  const proc = await reg.createProcess(prac, { work_area_id: area.id, name: 'Process' });
+  const task = await reg.createTask(prac, { process_id: proc.id, name: 'Main task', duration_min_per_shift: '480', duration_basis: 'recorded_fact', typical_start_min: '0', typical_end_min: '480' });
+  const hz = await reg.createHazard(prac, { task_id: task.id, substance_id: w.ref.substanceId, physical_form: 'dust', exposure_routes: ['inhalation'] });
+  S.group = await reg.createGroup(prac, { site_id: site.id, name: 'Probe group', rationale: 'Same task, same tools and same shift pattern; comparable work methods observed.', task_ids: [task.id], hazard_ids: [hz.id] });
+  S.wk = await reg.createWorker(prac, { client_id: w.A.clients['Client One'], ref_code: `PW1-${w.tag}`, full_name: 'Probe Worker 1' });
+  await reg.addMembership(prac, { group_id: S.group.id, worker_id: S.wk.id, valid_from: '2026-01-01' });
+  S.pump = await inst.createInstrument(prac, { asset_tag: `PP-${w.tag}`, instrument_type: 'sampling_pump' });
+  await inst.recordCalibration(prac, S.pump.id, { performed_at: '2026-01-01', valid_until: '2027-12-31', outcome: 'pass' });
+  S.method = await inst.createMethodVersion(prac, { code: `PM-${w.tag}`, title: 'Probe gravimetric', source_reference: 'Test fixture', version: '1', flow_drift_tolerance_pct: '5', result_basis: 'mass_on_sample', suitable_for_formal_assessment: 'on', flow_drift_consequence: 'disposition_required' });
+  S.plan = await plans.createPlan(prac, { site_id: site.id, title: 'Probe plan', purpose: 'Probe for TR-06 and TR-07', assessment_question: 'What is the 15-minute exposure?', approach: 'personal', strategy_rationale: 'Short-term personal samples during the main task.', instrument_ids: [S.pump.id] });
+  await plans.addTarget(prac, S.plan.id, { group_id: S.group.id, substance_id: w.ref.substanceId, method_version_id: S.method.id, planned_samples: '2' });
+  await plans.transitionPlan(w.a.rev, S.plan.id, { to: 'reviewed' });
+  await plans.transitionPlan(prac, S.plan.id, { to: 'scheduled' });
+  await plans.transitionPlan(w.a.tech, S.plan.id, { to: 'in_progress' });
+  const cap = async (code: string, start: string, end: string) => (await field.syncBatch(w.a.tech, [{ client_uuid: randomUUID(), server_id: null, base_version: null, payload: {
+    plan_id: S.plan.id, sample_code: code, sample_type: 'personal', worker_id: S.wk.id, substance_id: w.ref.substanceId, method_version_id: S.method.id, instrument_id: S.pump.id,
+    timezone: 'UTC', start_local: start, end_local: end, flow_pre_lpm: 2, flow_post_lpm: 2, shift_ref: 'DAY-0302' } }]))[0].server_id;
+  S.am = await cap(`PAM-${w.tag}`, '2026-03-02T08:00', '2026-03-02T08:15');
+  S.pm = await cap(`PPM-${w.tag}`, '2026-03-02T15:00', '2026-03-02T15:15');
+  S.dbl = await cap(`PDB-${w.tag}`, '2026-03-03T08:00', '2026-03-03T16:00');
+  await field.addQcCheck(w.a.tech, S.pm, { check_type: 'flow_check', outcome: 'fail', detail: 'Pump fault at collection' });
+  S.lab = await inst.createLaboratory(prac, { name: `Probe lab ${w.tag}` });
+  await lab.createSubmission(prac, { laboratory_id: S.lab.id, reference: `PSUB-${w.tag}`, sample_ids: [S.am, S.pm, S.dbl], dispatched_at: '2026-03-04T09:00' });
+  const sub = (await lab.listSubmissions(prac)).find((s) => s.reference === `PSUB-${w.tag}`);
+  await lab.receiveSubmission(prac, sub.id, { received_at: '2026-03-05T10:00', received_condition: 'Intact' });
+  // 0.1 mg/m³ and 2 mg/m³ over 30 L (15 min × 2 L/min) = 3 µg and 60 µg.
+  await lab.recordResult(prac, { sampling_event_id: S.am, substance_id: w.ref.substanceId, value: '3', unit: 'ug', qualifier: '=', lod: '0.1', loq: '0.3' });
+  await lab.recordResult(prac, { sampling_event_id: S.pm, substance_id: w.ref.substanceId, value: '60', unit: 'ug', qualifier: '=', lod: '0.1', loq: '0.3' });
+  const b = await asmt.createBenchmarkVersion(prac, { substance_id: w.ref.substanceId, jurisdiction: 'ORG', benchmark_type: `STEL-${w.tag}`, averaging_minutes: '15', value: '1', unit: 'mg/m3', source_title: 'Synthetic 15-minute benchmark', source_version: '1', effective_from: '2020-01-01' });
+  await asmt.verifyBenchmarkVersion(w.a.rev, b.id, { status: 'verified', note: 'Synthetic test benchmark verified' });
+  S.bm15 = b.id;
+});
+afterAll(async () => { await closePool(); });
+
+describe('probe on engine 1.4.0', () => {
+  it('TR-06 through the services', async () => {
+    const { revision } = await asmt.createAssessment(w.a.prac, { group_id: S.group.id, substance_id: w.ref.substanceId, plan_id: S.plan.id, title: 'Probe', assessment_question: 'Is short-term exposure adequately controlled?' });
+    await asmt.updateDraft(w.a.prac, revision.id, { calc_code: 'stel_15', sample_ids: [S.am, S.pm], benchmark_version_id: S.bm15 });
+    const before = (await asmt.calculate(w.a.prac, revision.id)).calc_output;
+    console.log('PROBE TR-06 before', before.benchmarkState, before.evidenceAdequacy);
+    let refused: string | null = null;
+    try { await asmt.recordEvidenceDisposition(w.a.prac, revision.id, { sample_id: S.pm, kind: 'duplicate', related_sample_id: S.am, reason: 'Recorded as a duplicate of the morning sample', consequence: 'The morning sample represents this worker and shift' }); } catch (e: any) { refused = e.message; }
+    const after = (await asmt.calculate(w.a.prac, revision.id)).calc_output;
+    console.log('PROBE TR-06 practitioner duplicate', refused ?? 'accepted', after.benchmarkState, after.evidenceAdequacy);
+    expect(true).toBe(true);
+  });
+  it('TR-07 through direct entry and CSV import', async () => {
+    let direct: string | null = null;
+    try { await lab.recordResult(w.a.prac, { sampling_event_id: S.dbl, substance_id: w.ref.substanceId, value: '600', unit: 'ug', qualifier: 'detected_below_loq', lod: '10', loq: '30' }); } catch (e: any) { direct = e.message; }
+    console.log('PROBE TR-07 direct entry', direct ?? 'accepted');
+    const csv = await lab.stageImport(w.a.prac, { filename: 'p.csv', laboratory_id: S.lab.id, csv: `sample_code,analyte,value,unit,qualifier,lod,loq,amendment_reason\nPDB-${w.tag},Demo Dust X (synthetic),600,ug,DET<LOQ,10,30,probe amendment\n` });
+    console.log('PROBE TR-07 CSV import', csv.status);
+    expect(true).toBe(true);
+  });
+});

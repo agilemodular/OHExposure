@@ -1,0 +1,17 @@
+Application-level probe on engine 1.4.0 (commit 9bb5e0d), run 2026-10-22T12:35:05Z in the development workspace
+(disposable test database; services called directly as the practitioner role; synthetic data).
+
+Command: npx vitest run test/tr06-tr07.test.ts (probe version of the file, replaced by the regression tests after the fix)
+
+PROBE TR-06 before indeterminate unresolved_evidence
+PROBE TR-06 practitioner duplicate accepted below_benchmark adequate
+PROBE TR-07 direct entry accepted
+PROBE TR-07 CSV import validated
+
+Reading:
+- TR-06: a practitioner could record "duplicate" for the afternoon sample naming the morning sample through
+  recordEvidenceDisposition; the service, the database trigger and the engine all accepted it, and the calculated
+  15-minute assessment changed from indeterminate / unresolved_evidence to below_benchmark / adequate.
+- TR-07: direct laboratory entry and the CSV import (qualifier text "DET<LOQ") both accepted detected_below_loq
+  with value 600 ug, LOD 10 ug, LOQ 30 ug.
+Both findings are therefore application exposures, not only engine-level defects.
