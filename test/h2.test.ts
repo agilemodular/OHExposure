@@ -526,6 +526,9 @@ describe('R2 final re-check', () => {
     await resumeWorkflows(URL_, w.A.tenant.id, ['field_sync'], 'H2 Operator', 'P3-REVAL');
     const id = (await withActor(w.a.tech, (tx) => tx.query(`select id from field_intake_holds where client_uuid=$1 and status='held'`, [cur.client_uuid]))).rows[0].id;
     const other = S.samples[1];
+    // A hold that stays 'held' cannot be repointed, even to its own sample (no change without a status transition, 022).
+    await expect(withActor(w.a.tech, (tx) => tx.query('update field_intake_holds set sampling_event_id=$2 where id=$1', [id, target]))).rejects.toThrow(/without a status transition/);
+    await expect(withActor(w.a.prac, (tx) => tx.query('update field_intake_holds set sampling_event_id=$2 where id=$1', [id, other]))).rejects.toThrow(/without a status transition/);
     // As the submitter, directly: close or conflict the hold against an unrelated sample.
     await expect(withActor(w.a.tech, (tx) => tx.query(`update field_intake_holds set status='synchronised', sampling_event_id=$2 where id=$1`, [id, other]))).rejects.toThrow(/its own sample/);
     await expect(withActor(w.a.tech, (tx) => tx.query(`update field_intake_holds set status='in_conflict', sampling_event_id=$2 where id=$1`, [id, other]))).rejects.toThrow(/its own sample/);
@@ -541,7 +544,7 @@ describe('R2 final re-check', () => {
     await field.dismissHold(w.a.prac, id, { notes: 'Obsolete held edit; the server copy stands' });
   });
 
-  it('a held conflict cannot be repointed to another sample', async () => {
+  it('a final (dismissed) hold cannot be changed or repointed', async () => {
     const c = await admin();
     const h = (await c.query(`select id, tenant_id from field_intake_holds where status='dismissed' and tenant_id=$1 limit 1`, [w.A.tenant.id])).rows[0];
     expect(h).toBeTruthy();
@@ -568,6 +571,19 @@ describe('remaining low findings (19 Oct, evening)', () => {
     expect(samePerson('Jane Smith', 'Jane \u0301Smith')).toBe(true);
     expect(samePerson('Jane Smith', 'Ja\u200Bne Smith')).toBe(true);
     expect(samePerson('ジロウ', 'シロウ')).toBe(false);
+    // R2-Q4 re-check: other default-ignorable characters and stray marks; non-decomposing Latin letters.
+    for (const x of ['Ja\u00ADne Smith', 'Ja\u200Ene Smith', 'Jane\u202E Smith', 'Ja\u2066ne Smith', 'Ja\u2061ne Smith', 'Ja\u180Ene Smith', 'Jane Smith\u{E0041}', 'Ja\u061Cne Smith'])
+      expect(samePerson('Jane Smith', x)).toBe(true);
+    expect(samePerson('王伟', '王\u3164伟')).toBe(true);
+    expect(samePerson('王伟', '王\u0301伟')).toBe(true);
+    expect(samePerson('सुनील', 'सु\u0301नील')).toBe(true);
+    expect(samePerson('ガク', 'カク')).toBe(false);
+    expect(samePerson('ガク', '\u30AB\u3099ク')).toBe(true);
+    expect(samePerson('Łukasz Nowak', 'Lukasz Nowak')).toBe(true);
+    expect(samePerson('Søren', 'Soren')).toBe(true);
+    expect(samePerson('Đorđe', 'Dorde')).toBe(true);
+    expect(samePerson('Strauß', 'Strauss')).toBe(true);
+    expect(samePerson('王伟', '王纬')).toBe(false);
     expect(samePerson('ゆうこ', 'ゆうご')).toBe(false);
     expect(samePerson('José Álvarez', 'alvarez jose')).toBe(true);
     expect(samePerson('Ελένη', 'ελενη')).toBe(true);
