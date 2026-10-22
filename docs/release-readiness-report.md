@@ -37,7 +37,7 @@ No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is t
   - The first review found 2 critical, 4 high, 8 medium and 9 low findings, plus 9 more from the re-checks.
   - **All Critical and High software findings are closed. Every Medium software finding is closed except H1-F01, which is fixed in software and awaits the hygienist's disposition.**
   - The open Low findings are listed in `findings-register.md` §4.
-  - An acceptance check closed the remaining software low findings (R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2) and confirmed R-X1 as mitigated (risk acceptance is proposed and awaits the SHEQ Experts director, `findings-register.md` §6). The follow-on name-check findings (R2-Q1 to R2-Q4) are fixed and tested; Q1–Q3 closed on re-check; see `findings-register.md` §3.4.
+  - An acceptance check closed the remaining software low findings (R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2) and confirmed R-X1 as mitigated (risk acceptance is proposed and awaits the SHEQ Experts director, `findings-register.md` §6). The follow-on name-check findings R2-Q1 to R2-Q4 are closed on re-check; residual edge cases (R2-Q5, Low) fall under R-X1; see `findings-register.md` §3.4 and §5.4.
 
 ## Correction to the 18 October report
 

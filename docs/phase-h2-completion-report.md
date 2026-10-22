@@ -44,7 +44,7 @@ The authoritative record is `findings-register.md`.
 | R-M8 | Low (residual) | PIN strength is the main protection for offline data; the controller must accept the residual risk within G8 |
 | R-M5, R-M6 | — | Fixed; still to be exercised on real devices (G9) |
 | R-L1, R-H2a, R-X1 (mitigated, accepted), R2-N7, R2-N9, R2-H3 residual, image digests | Low | See `findings-register.md` §4. None blocks a pilot by itself; G5 and G8 reviewers should accept or require them. |
-| R2-Q4 | Low | Fixed (tests); not re-reviewed |
+| R2-Q4 | Low | Closed on re-check, 22 Oct (`findings-register.md` §5.4); residual R2-Q5 under R-X1 |
 
 No Critical, High or Medium software finding is open.
 

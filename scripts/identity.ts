@@ -15,7 +15,8 @@ export function normaliseName(n: string): string {
   // Every default-ignorable code point (soft hyphen, bidi controls, Hangul fillers, tags, joiners, variation selectors…)
   // is removed, as are inherited marks (e.g. a stray acute) on scripts where they carry no meaning (R2-Q4 re-check).
   // Kana voicing marks are kept: ガ and カ are different names.
-  return n.normalize('NFKD').replace(/\p{Default_Ignorable_Code_Point}/gu, '')
+  // Spacing kana voicing marks (゛゜) are read as the combining marks they stand for; control characters and the braille blank are removed.
+  return n.replace(/\u309B/g, '\u3099').replace(/\u309C/g, '\u309A').replace(/[\p{Cc}\u2800]/gu, '').normalize('NFKD').replace(/\p{Default_Ignorable_Code_Point}/gu, '')
     .replace(/(^|[^\p{L}\p{M}])\p{M}+/gu, '$1')
     .replace(/([\p{Script=Latin}\p{Script=Greek}\p{Script=Cyrillic}\p{Script=Arabic}\p{Script=Hebrew}])\p{M}+/gu, '$1')
     .replace(/(?![\p{scx=Hira}\p{scx=Kana}])\p{Script=Inherited}/gu, '')

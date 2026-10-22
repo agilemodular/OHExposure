@@ -9,7 +9,7 @@ Sources of truth: `findings-register.md` (findings), `pilot-gate-register.md` (g
 
 | State | Status | Basis |
 |---|---|---|
-| Software verification complete | **Substantially complete, with stated exceptions.** All Critical and High findings are closed. Medium: H1-F01 is fixed in software but awaits professional disposition; R2-P3 and R2-P4 are closed. Four Lows (R2-Q4, R2-P5, R2-P6, OO-R6) are fixed and tested but not re-reviewed. The reviews were made by separate AI review agents, not by people or an external firm | `findings-register.md` §4–5 |
+| Software verification complete | **Substantially complete, with stated exceptions.** All Critical and High findings are closed. Medium: H1-F01 is fixed in software but awaits professional disposition; R2-P3 and R2-P4 are closed. The Low fixes re-checked on 22 Oct (R2-Q4, R2-P5, R2-P6, OO-R6) are closed; residual name-check edge cases (R2-Q5, Low) fall under R-X1. The reviews were made by separate AI review agents, not by people or an external firm | `findings-register.md` §4–5 |
 | Operational verification complete | **No.** No hosting environment exists: no TLS, secrets, alert delivery, monitoring, scheduled backups, hosting restore or rollback rehearsal. No device has been tested | G5, G6, G9 |
 | Professional approval complete | **No.** No hygienist appointed; no method approved; H1-F01 not dispositioned; no real reference data | G2, G3, G4 |
 | Ready for pilot authorisation | **No.** No gate is accepted | `pilot-gate-register.md` |
@@ -60,7 +60,7 @@ The software is corrected in engine 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1). Whe
 | Treatment | Findings |
 |---|---|
 | Defer while offline capture is off | R-H2a, R-M5, R-M6, R-M8, R-L1, OO-R7 |
-| Accept for the pilot with controls | R-X1 (with R2-Q4), R2-H3, R2-N9, R2-P4 residual |
+| Accept for the pilot with controls | R-X1 (with R2-Q5), R2-H3, R2-N9, R2-P4 residual |
 | Accept | R2-P3a |
 | Fix before pilot (deployment steps) | Image digests; R2-N7 if any existing volume is reused |
 

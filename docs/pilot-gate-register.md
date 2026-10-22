@@ -43,7 +43,7 @@ Findings are recorded in `findings-register.md`. Open or unaccepted findings tha
 | Gate | Findings |
 |---|---|
 | G3 | H1-F01: awaiting professional disposition (brief: `professional-review-handover.md` §1.0) |
-| G5 | R-X1 (name-based separation checks; mitigated; risk acceptance proposed, awaiting the SHEQ Experts director — findings register §6), R2-Q4 (fixed, not re-reviewed); privileged-access controls in `approval-and-issue-controls.md` §4 to be confirmed with the hosting owner |
+| G5 | R-X1 (name-based separation checks; mitigated; risk acceptance proposed, awaiting the SHEQ Experts director — findings register §6), R2-Q5 (residual name-check edge cases, under R-X1); privileged-access controls in `approval-and-issue-controls.md` §4 to be confirmed with the hosting owner |
 | G6 | H2-A7 (pre-migration backup): rehearsal in hosting needed |
 | G8 | Offline findings R-M5, R-M6, R-M8, R-L1, R-H2a: proposed *defer while offline capture is off* (`findings-register.md` §6); online-only verification and its re-check (§5) |
 | G9 | Online-only device tests O1–O10 and retained F tests (`online-only-pilot-configuration.md` §5); R-M5/R-M6 only if offline is enabled |
