@@ -1,6 +1,6 @@
 # Release readiness report
 
-**Updated:** 19 October 2026 (post-H2 evidence closure) · **Scope:** airborne contaminants · **Engine:** 1.3.1 (`twa_8h` 1.2.1, `stel_15` 1.1.1) · **Migrations:** 25
+**Updated:** 22 October 2026 (engine 1.4.0 remediation) · **Scope:** airborne contaminants · **Engine:** 1.4.0 (`twa_8h` 1.3.0, `stel_15` 1.2.0) · **Migrations:** 26
 
 ## Classification
 
@@ -32,7 +32,8 @@ No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is t
   - Every remaining Low finding has a proposed treatment awaiting its owner's acceptance (`findings-register.md` §6).
   - H1-F01 brief written for the hygienist.
   - Synthetic demonstration walkthrough with the six failure cases.
-- **Automated evidence:** 169 tests, all passing. Desktop browser checks 24/24 (offline) and 17/17 (online-only). A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
+- **Engine 1.4.0 remediation (22 Oct 2026):** the AI-assisted technical review of `ceec79f` found five calculation defects (TR-01–TR-05) and associated weaknesses. All are fixed and tested and await technical re-review (`findings-register.md` §7; `docs/remediation/remediation-summary.md`). The candidate method versions are now `twa_8h` 1.3.0 and `stel_15` 1.2.0; no approval exists or transfers.
+- **Automated evidence:** 248 tests, all passing. Desktop browser checks 24/24 (offline) and 17/17 (online-only), re-run on engine 1.4.0. A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
 - **Independent software review (R2).** R2 reviewed the Phase H2 controls, re-checked the fixes, then re-checked the final fixes.
   - The first review found 2 critical, 4 high, 8 medium and 9 low findings, plus 9 more from the re-checks.
   - **All Critical and High software findings are closed. Every Medium software finding is closed except H1-F01, which is fixed in software and awaits the hygienist's disposition.**
