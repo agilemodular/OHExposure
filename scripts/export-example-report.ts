@@ -9,7 +9,7 @@ const SUPER = process.env.EXAMPLE_SUPER_URL ?? 'postgres://postgres:postgres_dev
 const DB = 'ohea_example_report';
 const admin = SUPER.replace(/\/[^/]+$/, `/${DB}`);
 const c = new pg.Client({ connectionString: SUPER }); await c.connect();
-await c.query(`drop database if exists ${DB} with (force)`); await c.query(`create database ${DB} template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'`); // UTF-8 required (TR-09) await c.end();
+await c.query(`drop database if exists ${DB} with (force)`); await c.query(`create database ${DB} template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'`); await c.end(); // UTF-8 required (TR-09)
 const env = { ...process.env, DATABASE_ADMIN_URL: admin, DATABASE_URL: (() => { const u = new URL(admin); u.username = 'ohea_app'; u.password = process.env.OHEA_APP_PASSWORD ?? 'ohea_app_dev'; return u.toString(); })() };
 execFileSync('npx', ['tsx', '-e', `import('./scripts/migrate.ts').then((m) => m.migrate(process.env.DATABASE_ADMIN_URL))`], { env, stdio: 'inherit' });
 execFileSync('npx', ['tsx', 'scripts/seed-demo.ts'], { env, stdio: 'inherit' });

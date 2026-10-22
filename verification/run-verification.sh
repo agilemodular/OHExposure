@@ -88,11 +88,15 @@ step impact-tr08-scenario "bash scripts/tr/run-tr08-scenario.sh b5eb070 && cp do
 # 10. Optional automated desktop-browser checks (not device testing)
 if [ "${OHEA_BROWSER:-0}" = "1" ]; then
   PORT=${OHEA_PORT:-3100}
-  ( PORT=$PORT DATABASE_URL="$APP_APP" DATABASE_ADMIN_URL="$ADMIN_APP" STORAGE_DIR="$EV/storage/" npx tsx src/server.ts > "$EV/logs/server.log" 2>&1 & echo $! > "$EV/server.pid" )
+  # Refuse a port that is already in use, so the checks cannot reach a server this run did not start.
+  if curl -s -o /dev/null --max-time 2 "http://localhost:$PORT/"; then echo "Port $PORT is already in use; set OHEA_PORT to a free port" >&2; FAILED=$((FAILED+1)); else
+  # Own process group, so the server and its tsx/esbuild children are stopped together afterwards.
+  setsid bash -c "PORT=$PORT DATABASE_URL='$APP_APP' DATABASE_ADMIN_URL='$ADMIN_APP' STORAGE_DIR='$EV/storage/' exec npx tsx src/server.ts" > "$EV/logs/server.log" 2>&1 < /dev/null & SERVER_PGID=$!
   step wait-for-server "for i in \$(seq 1 60); do curl -s -o /dev/null -w '%{http_code}' http://localhost:$PORT/login | grep -q 200 && exit 0; sleep 1; done; exit 1"
   step browser-offline-protection "BASE=http://localhost:$PORT DATABASE_ADMIN_URL='$ADMIN_APP' python3 test/browser/field_offline_protection.py"
   step browser-online-only "BASE=http://localhost:$PORT DATABASE_ADMIN_URL='$ADMIN_APP' python3 test/browser/field_online_only.py"
-  kill "$(cat "$EV/server.pid")" 2>/dev/null; rm -f "$EV/server.pid"
+  kill -- -"$SERVER_PGID" 2>/dev/null; sleep 1; kill -9 -- -"$SERVER_PGID" 2>/dev/null
+  fi
 fi
 
 # Restore tracked files written by the generators; record what the regenerated outputs changed.
