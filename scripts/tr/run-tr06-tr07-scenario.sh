@@ -16,7 +16,7 @@ ADMIN=${SUPER%/*}/$DB
 APP=$(node -e 'const u=new URL(process.argv[1]); u.username="ohea_app"; u.password=process.env.OHEA_APP_PASSWORD||"ohea_app_dev"; console.log(u.toString())' "$ADMIN")
 ROOT=$(pwd)
 WT=$(mktemp -d)/legacy
-psql "$SUPER" -qc "drop database if exists $DB with (force)" -c "create database $DB"
+psql "$SUPER" -qc "drop database if exists $DB with (force)" -c "create database $DB template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'"
 git worktree add -q --detach "$WT" "$LEGACY"
 trap 'git -C "$ROOT" worktree remove --force "$WT"; psql "$SUPER" -qc "drop database if exists $DB with (force)"' EXIT
 ln -s "$ROOT/node_modules" "$WT/node_modules"

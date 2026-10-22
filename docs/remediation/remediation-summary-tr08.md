@@ -142,4 +142,4 @@ The technical review of `21a6d0f` (application 1.1.1) found the TR-08 source inc
 - `tsconfig.json` now including `verification`;
 - the report and scenario scripts deriving the application-role URL from the given server URL rather than assuming the `postgres_dev` password.
 
-It makes no application, migration, test or calculation change. Its own clean-environment run is in the handover package, under its own identifiers.
+It makes no application, migration, test or calculation change. Its own clean-environment run is in the handover package, under its own identifiers. A first run (candidate `a542514`) on a SQL_ASCII cluster revealed the undocumented UTF-8 database requirement (TR-09). That was fixed in tooling and documentation, and the run was repeated on the same cluster.

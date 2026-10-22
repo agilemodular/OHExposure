@@ -7,7 +7,7 @@ This runbook is for anyone who needs to verify the OHEA candidate independently,
 | Component | Version |
 |---|---|
 | Node.js | **22.x** (tested with 22.22.0; `package.json` `engines`), with npm from that release |
-| PostgreSQL | **16** (tested with 16.x) |
+| PostgreSQL | **16** (tested with 16.15); databases must use **UTF-8** encoding |
 | Git | Any recent version. The historical scenarios need the repository history, so verify from the git bundle or a clone, not from the plain archive |
 | Browser checks (optional) | Python 3 with Playwright (`pip install playwright`) and Chromium (`python3 -m playwright install chromium`) |
 
@@ -53,17 +53,17 @@ Use **one** of these.
 # (a) Docker
 docker run -d --name ohea-verify-pg -e POSTGRES_PASSWORD=postgres_dev -p 55432:5432 postgres:16
 # (b) Debian/Ubuntu cluster tools
-sudo pg_createcluster 16 ohea_verify -p 55432 --start
+sudo pg_createcluster 16 ohea_verify -p 55432 --encoding UTF8 --locale C --start
 sudo -u postgres psql -p 55432 -c "alter role postgres password 'postgres_dev'"
 ```
 
 ```bash
 export OHEA_PG_SUPER_URL=postgres://postgres:postgres_dev@localhost:55432/postgres
-psql "$OHEA_PG_SUPER_URL" -c 'drop database if exists ohea_verify_test with (force)' -c 'create database ohea_verify_test'
-psql "$OHEA_PG_SUPER_URL" -c 'drop database if exists ohea_verify_app with (force)'  -c 'create database ohea_verify_app'
+psql "$OHEA_PG_SUPER_URL" -c 'drop database if exists ohea_verify_test with (force)' -c "create database ohea_verify_test template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'"
+psql "$OHEA_PG_SUPER_URL" -c 'drop database if exists ohea_verify_app with (force)'  -c "create database ohea_verify_app template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'"
 ```
 
-`.env.verification.example` lists every setting the run uses, with placeholders and disposable local defaults.
+**Databases must use UTF-8 encoding** (TR-09). The commands above create them as UTF-8 explicitly, so they work even on a cluster initialised as SQL_ASCII, and `scripts/migrate.ts` refuses a non-UTF-8 database. `.env.verification.example` lists every setting the run uses, with placeholders and disposable local defaults.
 
 ## 4. Apply migrations (001–031)
 

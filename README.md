@@ -8,7 +8,7 @@ Standalone platform owned by SHEQ Experts Limited that connects workplace exposu
 
 ## Run it locally
 
-Requirements: Node 22+, PostgreSQL 16.
+Requirements: Node 22, PostgreSQL 16 with a **UTF-8** database (`create database ohea template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'`). Independent verification from source: [docs/verification-runbook.md](docs/verification-runbook.md).
 
 ```bash
 npm install

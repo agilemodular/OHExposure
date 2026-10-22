@@ -7,6 +7,9 @@ export async function migrate(adminUrl: string) {
   const c = new pg.Client({ connectionString: adminUrl });
   await c.connect();
   try {
+    // TR-09: the schema needs a UTF-8 database (e.g. Unicode normalisation in migration 028); refuse anything else early.
+    const enc = (await c.query(`select pg_encoding_to_char(encoding) e, current_database() d from pg_database where datname = current_database()`)).rows[0];
+    if (enc.e !== 'UTF8') throw new Error(`Database ${enc.d} uses ${enc.e} encoding; OHEA requires UTF8. Create it with: create database ${enc.d} template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'`);
     await c.query('create table if not exists schema_migrations (name text primary key, applied_at timestamptz default now())');
     const dir = join(import.meta.dirname, '..', 'db', 'migrations');
     for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {

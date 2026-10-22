@@ -36,7 +36,7 @@ export async function restoreVerify(adminUrl: string, dir: string, o: { keep?: b
     if (checks.some((c) => !c.ok)) throw new Error('Backup files do not match their manifest; not restoring');
 
     const m = new pg.Client({ connectionString: maint.toString() }); await m.connect();
-    await m.query(`create database ${scratchName}`); created = true;
+    await m.query(`create database ${scratchName} template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'`); created = true;
     await m.end();
     execFileSync('pg_restore', ['--exit-on-error', '--no-password', '-d', scratchUrl.toString(), join(dir, manifest.db.file)], { stdio: ['ignore', 'ignore', 'pipe'] });
     execFileSync('tar', ['-xf', join(dir, manifest.attachments.file), '-C', files]);

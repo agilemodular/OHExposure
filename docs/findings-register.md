@@ -134,6 +134,7 @@ Closed since the H2 report: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2, R2-P
 | TR-01–TR-05, TR-A–D, TR-R | High/Medium (calculation and reporting) | Fixed and tested; TR-01–TR-05 reproduction outputs verified to match by the independent technical re-review of `b5eb070`; the rest awaiting technical re-review (§7) | Re-review of engine 1.4.0; professional judgement on the conventions listed in §7 |
 | TR-N1–N3, TR-N5–N8 | High–Low | Fixed and tested; awaiting technical re-review (§7.1) | As above |
 | TR-06 (supersedes TR-N4), TR-07; R5-F1–F8 | High (calculation; reachable through the application) | Engine reproductions and fixtures verified by the independent technical re-review of `b5eb070`; R5 fixes awaiting re-review (§7.2, §7.3), engine 1.5.1 | Re-review of the R5 fixes; professional judgement on the duplicate thresholds and conflict rule, and the value-field boundaries |
+| TR-09 | Low (environment prerequisite; fails closed) | Fixed in tooling; development-team clean run passes (§7.7) | State UTF-8 in hosting requirements (G5/G6) |
 | TR-08 (with R6-N1–N5, M1–M2) | High (approval safeguards; reproduced end to end) | **Corrected by source review; supplied integration evidence reviewed; independent runtime verification outstanding** (§7.4–§7.6), application 1.1.1 | Re-review of the resolver, locks and trigger |
 | R2-Q5 | Low | Partly fixed (tests); remaining edge cases fall under R-X1 | Accept with R-X1 (§6) |
 | R-H2a, R-M5, R-M6, R-M8, R-L1, OO-R7 | Low | Open / mitigated (offline capability) | Defer while offline capture is off |
@@ -400,3 +401,15 @@ The latest technical review found the TR-08 source inconsistency corrected and i
 - The 1.1.1 package and its full-suite results record **`21a6d0f`**. That is a later commit containing only documentation and packaging changes.
 - Between the two commits, **no file under `src/`, `db/`, `test/`, `package.json`, `package-lock.json`, `tsconfig.json` or `vitest.config.ts` differs**, and neither do the TR-08 scenario or impact scripts. Only documentation, `tr08.after.json` itself and the package builder changed. So the `b1f4dd0` reproduction applies unchanged to the `21a6d0f` source.
 - The final handover candidate's own run produces new evidence with its own identifiers (`docs/verification-runbook.md`). Historical outputs keep theirs, and no earlier result is relabelled.
+
+### 7.7 TR-09: undocumented UTF-8 database requirement (found by the clean-environment verification run, 22 Oct 2026)
+
+| Field | Content |
+|---|---|
+| Found by | The development team's clean-environment run of `verification/run-verification.sh` on candidate `a542514`. The run used a fresh PostgreSQL 16.15 cluster initialised with the container's default C locale, so its databases were SQL_ASCII, and a fresh clone from the git bundle. Evidence: `evidence-a542514/` in the handover package |
+| Observed | 7 of 340 tests failed, all in `tr06-tr07.test.ts`, with *Unicode normalization can only be performed if server encoding is UTF8*. The text normalisation in migration 028 (`ohea_norm_text`, `normalize(…, NFKC)`) needs a UTF-8 database. All other steps passed |
+| Impact | No silent wrong result: duplicate dispositions are **refused with an error** in a non-UTF-8 database. Deployment risk only: production (`postgres:16` image) is UTF-8 by default. The development databases used so far were UTF-8, which is why the requirement was never exercised |
+| Severity | Low (environment prerequisite, fails closed) |
+| Treatment | **Tooling and documentation only; no application, migration, test or calculation change.** `scripts/migrate.ts` refuses a non-UTF-8 database with the exact `create database … encoding 'UTF8'` command. Every script that creates a disposable database (verification run, scenario scripts, demonstration report, restore verification) creates it as UTF-8 explicitly. The README and runbook state the requirement |
+| Evidence of the fix | The clean-environment run repeated on the same SQL_ASCII cluster with the fixed candidate (`evidence-<candidate>/` in the handover package) |
+| Status | Fixed (tooling); verified by the development team's clean run; independent runtime verification outstanding |

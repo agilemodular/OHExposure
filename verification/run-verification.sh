@@ -52,7 +52,10 @@ step dependency-versions "npm ls --depth=0 --json > '$EV/outputs/npm-ls.json'; n
 step typecheck 'npx tsc --noEmit -p .'
 
 # 3. Disposable databases (explicit names only)
-step create-databases "psql '$SUPER' -v ON_ERROR_STOP=1 -c 'drop database if exists ohea_verify_test with (force)' -c 'drop database if exists ohea_verify_app with (force)' -c 'create database ohea_verify_test' -c 'create database ohea_verify_app'"
+UTF="template template0 encoding 'UTF8' lc_collate 'C' lc_ctype 'C'"   # UTF-8 required (TR-09), whatever the cluster default
+create_dbs() { psql "$SUPER" -v ON_ERROR_STOP=1 -c 'drop database if exists ohea_verify_test with (force)' -c 'drop database if exists ohea_verify_app with (force)' \
+  -c "create database ohea_verify_test $UTF" -c "create database ohea_verify_app $UTF"; psql "$SUPER" -Atc "select datname, pg_encoding_to_char(encoding) from pg_database where datname like 'ohea_verify_%' order by 1"; }
+step create-databases create_dbs
 
 # 4. Migrations (application database; the test database is migrated by the test global setup)
 step migrate "DATABASE_ADMIN_URL='$ADMIN_APP' npx tsx scripts/migrate.ts"
