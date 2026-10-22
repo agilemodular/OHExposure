@@ -1,17 +1,18 @@
 # Calculation and benchmark specifications
 
-Engine: `src/calc/engine.ts`, engine version **1.5.0** (calculations `twa_8h` **v1.4.0** and `stel_15` **v1.3.0**). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`, `test/worked-examples.test.ts` (structured fixtures with independently derived expected values), `test/tr-services.test.ts`, `test/tr06-tr07.test.ts`.
+Engine: `src/calc/engine.ts`, engine version **1.5.1** (calculations `twa_8h` **v1.4.1** and `stel_15` **v1.3.1**). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`, `test/worked-examples.test.ts` (structured fixtures with independently derived expected values), `test/tr-services.test.ts`, `test/tr06-tr07.test.ts`.
 
-**§0 below states the current rules and takes precedence** (1.4.0 rules in §0.1–0.8, changed or added by 1.5.0 in §0.9–0.10). Sections 1–6 describe the 1.3.1 design; where §0 changes a rule, §0 applies. No method version has a professional approval; approvals are recorded per version and are not transferred between versions (1.2.1/1.1.1 → 1.3.0/1.2.0 → 1.4.0/1.3.0).
+**§0 below states the current rules and takes precedence** (1.4.0 rules in §0.1–0.8, changed or added by 1.5.0/1.5.1 in §0.9–0.11). Sections 1–6 describe the 1.3.1 design; where §0 changes a rule, §0 applies. No method version has a professional approval; approvals are recorded per version and are not transferred between versions (1.2.1/1.1.1 → 1.3.0/1.2.0 → 1.4.0/1.3.0 → 1.4.1/1.3.1).
 
 ### Version history of the rules in §0
 
 | Engine | `twa_8h` / `stel_15` | Change | Source |
 |---|---|---|---|
 | 1.4.0 | 1.3.0 / 1.2.0 | §0.1–0.8 (TR-01–TR-05, items A–D) | AI-assisted technical review of `ceec79f` |
-| **1.5.0** | **1.4.0 / 1.3.0** | §0.9 duplicate relationships (TR-06); §0.10 value-field meaning and contradictory detected-below-LOQ inputs (TR-07). All other rules unchanged: TR-01–TR-05 reproductions and worked examples E1–E14 give the same outputs as on 1.4.0 (`docs/remediation/tr-reproductions.after-1.5.0.json`, `validation-examples.after-1.5.0.json`) | Independent technical review of package `9b87c17` |
+| 1.5.0 | 1.4.0 / 1.3.0 | §0.9 duplicate relationships (TR-06); §0.10 value-field meaning and contradictory detected-below-LOQ inputs (TR-07). All other rules unchanged: TR-01–TR-05 reproductions and worked examples E1–E14 give the same outputs as on 1.4.0 (`docs/remediation/tr-reproductions.after-1.5.0.json`, `validation-examples.after-1.5.0.json`) | Independent technical review of package `9b87c17` |
+| **1.5.1** | **1.4.1 / 1.3.1** | §0.9 amended: a duplicate needs a calculable result for both samples, and a void sample is never a duplicate; §0.11 sample-list removals (pre-existing gap); database refuses non-finite laboratory values and flows. Other outputs unchanged (`*.after-1.5.1.json`) | R5 re-check of `808f76b` (an AI review agent) |
 
-## 0. Engine 1.4.0 and 1.5.0 rules
+## 0. Engine 1.4.0–1.5.1 rules
 
 ### 0.1 Authoritative references checked (22 October 2026)
 
@@ -127,6 +128,8 @@ Relationship evidence required for a duplicate (all from the records, none from 
 | Tasks performed recorded for both and the same (case and spacing ignored) | required | required |
 | Same shift association (shift reference, or local start date) | required | required |
 | Sampling window | start and end each within **1 min** (recording granularity) | overlap ≥ **90 %** of the longer window (boundary accepted) |
+| Neither sample void (1.5.1: also at calculation, so a later void ends the duplicate) | required | required |
+| Both results calculable (1.5.1): an unknown result cannot be compared, so it cannot be set aside | required | required |
 | Identity of the event / pair | the **same instrument** | the **same pair reference** recorded at capture on both samples (`sampling_events.pair_ref`) |
 
 **Conflicting results (review policy).** A duplicate label alone must not suppress adverse evidence:
@@ -134,9 +137,9 @@ Relationship evidence required for a duplicate (all from the records, none from 
 - `same_event_record`: the two records must report the **same** result. Any difference is a discrepancy to correct (amendment), not to set aside.
 - Results in different units are not compared automatically; the disposition is not accepted.
 
-**Where it is enforced.** Engine at every calculation (`duplicateProblem`, `src/calc/engine.ts`; a disposition that later becomes unsupported, e.g. after an amended result, is rejected then), the service before recording (`recordEvidenceDisposition`, same function, refuses with the reason), and the database trigger (`protect_evidence_disposition`, migration 028: category, personal samples, not void, worker, result for the assessed substance, group, tasks, shift, window, instrument or pair reference). The result comparison needs concentrations, so it is checked by the engine and the service, not by the database. Reviewer-only authority for `outside_scope` and `remaining_coverage_adequate` is unchanged (service and database, migration 027).
+**Where it is enforced.** Engine at every calculation (`duplicateProblem`, `src/calc/engine.ts`; a disposition that later becomes unsupported — an amended result, a void, a result that is no longer calculable — is rejected then), the service before recording (`recordEvidenceDisposition`, same function, refuses with the reason), and the database trigger (`protect_evidence_disposition`, migration 028: category, personal samples, not void, worker, result for the assessed substance, group, tasks, shift, window, instrument or pair reference). The result comparison needs concentrations, so it is checked by the engine and the service, not by the database. Migration 029 also refuses a related sample on any disposition other than a duplicate. Reviewer-only authority for `outside_scope` and `remaining_coverage_adequate` is unchanged (service and database, migration 027).
 
-**Audit and report.** The disposition row keeps the sample, related sample, category, reason, consequence, author and time (append-only). The audit event adds the sample codes, the sample's interval and its flags (e.g. the failed QC check). The report lists set-aside evidence with category, related sample, the retained result, reason, consequence and findings; rejected dispositions are listed with the reason they were not accepted; and for a new revision the superseded revision's dispositions are re-checked and shown.
+**Audit and report.** The disposition row keeps the sample, related sample, category, reason, consequence, author and time (append-only). The audit event adds the sample codes, both samples' intervals, the sample's flags (e.g. the failed QC check) and, from 1.5.1, the relationship evidence of both samples (windows, instruments, pair references, tasks, group, shift). The report lists set-aside evidence with category, related sample, the retained result, the relationship evidence, reason, consequence and findings; rejected dispositions are listed with the reason they were not accepted; and for a new revision the superseded revision's dispositions are re-checked and shown.
 
 **Professional judgement needed:** the 1-min and 90 % thresholds, the higher-result conflict rule, and whether paired results should ever be averaged rather than one retained (not implemented).
 
@@ -156,11 +159,22 @@ A laboratory format that puts a threshold in the value field must be mapped expl
 **Contradictory inputs** (e.g. `detected_below_loq`, 600 µg, LOD 10 µg, LOQ 30 µg):
 - **Laboratory entry, amendments and CSV import** refuse them with a message naming the qualifier, value, limits and the fields in conflict (`qualifierValueProblem`, shared with the engine). The value is not changed, re-interpreted or discarded; the record is not stored until the laboratory clarifies it.
 - **Database:** constraint `lab_result_value_meaning_valid` (migration 028). Added NOT VALID and validated only when no historical row violates it, so records entered before 028 are kept and listed by the impact scan.
+- **Database (1.5.1, migration 029):** `lab_result_values_finite` and `sampling_flows_finite` refuse NaN and ±Infinity (PostgreSQL `numeric` accepts them). **CSV import:** numbers must be decimal or scientific notation; hexadecimal (`0x1E`), `Infinity` and other text are rejected rather than reinterpreted.
 - **Engine** (records entered before 028, or direct engine input): `INPUT_INVALID_DBL_VALUE` / `INPUT_INVALID_VALUE_MEANING`, no numeric result. A sample with contradictory or invalid inputs **cannot be set aside** by any disposition other than `not_replaced` (coverage gap), so it always blocks a favourable overall comparison until corrected by an amendment (a new result revision with a reason; earlier revisions are kept).
 
 **Professional judgement needed:** inclusive boundaries; whether any laboratory reports a detected-below-LOQ value that is neither an estimate nor the LOQ (would need a new mapping).
 
 > **Methodological sources must be confirmed by a competent occupational hygienist against the current editions before pilot use.** The references below identify the conventions the engine implements; they were not re-checked against the live publications during this build (no access was attempted), and no text from them is reproduced.
+
+### 0.11 Removing samples from an assessment's sample list (1.5.1, R5-F2)
+
+A new assessment starts with every analysed sample of the group and substance (and plan, when set). Taking a sample out of the list decides that it is outside the scope of the assessment, so it is treated like the reviewer-only `outside_scope` judgement:
+- the removal needs a reason (≥ 10 characters) and is recorded, append-only, in `assessment_sample_removals` (migration 029);
+- a **practitioner's removal is a request**: the sample **stays in the evidence** (calculation, evidence adequacy, report) until a **technical reviewer confirms** the removal with a reason (service `confirmSampleRemoval`; the database refuses confirmation by anyone else);
+- re-adding the sample cancels the request; a new revision carries pending removals forward as evidence;
+- the assessment page and the report list every removal with who requested it, why, and whether and by whom it was confirmed; the removals are part of the input hash, so a change after calculation requires recalculation.
+
+This closes a route by which adverse or contradictory evidence (TR-06, TR-07) could be dropped without a reviewer, which existed before 1.4.0.
 
 ## Capability matrix (Phase H1)
 
@@ -168,7 +182,7 @@ One row per calculation capability. **Pilot-enabled** is enforced on the server:
 
 | Capability | `sample_concentration` | `twa_8h` | `stel_15` | Unit conversion |
 |---|---|---|---|---|
-| Version | engine 1.4.0 | **1.3.0** | **1.2.0** | engine 1.4.0 |
+| Version | engine 1.5.1 | **1.4.1** | **1.3.1** | engine 1.5.1 |
 | Purpose | Airborne concentration of one sample, as an interval | Personal 8-h TWA per worker-shift vs 480-min benchmark | Personal 15-min result vs 15-min benchmark | ppm ↔ mg/m³ at comparison |
 | Formula / source | §1; mass ÷ (mean flow × sampled time) | §2; Σ(CᵢTᵢ)/480 — GB convention (HSE EH40, HSG173) *to be confirmed* | §2a and §0.3; C for exactly 15 min uninterrupted; C×T/15 only with justified and evidenced zero remainder (assumption-dependent) | §3a and §0.1; mg/m³ = ppm × MW / 24.05526 (EH40 para 68) |
 | Inputs | Times, interruptions, flows, method version, instrument, calibration, QC, lab result revision | Concentrations, worker refs, exposure minutes, unsampled assumption + justification, register durations | Concentrations, short-sample assumption + justification | Interval, target unit, molecular weight + source |

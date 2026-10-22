@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the re-review ZIP for the engine 1.5.0 remediation (TR-06, TR-07) from the repository at HEAD.
+"""Builds the re-review ZIP for the engine 1.5.0 remediation (TR-06, TR-07; amended as 1.5.1 after the R5 re-check) from the repository at HEAD.
 
 Run from the repository root after the test run:
   python3 scripts/tr/build_rereview_package.py <test-run.json> <browser-offline.log> <browser-online.log> <out-dir>
@@ -13,7 +13,7 @@ git = lambda *a: subprocess.check_output(['git', *a], cwd=R).decode().strip()
 commit = git('rev-parse', 'HEAD'); short = commit[:7]
 assert git('status', '--porcelain') == '', 'working tree must be clean'
 BASE = '9b87c17'
-name = f'OHEA-rereview-engine-1.5.0-{short}'
+name = f'OHEA-rereview-engine-1.5.1-{short}'
 P = os.path.join(out_dir, name)
 shutil.rmtree(P, ignore_errors=True)
 
@@ -29,12 +29,16 @@ FILES = {
   '01-source/db/migrations/026_engine_1_4_remediation.sql': 'db/migrations/026_engine_1_4_remediation.sql',
   '01-source/db/migrations/027_disposition_roles.sql': 'db/migrations/027_disposition_roles.sql',
   '01-source/db/migrations/028_duplicate_relationship_value_meaning.sql': 'db/migrations/028_duplicate_relationship_value_meaning.sql',
+  '01-source/db/migrations/029_sample_removals_finite_values.sql': 'db/migrations/029_sample_removals_finite_values.sql',
   '01-source/scripts/tr/reproductions-tr06-tr07.ts': 'scripts/tr/reproductions-tr06-tr07.ts',
   '01-source/scripts/tr/tr06-tr07-impact.ts': 'scripts/tr/tr06-tr07-impact.ts',
   '01-source/scripts/tr/tr06-tr07-scenario.ts': 'scripts/tr/tr06-tr07-scenario.ts',
   '01-source/scripts/tr/run-tr06-tr07-scenario.sh': 'scripts/tr/run-tr06-tr07-scenario.sh',
   '02-reproductions/tr06-tr07.before-1.4.0.json': 'docs/remediation/tr06-tr07.before-1.4.0.json',
   '02-reproductions/tr06-tr07.after-1.5.0.json': 'docs/remediation/tr06-tr07.after-1.5.0.json',
+  '02-reproductions/tr06-tr07.after-1.5.1.json': 'docs/remediation/tr06-tr07.after-1.5.1.json',
+  '02-reproductions/tr-reproductions.after-1.5.1.json': 'docs/remediation/tr-reproductions.after-1.5.1.json',
+  '02-reproductions/validation-examples.after-1.5.1.json': 'docs/remediation/validation-examples.after-1.5.1.json',
   '02-reproductions/tr06-tr07.application-probe.before-1.4.0.txt': 'docs/remediation/tr06-tr07.application-probe.before-1.4.0.txt',
   '02-reproductions/tr06-tr07.application-probe.test.ts.txt': 'docs/remediation/tr06-tr07.application-probe.test.ts.txt',
   '02-reproductions/tr-reproductions.after-1.4.0.json': 'docs/remediation/tr-reproductions.after-1.4.0.json',
@@ -46,6 +50,7 @@ FILES = {
   '03-fixtures-and-tests/worked-examples.test.ts': 'test/worked-examples.test.ts',
   '03-fixtures-and-tests/tr06-tr07.test.ts': 'test/tr06-tr07.test.ts',
   '03-fixtures-and-tests/tr-services.test.ts': 'test/tr-services.test.ts',
+  '03-fixtures-and-tests/fixtures.ts': 'test/fixtures.ts',
   '04-specifications/calculation-and-benchmark-specifications.md': 'docs/calculation-and-benchmark-specifications.md',
   '04-specifications/hygienist-review-pack.md': 'docs/hygienist-review-pack.md',
   '04-specifications/professional-review-handover.md': 'docs/professional-review-handover.md',
@@ -81,10 +86,10 @@ eng = open(os.path.join(R, 'src/calc/engine.ts')).read()
 ident = {'repository': 'github.com/agilemodular/OHExposure', 'branch': 'main', 'commit': commit, 'commit_date': git('log', '-1', '--format=%cI'), 'reviewed_baseline': git('rev-parse', BASE),
          'engine_version': re.search(r"ENGINE_VERSION = '([^']+)'", eng).group(1),
          'methods': dict(re.findall(r"(twa_8h|stel_15): \{ code: '\w+', version: '([^']+)'", eng)),
-         'previous': {'engine': '1.4.0', 'twa_8h': '1.3.0', 'stel_15': '1.2.0'},
-         'migrations_added': ['028_duplicate_relationship_value_meaning.sql'],
-         'findings': {'TR-06': 'implemented — awaiting technical re-review', 'TR-07': 'implemented — awaiting technical re-review'},
-         'evidence_classes': {'supplied_test_evidence': 'development workspace runs in this package', 'independent_technical_verification': 'none yet for engine 1.5.0', 'professional_approval': 'none for any version'},
+         'previous': {'engine': '1.4.0', 'twa_8h': '1.3.0', 'stel_15': '1.2.0'}, 'superseded_package': {'commit': '808f76b', 'engine': '1.5.0', 'twa_8h': '1.4.0', 'stel_15': '1.3.0', 'note': 'issued 22 Oct 2026; amended after the R5 re-check'},
+         'migrations_added': ['028_duplicate_relationship_value_meaning.sql', '029_sample_removals_finite_values.sql'],
+         'findings': {'TR-06': 'implemented — awaiting technical re-review', 'TR-07': 'implemented — awaiting technical re-review', 'R5-F1..F8': 'fixed in 1.5.1 — awaiting technical re-review'},
+         'evidence_classes': {'supplied_test_evidence': 'development workspace runs in this package', 'independent_technical_verification': 'none for engine 1.5.1; R5 (an AI review agent, not external) checked 1.5.0 and its findings are fixed in 1.5.1', 'professional_approval': 'none for any version'},
          'classification': 'internal prototype; pilot gates open; no release readiness declared',
          'molar_volume_L_per_mol': re.search(r'MOLAR_VOLUME_L = ([0-9.]+)', eng).group(1),
          'migrations': sorted(os.listdir(os.path.join(R, 'db/migrations'))),

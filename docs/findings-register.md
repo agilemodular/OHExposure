@@ -133,7 +133,7 @@ Closed since the H2 report: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2, R2-P
 | H1-F01 | Medium (calculation) | Fixed in software; technical disposition updated for engine 1.4.0 (§7); **professional disposition pending** | Not a software decision: appointed hygienist (G2/G3); brief in `professional-review-handover.md` §1.0 |
 | TR-01–TR-05, TR-A–D, TR-R | High/Medium (calculation and reporting) | Fixed and tested; awaiting technical re-review (§7) | Re-review of engine 1.4.0; professional judgement on the conventions listed in §7 |
 | TR-N1–N3, TR-N5–N8 | High–Low | Fixed and tested; awaiting technical re-review (§7.1) | As above |
-| TR-06 (supersedes TR-N4), TR-07 | High (calculation; reachable through the application) | **Implemented — awaiting technical re-review** (§7.2), engine 1.5.0 | Re-review of engine 1.5.0; professional judgement on the duplicate thresholds and conflict rule, and the value-field boundaries |
+| TR-06 (supersedes TR-N4), TR-07; R5-F1–F8 | High (calculation; reachable through the application) | **Implemented — awaiting technical re-review** (§7.2, §7.3), engine 1.5.1 | Re-review of engine 1.5.0; professional judgement on the duplicate thresholds and conflict rule, and the value-field boundaries |
 | R2-Q5 | Low | Partly fixed (tests); remaining edge cases fall under R-X1 | Accept with R-X1 (§6) |
 | R-H2a, R-M5, R-M6, R-M8, R-L1, OO-R7 | Low | Open / mitigated (offline capability) | Defer while offline capture is off |
 | R-X1 (with R2-Q5) | Low | Mitigated | Accept for the pilot with controls |
@@ -144,7 +144,7 @@ Closed since the H2 report: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2, R2-P
 | R2-N7 | Low | Open | Fix before pilot if any existing volume is reused |
 | Image tags | Low | Partial | Fix before pilot (pin digests) |
 
-**No Critical or High software finding is open without an implemented fix.** TR-06 and TR-07 are implemented but not yet re-reviewed. H1-F01 is fixed in software and awaits the hygienist's disposition.
+**No Critical or High software finding is open without an implemented fix.** TR-06, TR-07 and the R5 fixes (§7.3) are implemented but not yet re-reviewed. H1-F01 is fixed in software and awaits the hygienist's disposition.
 
 ## 5. Post-H2 targeted reviews (R3, 19 Oct 2026)
 
@@ -273,7 +273,7 @@ Verdicts: TR-01, TR-02 (see N4), TR-03, TR-04, TR-05, A, D and the report closed
 
 ### 7.2 Findings on package `9b87c17` (engine 1.4.0): TR-06 and TR-07 (22 Oct 2026)
 
-Source: two findings supplied with the remediation brief of 22 October 2026, stated as independently reproduced on the re-review package `9b87c17`. This register does not record who made them; they are treated as technical review findings, not as professional validation. Both were reproduced on engine 1.4.0 with the inputs unchanged before any change (`docs/remediation/tr06-tr07.before-1.4.0.json`), and an application probe showed both were reachable through the services, not only the engine (`docs/remediation/tr06-tr07.application-probe.before-1.4.0.txt`). Correction: engine **1.5.0** (`twa_8h` **1.4.0**, `stel_15` **1.3.0**), migration **028**. Summary and evidence: `docs/remediation/remediation-summary-tr06-tr07.md`.
+Source: two findings supplied with the remediation brief of 22 October 2026, stated as independently reproduced on the re-review package `9b87c17`. This register does not record who made them; they are treated as technical review findings, not as professional validation. Both were reproduced on engine 1.4.0 with the inputs unchanged before any change (`docs/remediation/tr06-tr07.before-1.4.0.json`), and an application probe showed both were reachable through the services, not only the engine (`docs/remediation/tr06-tr07.application-probe.before-1.4.0.txt`). Correction: engine **1.5.0** (`twa_8h` **1.4.0**, `stel_15` **1.3.0**), migration **028**; amended after the R5 re-check in engine **1.5.1** (`twa_8h` **1.4.1**, `stel_15` **1.3.1**), migration **029** (§7.3). Summary and evidence: `docs/remediation/remediation-summary-tr06-tr07.md`.
 
 | ID | Affected versions | Reproduction inputs (unchanged) | Observed (1.4.0) | Expected safety property | Root cause | Correction (1.5.0) | Regression evidence | Professional-review dependency | Status |
 |---|---|---|---|---|---|---|---|---|---|
@@ -283,3 +283,21 @@ Source: two findings supplied with the remediation brief of 22 October 2026, sta
 Impact on existing records (read-only scan, `scripts/tr/tr06-tr07-impact.ts`): development demonstration database — none found (`docs/remediation/tr06-tr07-impact.demo.json`). Synthetic historical scenario created with the 1.4.0 code — one approved revision with an issued report, classified as a *confirmed changed outcome* (below benchmark → indeterminate); it was not altered, and a new revision was created with a reason (`docs/remediation/tr06-tr07-impact.scenario.json`, `tr06-tr07-scenario.summary.json`).
 
 TR-N4 (§7.1) is superseded by TR-06: its correction was insufficient.
+
+### 7.3 Re-check of engine 1.5.0 (R5, 22 Oct 2026, commit `808f76b`)
+
+R5 was a separate AI review agent with no part in writing the code, working in its own worktree and database. **It is not a human or external professional review, and it is not the technical re-review requested for TR-06 and TR-07.** It ran the full suite (311 passed), the reproductions, about 40 engine probes and a service/database probe suite, and confirmed the fixtures are regenerated byte-identically by an oracle that does not use the engine.
+
+Verdicts: TR-06 **not closed** (F1); TR-07 substantively closed (Lows below). Treatment (engine **1.5.1**, `twa_8h` **1.4.1**, `stel_15` **1.3.1**, migration **029**; fixed with tests; **not re-reviewed**):
+
+| ID | Finding | Severity | Treatment | Evidence | Status |
+|---|---|---|---|---|---|
+| R5-F1 | A paired duplicate whose set-aside result could not be calculated (e.g. 50 mg/m³ entered on a mass-on-sample method; flow missing) skipped the conflict check and was set aside: below benchmark / adequate | **High** | Both results must be calculable; otherwise the duplicate is not accepted (engine and service; the database cannot compare results) | Fixtures TR-06w, TR-06x; `tr06-tr07.test.ts` F1; mutation detected | Fixed (tests); awaiting technical re-review |
+| R5-F2 | A practitioner could drop adverse or contradictory evidence by unticking it in the draft's sample list (no record, no reviewer), equivalent to a reviewer-only scope decision. Existed before 1.4.0 | Medium | Removal needs a reason and is recorded append-only (`assessment_sample_removals`, migration 029); a practitioner's removal is a request and the sample stays in the evidence until a technical reviewer confirms (service and database); listed on the page and in the report; part of the input hash; pending removals carried into a new revision (specification §0.11) | `tr06-tr07.test.ts` F2 (service, database, report, append-only); mutation detected. Existing tests that narrow the pool now confirm removals through the services (`test/fixtures.ts`, `updateDraftConfirmed`) | Fixed (tests); awaiting technical re-review |
+| R5-F3 | A duplicate stayed accepted at calculation after the set-aside sample was voided (service and database refused it) | Low | Void samples refused by the engine too | Fixture TR-06y; `tr06-tr07.test.ts` F3 | Fixed (tests) |
+| R5-F4 | The database accepted NaN/Infinity in laboratory values and limits (PostgreSQL `numeric`) | Low | `lab_result_values_finite`, `sampling_flows_finite` (migration 029, NOT VALID only if historical rows violate) | `tr06-tr07.test.ts` F4 | Fixed (tests) |
+| R5-F5 | The database accepted a related sample on a non-duplicate disposition | Low | `evidence_disposition_related_only_duplicate` (migration 029) | `tr06-tr07.test.ts` F5 | Fixed (tests) |
+| R5-F6 | CSV numbers parsed with `Number()`: `0x1E` imported as 30 | Low | Decimal or scientific notation only; other text rejected | `tr06-tr07.test.ts` F6 | Fixed (tests) |
+| R5-F7 | Relationship evidence not frozen in the audit event or shown in the report | Low | Audit event and report carry both samples' windows, instruments, pair references, tasks, group, shift and the retained result | `tr06-tr07.test.ts` F7 | Fixed (tests) |
+| R5-F8 | Impact scan counted a supported but conflicting duplicate as sufficient; did not flag evidence amended after approval; attribution could include earlier engine changes | Low | Compares results from the frozen inputs; lists results amended since the calculation; states attribution | Scenario re-run | Fixed |
+| R5-D | Documentation: "missing evidence never passes" and "later unsupported dispositions are rejected" were not true in 1.5.0; finite limits not enforced by the database; capability matrix stale; bytecode committed | Low (documentation) | Corrected with the fixes above; capability matrix updated; bytecode removed and ignored | — | Fixed |

@@ -64,7 +64,7 @@ Classification used throughout:
 
 | Capability | Status | Evidence / notes |
 |---|---|---|
-| Deterministic `sample_concentration` and `twa_8h` v1.4.0 (engine 1.5.0) | Verified (software); **not professionally reviewed**; TR-06/TR-07 awaiting technical re-review | calc tests; 110 structured fixtures with independently derived expected values; `tr06-tr07.test.ts` |
+| Deterministic `sample_concentration` and `twa_8h` v1.4.1 (engine 1.5.1) | Verified (software); **not professionally reviewed**; TR-06/TR-07 and R5 fixes awaiting technical re-review | calc tests; 113 structured fixtures with independently derived expected values; `tr06-tr07.test.ts` |
 | Non-detect intervals, coverage assumptions, static/screening exclusion | Verified | calc tests |
 | Separate data-quality / benchmark / review states | Verified | calc + UI |
 | Inputs snapshot and hash; approval blocked if evidence changed | Verified | workflow test |
@@ -73,7 +73,7 @@ Classification used throughout:
 | Staleness notices (evidence changed, newer/withdrawn benchmark) | Verified (evidence), Unverified (benchmark path) | workflow test |
 | Before/after comparability | Verified (engine), Unverified (page) | calc test |
 | Benchmark versions with second-person verification | Verified (rule), Unverified (UI) | service rule |
-| STEL (15-minute) calculation `stel_15` v1.3.0 (engine 1.5.0) | Verified (software); not professionally reviewed; TR-06/TR-07 awaiting technical re-review | calc tests, fixtures (TR-01 and TR-06 groups), service tests |
+| STEL (15-minute) calculation `stel_15` v1.3.1 (engine 1.5.1) | Verified (software); not professionally reviewed; TR-06/TR-07 and R5 fixes awaiting technical re-review | calc tests, fixtures (TR-01 and TR-06 groups), service tests |
 | ppm ↔ mg/m³ conversion using recorded molecular weight | Verified (software) | calc tests |
 | Statistical compliance testing (e.g. BS EN 689) | Proposed | |
 | Real jurisdiction benchmark content | Blocked | D2 / gate G4 |

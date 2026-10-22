@@ -3,7 +3,7 @@
 **Start with** `professional-review-handover.md`, which indexes this pack and the supporting material.
 
 **For:** the competent occupational hygienist appointed to review the platform before a controlled pilot (pilot gates **G2** and **G3**, dependency D1).
-**Engine:** 1.5.0 (updated 22 Oct 2026; see `docs/remediation/remediation-summary.md`, `docs/remediation/remediation-summary-tr06-tr07.md` and specification §0) — `sample_concentration` (engine-level), `twa_8h` **v1.4.0**, `stel_15` **v1.3.0**, ppm ↔ mg/m³ conversion. **Prepared:** 18 October 2026.
+**Engine:** 1.5.1 (updated 22 Oct 2026; see `docs/remediation/remediation-summary.md`, `docs/remediation/remediation-summary-tr06-tr07.md` and specification §0) — `sample_concentration` (engine-level), `twa_8h` **v1.4.1**, `stel_15` **v1.3.1**, ppm ↔ mg/m³ conversion. **Prepared:** 18 October 2026.
 **No code inspection is needed.** Every number in this pack was produced by running the engine on the stated inputs (generator kept with the test evidence), not typed in.
 
 ## How to use this pack
@@ -67,7 +67,7 @@ The practitioner writes the interpretation, conclusion category and limitations.
 
 > **Updated for engine 1.4.0 (22 Oct 2026).** E2, E7b, E8 and E13 change intentionally (method acceptance, STEL remainder evidence, EH40 molar volume, below-LOQ semantics); the reasons are in `docs/remediation/remediation-summary.md` §4. Structured versions of every example, with exact inputs and independently derived expected values, are in `test/fixtures/worked-examples.fixtures.json`. Where the table below differs from the fixtures, the fixtures state the current behaviour put to you for confirmation.
 
-> **Updated for engine 1.5.0 (22 Oct 2026).** E1–E14 give the same results as on 1.4.0. Added: the duplicate-relationship rules (specification §0.9; fixtures group TR-06) and the value-field rules for detected-below-LOQ results (§0.10; fixtures group TR-07). Conventions put to you: the ±1 min and 90 % window thresholds, the higher-result conflict rule for paired samples, and inclusive [LOD, LOQ] boundaries.
+> **Updated for engine 1.5.0 and 1.5.1 (22 Oct 2026).** E1–E14 give the same results as on 1.4.0. 1.5.1 adds: a duplicate needs a calculable result for both samples, and removing a sample from an assessment needs a technical reviewer's confirmation (§0.11). Added: the duplicate-relationship rules (specification §0.9; fixtures group TR-06) and the value-field rules for detected-below-LOQ results (§0.10; fixtures group TR-07). Conventions put to you: the ±1 min and 90 % window thresholds, the higher-result conflict rule for paired samples, and inclusive [LOD, LOQ] boundaries.
 
 **Tolerance:** hand results should agree with the expected value to **±0.1 % relative** (rounding: concentrations are stored to 6 significant decimals; displayed to 4 significant figures). Any larger difference is a finding. Categorical outcomes (state, flag, "not calculated") must match exactly.
 
@@ -183,8 +183,8 @@ Sign-off is by a named competent person, with a statement of competence. It is r
 |---|---|---|---|---|---|
 | Conventions C1–C19 | | | | | |
 | Worked examples E1–E14 checked | | | | | |
-| `twa_8h` v1.4.0 | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
-| `stel_15` v1.3.0 | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
+| `twa_8h` v1.4.1 | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
+| `stel_15` v1.3.1 | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
 | Unit conversion (engine 1.3.1) | ☐ Approved ☐ With conditions ☐ Rejected | | | | |
 | Example report and limitation statements | | | | | |
 | Control effectiveness and closure rules | | | | | |

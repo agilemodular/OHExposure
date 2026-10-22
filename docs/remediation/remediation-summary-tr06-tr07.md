@@ -1,15 +1,18 @@
 # Duplicate-evidence and detected-below-LOQ remediation — engine 1.5.0
 
 **Responds to:** two findings on re-review package `9b87c17` (engine 1.4.0), supplied with the brief of 22 October 2026 as independently reproduced. This document does not record who made them.
-**Date:** 22 October 2026 · **Engine:** 1.4.0 → **1.5.0** · **Methods:** `twa_8h` 1.3.0 → **1.4.0**, `stel_15` 1.2.0 → **1.3.0** · **Migration:** 028.
+**Date:** 22 October 2026 · **Engine:** 1.4.0 → 1.5.0 → **1.5.1** · **Methods:** `twa_8h` 1.3.0 → 1.4.0 → **1.4.1**, `stel_15` 1.2.0 → 1.3.0 → **1.3.1** · **Migrations:** 028, 029.
+
+> **Amended after the R5 re-check (§8).** R5 (a separate AI review agent, not the requested technical re-review) found that 1.5.0 did not fully close TR-06: a duplicate without a calculable result skipped the conflict check (High). It also found a pre-existing route for dropping evidence by narrowing the sample list (Medium) and six Lows. All are fixed in 1.5.1 with tests.
 **Classification unchanged: internal prototype — pilot gates remain open.** Passing automated tests is not occupational-hygiene approval or authorisation for pilot use. No method version has a professional approval, and nothing approved for any earlier version transfers.
 
 ## 1. Status
 
 | Item | Implemented and tested | Awaiting technical re-review | Awaiting professional judgement | Still open |
 |---|---|---|---|---|
-| TR-06 duplicate-evidence dispositions | Yes | **Yes** (not re-reviewed by anyone) | Window thresholds (±1 min; ≥ 90 % overlap); higher-result conflict rule; paired averaging (not implemented) | — |
+| TR-06 duplicate-evidence dispositions (with R5-F1, F3) | Yes | **Yes** (only the R5 AI agent has checked it; its findings are fixed but not re-checked) | Window thresholds (±1 min; ≥ 90 % overlap); higher-result conflict rule; paired averaging (not implemented) | — |
 | TR-07 contradictory detected-below-LOQ inputs | Yes | **Yes** | Inclusive [LOD, LOQ] boundaries; mapping of each pilot laboratory's formats | — |
+| Sample-list removals (R5-F2) | Yes | **Yes** | Whether a reviewer's confirmation is the right control | — |
 | Historical records | Read-only impact scan; no record altered | Yes | Whether to reassess each affected assessment (people decide) | Reassessment of any real affected records (none in the development database) |
 
 Evidence classes in this package are kept apart: **supplied test evidence** (runs in the development workspace, listed in §6); **independent technical verification** (none yet for 1.5.0; R4 was an AI review agent that checked 1.4.0 only); **professional approval** (none for any version).
@@ -27,14 +30,14 @@ Both were checked on 1.4.0 before any change: the engine reproductions (`tr06-tr
 
 ### TR-06 — duplicate relationships (specification §0.9)
 - Three situations are now distinct: a **duplicate record of the same sampling event** (`same_event_record`), a **genuine paired or co-located sample** (`paired_colocated`), and **a different sample offered as evidence of adequate remaining coverage**. The third is not a duplicate. It goes through `remaining_coverage_adequate`, which only a technical reviewer can record (unchanged since migration 027).
-- **Relationship evidence**, all taken from the records:
+- **Relationship evidence**, all taken from the records (1.5.1: both results must also be calculable, and neither sample void):
   - always: same worker, a result for the assessed substance on both samples, the same exposure group, the same recorded tasks and the same shift;
   - `same_event_record`: start and end within 1 min, and the same instrument;
   - `paired_colocated`: the same **pair reference recorded at capture** (new field `sampling_events.pair_ref`), and an overlap of at least 90 % of the longer window.
-  - Missing evidence leaves the disposition unresolved.
+  - Missing evidence, including a result that cannot be calculated, leaves the disposition unresolved (true from 1.5.1; in 1.5.0 a missing result was not caught — R5-F1).
 - **Conflicts.** A paired result that is higher than the retained one is a conflict, and so is a same-event record whose result differs. The sample stays unresolved, so a favourable overall comparison is not possible. A technical reviewer can review the pair and record a coverage judgement.
 - **Enforcement:**
-  - the engine checks at every calculation, so a disposition that later becomes unsupported (for example after an amended result) is rejected then;
+  - the engine checks at every calculation, so a disposition that later becomes unsupported (an amended result, a void, a result no longer calculable — the last two from 1.5.1) is rejected then;
   - the service checks before recording, using the same function, and states the reason;
   - the database trigger in migration 028 checks every invariant it can verify; the result comparison is left to the engine and the service.
 - **Audit and report:**
@@ -64,7 +67,11 @@ Both were checked on 1.4.0 before any change: the engine reproductions (`tr06-tr
 | Duplicate disposition | Same worker and shift/date only | Category and relationship evidence; conflict rule | Any assessment with a duplicate disposition | Yes, where the overall state was *below benchmark* and a duplicate set aside evidence |
 | `detected_below_loq` value | Ignored | Must agree with the limits; else no numeric result | Detected-below-LOQ records with a value | Yes, where such a record was used |
 | Contradictory sample disposition | Could be set aside like any other | Only *not replaced* | As above | As above |
+| 1.5.1: duplicate with an uncalculable result; void after disposition | Set aside | Unresolved | Duplicates whose set-aside sample has no result or was voided | Yes, if any (none found) |
+| 1.5.1: removing samples from the list | Silent | Recorded; effective only after a reviewer confirms | Any draft whose sample list was narrowed | Recalculate drafts |
 | Everything else | — | Unchanged: TR-01–TR-05 and E1–E14 outputs are identical apart from version labels (`tr-reproductions.after-1.5.0.json`, `validation-examples.after-1.5.0.json`) | — | — |
+
+**Migration 029** (1.5.1) adds `assessment_sample_removals` with its trigger, and the constraints `evidence_disposition_related_only_duplicate`, `lab_result_values_finite` and `sampling_flows_finite` (each NOT VALID only when historical rows violate it). It changes no existing row.
 
 **Migration 028** adds the following and changes no existing row:
 - `sampling_events.pair_ref`;
@@ -103,12 +110,12 @@ For each dependent revision it re-runs the current engine on the frozen inputs. 
 
 | Run | Result | What it is |
 |---|---|---|
-| `npm test` (Vitest, full suite, disposable test database, application role with RLS) | see `docs/test-evidence.md` (the exact counts of the packaged run are in the package's `03-fixtures-and-tests/results/test-run.json`) | Includes 110 structured fixtures (24 TR-06, 17 TR-07; expected values from the independent Python oracle `scripts/tr/build_fixtures.py`, statuses written by hand from the specification) and 13 application tests in `test/tr06-tr07.test.ts` |
-| Mutation checks (not committed; run by hand) | Every mutation detected | Engine: overlap threshold, conflict rule, LOQ check, substance check, contradictory set-aside → fixture failures. Service: duplicate check, laboratory value check → application test failures |
+| `npm test` (Vitest, full suite, disposable test database, application role with RLS) | **320 passed, 0 failed, 10 suites** on 1.5.1 (311 on 1.5.0); per-test results of the packaged run in the package's `03-fixtures-and-tests/results/test-run.json` | Includes 113 structured fixtures (27 TR-06, 17 TR-07; expected values from the independent Python oracle `scripts/tr/build_fixtures.py`, statuses written by hand from the specification) and 19 application tests in `test/tr06-tr07.test.ts` (6 for the R5 fixes) |
+| Mutation checks (not committed; run by hand) | Every mutation detected (1.5.1: F1, F2 and F3 mutations also detected) | Engine: overlap threshold, conflict rule, LOQ check, substance check, contradictory set-aside → fixture failures. Service: duplicate check, laboratory value check → application test failures |
 | Browser checks (desktop Chromium, headless, development server) | 24/24 and 17/17 | Field capture forms (pair reference added). **Not device evidence** |
 | Scenario run | As §5 | Two code versions, one disposable database |
 
-Intentional changes to existing expectations: fixture **TR-02b** (an uncategorised duplicate is no longer accepted; was *below / adequate*, now *indeterminate / unresolved*). Existing application tests needed only the order of two service checks to be restored; no expectation was weakened.
+Tests that build an assessment from a narrower set than its starting pool now record the removal and have a technical reviewer confirm it through the services (`updateDraftConfirmed` in `test/fixtures.ts`); no expectation was weakened. Intentional changes to existing expectations: fixture **TR-02b** (an uncategorised duplicate is no longer accepted; was *below / adequate*, now *indeterminate / unresolved*). Existing application tests needed only the order of two service checks to be restored; no expectation was weakened.
 
 ## 7. Known limits
 
@@ -116,3 +123,17 @@ Intentional changes to existing expectations: fixture **TR-02b** (an uncategoris
 - The database cannot compare results (concentrations exist only in the engine), so the conflict rule is enforced by the engine and the service.
 - Thresholds (±1 min, 90 %) and the conflict rule are conventions chosen for safety and are listed for professional judgement.
 - The impact scan of real data has been run only on the development demonstration database. Any hosted database needs its own run.
+
+## 8. R5 re-check of 1.5.0 and engine 1.5.1
+
+R5 was a separate AI review agent (not a person, not the requested re-review). Findings and treatment are in `findings-register.md` §7.3:
+- **F1 (High):** a duplicate with an uncalculable set-aside result skipped the conflict check. Now both results must be calculable.
+- **F2 (Medium, pre-existing):** sample-list narrowing. Removals are now recorded, and a practitioner's removal takes effect only after a technical reviewer confirms it (specification §0.11).
+- **F3–F8 (Low):**
+  - a void sample is never a duplicate at calculation;
+  - the database refuses non-finite laboratory values and flows;
+  - only a duplicate can name a related sample;
+  - CSV numbers are strictly decimal or scientific;
+  - the audit and the report keep the relationship evidence;
+  - the impact scan compares frozen results and flags amended evidence.
+- **Outputs:** the TR-01–TR-07 reproductions and E1–E14 are unchanged apart from version labels (`*.after-1.5.1.json`). The scenario and the impact scans were re-run on 1.5.1 with the same results.
