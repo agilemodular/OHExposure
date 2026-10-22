@@ -1,6 +1,8 @@
 # Release readiness report
 
-**Updated:** 22 October 2026 (engine 1.4.0 remediation) · **Scope:** airborne contaminants · **Engine:** 1.4.0 (`twa_8h` 1.3.0, `stel_15` 1.2.0) · **Migrations:** 26
+**Updated:** 22 October 2026 (engine 1.5.0: TR-06 and TR-07) · **Scope:** airborne contaminants · **Engine:** 1.5.0 (`twa_8h` 1.4.0, `stel_15` 1.3.0) · **Migrations:** 28 (001–028)
+
+This report does not declare release readiness. It records what has been verified in the development environment.
 
 ## Classification
 
@@ -32,11 +34,12 @@ No pilot gate is accepted and no pilot is authorised. Readiness for a pilot is t
   - Every remaining Low finding has a proposed treatment awaiting its owner's acceptance (`findings-register.md` §6).
   - H1-F01 brief written for the hygienist.
   - Synthetic demonstration walkthrough with the six failure cases.
-- **Engine 1.4.0 remediation (22 Oct 2026):** the AI-assisted technical review of `ceec79f` found five calculation defects (TR-01–TR-05) and associated weaknesses. All are fixed and tested and await technical re-review (`findings-register.md` §7; `docs/remediation/remediation-summary.md`). The candidate method versions are now `twa_8h` 1.3.0 and `stel_15` 1.2.0; no approval exists or transfers.
-- **Automated evidence:** 256 tests, all passing. Desktop browser checks 24/24 (offline) and 17/17 (online-only), re-run on engine 1.4.0. A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
+- **Engine 1.4.0 remediation (22 Oct 2026):** the AI-assisted technical review of `ceec79f` found five calculation defects (TR-01–TR-05) and associated weaknesses. All are fixed and tested and await technical re-review (`findings-register.md` §7; `docs/remediation/remediation-summary.md`). The candidate method versions became `twa_8h` 1.3.0 and `stel_15` 1.2.0 (since replaced by 1.4.0 and 1.3.0, below).
+- **Engine 1.5.0 remediation (22 Oct 2026):** two findings on package `9b87c17`: a duplicate disposition could set aside a different sample (TR-06), and contradictory detected-below-LOQ inputs gave a favourable result (TR-07). Both are implemented and tested and **await technical re-review** (`findings-register.md` §7.2; `docs/remediation/remediation-summary-tr06-tr07.md`). The candidate method versions are now `twa_8h` 1.4.0 and `stel_15` 1.3.0; no approval exists or transfers.
+- **Automated evidence:** 311 tests, all passing (10 suites). Desktop browser checks 24/24 (offline) and 17/17 (online-only), re-run on engine 1.5.0. A development restore was verified as the non-superuser owner. **None of this is hosting or device evidence.**
 - **Independent software review (R2).** R2 reviewed the Phase H2 controls, re-checked the fixes, then re-checked the final fixes.
   - The first review found 2 critical, 4 high, 8 medium and 9 low findings, plus 9 more from the re-checks.
-  - **All Critical and High software findings are closed. Every Medium software finding is closed except H1-F01, which is fixed in software and awaits the hygienist's disposition.**
+  - **All Critical and High findings from R2 are closed. Every Medium software finding from R2 is closed except H1-F01, which is fixed in software and awaits the hygienist's disposition.** The later calculation findings (TR-01–TR-07) are tracked in `findings-register.md` §7–§7.2.
   - The open Low findings are listed in `findings-register.md` §4.
   - An acceptance check closed the remaining software low findings (R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2) and confirmed R-X1 as mitigated (risk acceptance is proposed and awaits the SHEQ Experts director, `findings-register.md` §6). The follow-on name-check findings R2-Q1 to R2-Q4 are closed on re-check; residual edge cases (R2-Q5, Low) fall under R-X1; see `findings-register.md` §3.4 and §5.4.
 

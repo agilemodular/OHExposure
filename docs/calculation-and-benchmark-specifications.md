@@ -1,10 +1,17 @@
 # Calculation and benchmark specifications
 
-Engine: `src/calc/engine.ts`, engine version **1.4.0** (calculations `twa_8h` **v1.3.0** and `stel_15` **v1.2.0**). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`, `test/worked-examples.test.ts` (structured fixtures with independently derived expected values), `test/tr-services.test.ts`.
+Engine: `src/calc/engine.ts`, engine version **1.5.0** (calculations `twa_8h` **v1.4.0** and `stel_15` **v1.3.0**). Pure functions, no I/O, no AI. Every assessment revision stores `calc_code`, `calc_version`, the full input snapshot and a SHA-256 hash of the inputs. Tests: `test/calc.test.ts`, `test/worked-examples.test.ts` (structured fixtures with independently derived expected values), `test/tr-services.test.ts`, `test/tr06-tr07.test.ts`.
 
-**§0 below states the 1.4.0 rules and takes precedence.** Sections 1–6 describe the 1.3.1 design; where §0 changes a rule, §0 applies. No method version has a professional approval; 1.4.0 approvals are not transferred from 1.3.1 (approvals are recorded per version).
+**§0 below states the current rules and takes precedence** (1.4.0 rules in §0.1–0.8, changed or added by 1.5.0 in §0.9–0.10). Sections 1–6 describe the 1.3.1 design; where §0 changes a rule, §0 applies. No method version has a professional approval; approvals are recorded per version and are not transferred between versions (1.2.1/1.1.1 → 1.3.0/1.2.0 → 1.4.0/1.3.0).
 
-## 0. Engine 1.4.0 (technical review of commit ceec79f, TR-01–TR-05 and items A–D)
+### Version history of the rules in §0
+
+| Engine | `twa_8h` / `stel_15` | Change | Source |
+|---|---|---|---|
+| 1.4.0 | 1.3.0 / 1.2.0 | §0.1–0.8 (TR-01–TR-05, items A–D) | AI-assisted technical review of `ceec79f` |
+| **1.5.0** | **1.4.0 / 1.3.0** | §0.9 duplicate relationships (TR-06); §0.10 value-field meaning and contradictory detected-below-LOQ inputs (TR-07). All other rules unchanged: TR-01–TR-05 reproductions and worked examples E1–E14 give the same outputs as on 1.4.0 (`docs/remediation/tr-reproductions.after-1.5.0.json`, `validation-examples.after-1.5.0.json`) | Independent technical review of package `9b87c17` |
+
+## 0. Engine 1.4.0 and 1.5.0 rules
 
 ### 0.1 Authoritative references checked (22 October 2026)
 
@@ -26,7 +33,7 @@ EH40 gives **no** method for short-term results from samples shorter or longer t
 - Display only: 4 **significant figures** (not decimal places); values below 0.001 or of 10⁶ and above in scientific notation; a positive value is never shown as 0. Ratios to the benchmark are displayed the same way.
 - Unbounded upper results (over-range) carry `upper = Infinity` and `upperUnbounded: true`; stored JSON writes `"Infinity"`, never `null`.
 
-### 0.3 `stel_15` v1.2.0 timing (TR-01)
+### 0.3 `stel_15` timing (TR-01; v1.2.0, unchanged in v1.3.0)
 
 Sampled time T (running time), elapsed window W (start to end) and reference period (15 min) are distinct.
 
@@ -47,7 +54,7 @@ Sampling tolerance: **0 min** (`STEL_SAMPLING_TOLERANCE_MIN`). A non-zero tolera
 | `estimated` | Estimated quantitative result (laboratory says so) | [v, v], qualified |
 | `<LOD` | Not detected | [0, max(reported limit, LOD)] |
 | `<LOQ` | Less than LOQ; **detection not confirmed** (even when an LOD is supplied) | [0, max(reported value, LOQ)] |
-| `detected_below_loq` | Laboratory confirms detection between LOD and LOQ | [LOD, LOQ]; needs LOD < LOQ |
+| `detected_below_loq` | Laboratory confirms detection between LOD and LOQ | [LOD, LOQ]; needs LOD < LOQ; a reported value must agree (§0.10) |
 | `>` | Over range | [v, ∞), upper bound unknown |
 
 When a reported "<" value and the stated limit differ, the larger bounds the result and the difference is flagged (LIMIT_VALUE_DIFFERS). The laboratory's own qualifier text is stored and shown beside the interpretation. CSV mapping: `ND`, `n.d.`, `not detected`, `<DL` → `<LOD`; `<LOR`, `below LOQ` → `<LOQ`; `DET<LOQ`, `detected <LOQ`, `detected below LOQ`, `trace` → `detected_below_loq`; unrecognised text is rejected.
@@ -78,7 +85,7 @@ Dispositions: `sample_acceptance_dispositions` (append-only; database requires a
 
 Status axes are kept separate: **calculation availability** (complete, partial, none), **evidence adequacy** (adequate, adequate with accepted gaps, unresolved evidence, coverage gap, no formal evidence), **numerical comparison** per result, overall **benchmark state**, and the **professional conclusion** (people only).
 
-A personal sample that is excluded, indicative or not calculable needs a disposition before a favourable overall comparison: `duplicate` (names another valid formal sample of the **same worker and shift** in the revision), `outside_scope` (technical reviewer only), `not_replaced` (worker or task remains unassessed), or `remaining_coverage_adequate` (technical reviewer only). Each needs a reason and an assessment of consequences (≥ 10 characters each). Recorded on draft revisions only, append-only, in `assessment_evidence_dispositions`. Every set-aside sample is listed with who set it aside and why, in the comparison note and the report.
+A personal sample that is excluded, indicative or not calculable needs a disposition before a favourable overall comparison: `duplicate` (1.5.0: only for a supported duplicate category with matching relationship evidence, §0.9), `outside_scope` (technical reviewer only), `not_replaced` (worker or task remains unassessed), or `remaining_coverage_adequate` (technical reviewer only). Each needs a reason and an assessment of consequences (≥ 10 characters each). Recorded on draft revisions only, append-only, in `assessment_evidence_dispositions`. Every set-aside sample is listed with who set it aside and why, in the comparison note and the report.
 
 | Situation | Overall benchmark state |
 |---|---|
@@ -86,7 +93,7 @@ A personal sample that is excluded, indicative or not calculable needs a disposi
 | Benchmark invalid (value ≤ 0, unknown unit) | not comparable |
 | Averaging period differs | not comparable |
 | Any formal result at or above | **at or above** (valid adverse evidence stands regardless of other evidence) |
-| All formal results below, all evidence formal or dispositioned (duplicate, outside scope) | below |
+| All formal results below, all evidence formal or dispositioned (duplicate accepted under §0.9, outside scope) | below |
 | All formal results below, gap accepted by a reviewer (remaining coverage adequate) | below (note states the accepted gap) |
 | All formal results below, but unresolved evidence or a coverage gap (not replaced) | **indeterminate** |
 | All formal results below, but some formal worker-shift results could not be calculated | indeterminate |
@@ -96,6 +103,62 @@ A personal sample that is excluded, indicative or not calculable needs a disposi
 | No formal results; excluded or indicative evidence could be at or above (upper bound ≥ benchmark, unknown, or unconvertible) | indeterminate (not proof either way) |
 | No formal results; only indicative or excluded evidence wholly below | not comparable |
 | Static samples only | not comparable |
+
+A recorded disposition that the engine does not accept (for example a duplicate that fails §0.9, or any set-aside of a sample with contradictory inputs, §0.10) leaves the sample **unresolved**; the report lists it with the disposition, who recorded it, the reason, and why it was not accepted.
+
+### 0.9 Duplicate relationships (1.5.0, TR-06)
+
+Three situations are distinguished:
+
+| Situation | Route | Who |
+|---|---|---|
+| **Duplicate record of the same sampling event** (the same event entered twice) | `duplicate`, category `same_event_record` | Practitioner or technical reviewer |
+| **Genuine paired or co-located duplicate sample** (two samplers worn at the same time) | `duplicate`, category `paired_colocated` | Practitioner or technical reviewer |
+| **A different sample offered as evidence that the remaining coverage is adequate** (e.g. a morning sample standing in for an afternoon one) | **not a duplicate**: `remaining_coverage_adequate`, with a stated consequence | **Technical reviewer only** |
+
+Relationship evidence required for a duplicate (all from the records, none from the disposition text). **Missing evidence leaves the disposition unresolved; it never passes.**
+
+| Check | `same_event_record` | `paired_colocated` |
+|---|---|---|
+| Both personal samples; the related sample is a valid formal sample in this revision | required | required |
+| Same worker | required | required |
+| Assessed substance: both samples have a result for it | required | required |
+| Same exposure group at sampling | required | required |
+| Tasks performed recorded for both and the same (case and spacing ignored) | required | required |
+| Same shift association (shift reference, or local start date) | required | required |
+| Sampling window | start and end each within **1 min** (recording granularity) | overlap ≥ **90 %** of the longer window (boundary accepted) |
+| Identity of the event / pair | the **same instrument** | the **same pair reference** recorded at capture on both samples (`sampling_events.pair_ref`) |
+
+**Conflicting results (review policy).** A duplicate label alone must not suppress adverse evidence:
+- `paired_colocated`: if the result set aside is **higher** than the retained result (upper bound, relative tolerance 10⁻⁹), the relationship is a **conflict**. The disposition is not accepted and the sample stays unresolved, so no favourable overall comparison is possible. Whether the pair is acceptable (for example within a method's paired-sample precision) is a technical reviewer's judgement, recorded as `remaining_coverage_adequate` with its consequence, or the higher result is treated as the exposure. The policy does not depend on whether the higher result reaches the benchmark.
+- `same_event_record`: the two records must report the **same** result. Any difference is a discrepancy to correct (amendment), not to set aside.
+- Results in different units are not compared automatically; the disposition is not accepted.
+
+**Where it is enforced.** Engine at every calculation (`duplicateProblem`, `src/calc/engine.ts`; a disposition that later becomes unsupported, e.g. after an amended result, is rejected then), the service before recording (`recordEvidenceDisposition`, same function, refuses with the reason), and the database trigger (`protect_evidence_disposition`, migration 028: category, personal samples, not void, worker, result for the assessed substance, group, tasks, shift, window, instrument or pair reference). The result comparison needs concentrations, so it is checked by the engine and the service, not by the database. Reviewer-only authority for `outside_scope` and `remaining_coverage_adequate` is unchanged (service and database, migration 027).
+
+**Audit and report.** The disposition row keeps the sample, related sample, category, reason, consequence, author and time (append-only). The audit event adds the sample codes, the sample's interval and its flags (e.g. the failed QC check). The report lists set-aside evidence with category, related sample, the retained result, reason, consequence and findings; rejected dispositions are listed with the reason they were not accepted; and for a new revision the superseded revision's dispositions are re-checked and shown.
+
+**Professional judgement needed:** the 1-min and 90 % thresholds, the higher-result conflict rule, and whether paired results should ever be averaged rather than one retained (not implemented).
+
+### 0.10 Meaning of the laboratory value field; contradictory detected-below-LOQ inputs (1.5.0, TR-07)
+
+| Qualifier | Allowed meaning of the value field (default first) | Rule |
+|---|---|---|
+| `=` | measured | Required |
+| `estimated` | estimate | Required |
+| `<LOD` | reporting threshold | Value or LOD required; the larger bounds the result |
+| `<LOQ` | reporting threshold | Value or LOQ required; the larger bounds the result |
+| `>` | lower limit (top of the reportable range) | Required |
+| `detected_below_loq` | **estimate** (default) or **reporting threshold** | LOD and LOQ finite, LOD < LOQ. An estimate must lie in **[LOD, LOQ], both inclusive** (a value equal to a limit is accepted and noted). A value declared a reporting threshold must **equal the LOQ**. The interval is always [LOD, LOQ]; the value is never used as a quantified result |
+
+A laboratory format that puts a threshold in the value field must be mapped explicitly: CSV column `value_meaning` (`measured`, `estimate`, `reporting_threshold`, `lower_limit`); the qualifier text is not used to infer it. Original laboratory text (`lab_qualifier`), the value as reported, and the raw CSV row (`import_rows.raw`, also for rejected batches) are kept.
+
+**Contradictory inputs** (e.g. `detected_below_loq`, 600 µg, LOD 10 µg, LOQ 30 µg):
+- **Laboratory entry, amendments and CSV import** refuse them with a message naming the qualifier, value, limits and the fields in conflict (`qualifierValueProblem`, shared with the engine). The value is not changed, re-interpreted or discarded; the record is not stored until the laboratory clarifies it.
+- **Database:** constraint `lab_result_value_meaning_valid` (migration 028). Added NOT VALID and validated only when no historical row violates it, so records entered before 028 are kept and listed by the impact scan.
+- **Engine** (records entered before 028, or direct engine input): `INPUT_INVALID_DBL_VALUE` / `INPUT_INVALID_VALUE_MEANING`, no numeric result. A sample with contradictory or invalid inputs **cannot be set aside** by any disposition other than `not_replaced` (coverage gap), so it always blocks a favourable overall comparison until corrected by an amendment (a new result revision with a reason; earlier revisions are kept).
+
+**Professional judgement needed:** inclusive boundaries; whether any laboratory reports a detected-below-LOQ value that is neither an estimate nor the LOQ (would need a new mapping).
 
 > **Methodological sources must be confirmed by a competent occupational hygienist against the current editions before pilot use.** The references below identify the conventions the engine implements; they were not re-checked against the live publications during this build (no access was attempted), and no text from them is reproduced.
 

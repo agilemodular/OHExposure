@@ -1,9 +1,9 @@
 # Professional review handover
 
 **For:** the competent occupational hygienist, once appointed (gates **G2**, **G3** and **G4**).
-**Engine:** 1.4.0 (`twa_8h` 1.3.0, `stel_15` 1.2.0). **Prepared:** 19 October 2026; updated 22 October 2026 after the AI-assisted technical review of `ceec79f` (TR-01–TR-05).
+**Engine:** 1.5.0 (`twa_8h` 1.4.0, `stel_15` 1.3.0). **Prepared:** 19 October 2026; updated 22 October 2026 after the AI-assisted technical review of `ceec79f` (TR-01–TR-05) and the findings on package `9b87c17` (TR-06, TR-07).
 
-> **Changed since 19 October.** The candidate versions are now `twa_8h` **1.3.0** and `stel_15` **1.2.0** (engine 1.4.0). Approvals are per version; nothing approved earlier transfers. What changed and why: `docs/remediation/remediation-summary.md`. Conventions now put to you (specification §0): (1) STEL: exact 15 min, sampling tolerance 0; zero-remainder only with supporting evidence; (2) generic "<LOQ" carried as 0–LOQ; (3) method acceptance consequences for each method version; MDHS14/4 para 63 treats a cyclone flow change > 5 % (or 0.1 L/min) as invalid and uses the recommended flow, not the mean of pre/post flows, as the volume basis — please state which basis applies; (4) molar volume 24.05526 L/mol (EH40 para 68); (5) the evidence-disposition model and decision table (§0.8); (6) the shift and exposure-duration rules (§0.7). Structured fixtures with independently derived expected values: `test/fixtures/worked-examples.fixtures.json`.
+> **Changed since 19 October.** The candidate versions are now `twa_8h` **1.4.0** and `stel_15` **1.3.0** (engine 1.5.0; via 1.3.0/1.2.0 on engine 1.4.0). Additional conventions from 1.5.0: (7) duplicate evidence — the three situations, the relationship evidence, the ±1 min and 90 % thresholds and the higher-result conflict rule (specification §0.9); (8) the meaning of the laboratory value field and inclusive [LOD, LOQ] for detected-below-LOQ estimates (§0.10); summary `docs/remediation/remediation-summary-tr06-tr07.md`. Earlier note: Approvals are per version; nothing approved earlier transfers. What changed and why: `docs/remediation/remediation-summary.md`. Conventions now put to you (specification §0): (1) STEL: exact 15 min, sampling tolerance 0; zero-remainder only with supporting evidence; (2) generic "<LOQ" carried as 0–LOQ; (3) method acceptance consequences for each method version; MDHS14/4 para 63 treats a cyclone flow change > 5 % (or 0.1 L/min) as invalid and uses the recommended flow, not the mean of pre/post flows, as the volume basis — please state which basis applies; (4) molar volume 24.05526 L/mol (EH40 para 68); (5) the evidence-disposition model and decision table (§0.8); (6) the shift and exposure-duration rules (§0.7). Structured fixtures with independently derived expected values: `test/fixtures/worked-examples.fixtures.json`.
 **Status:** no method is approved. Until you approve a method version, organisations at pilot level cannot submit, approve or issue conclusions that use it; the server and the database both refuse. Everything you need is listed here, so no code inspection is required.
 
 > ## Read first: what the software does not judge
@@ -58,7 +58,7 @@ If you consider either case should be *indeterminate*, record it as a methodolog
 
 Each candidate method has the same structure. *Source references* name the convention the engine follows. They were not re-checked against the live publications during the build, so confirming them is part of your review.
 
-### 1.1 `twa_8h` v1.3.0: personal 8-hour time-weighted average
+### 1.1 `twa_8h` v1.4.0: personal 8-hour time-weighted average
 
 | Item | Content |
 |---|---|
@@ -70,10 +70,10 @@ Each candidate method has the same structure. *Source references* name the conve
 | Limitations | No temperature/pressure or blank correction; no uncertainty propagation; no statistics or representativeness assessment (see the box above). |
 | Representative outputs | Example report, sections 5–6; `validation-examples.json` E1, E3, E9, E10. |
 | Software verification | `test/calc.test.ts` (TWA cases, the 1.3.1 roll-up); `test/workflow.test.ts` (end-to-end); `test/review-regressions.test.ts`; independent software reviewers' hand calculations matched. |
-| Findings | H1-F01 (roll-up), fixed in 1.2.1. See §1.0. **Your disposition:** ☐ |
+| Findings | H1-F01 (roll-up), fixed in 1.2.1. See §1.0. TR-01–TR-05 (1.3.0) and TR-06/TR-07 (1.4.0): `findings-register.md` §7–§7.2. **Your disposition:** ☐ |
 | Your decision | ☐ Approved ☐ Approved with conditions ☐ Rejected · Permitted scope: ________ · Review/expiry date: ________ |
 
-### 1.2 `stel_15` v1.2.0: personal 15-minute short-term result
+### 1.2 `stel_15` v1.3.0: personal 15-minute short-term result
 
 | Item | Content |
 |---|---|
@@ -84,7 +84,7 @@ Each candidate method has the same structure. *Source references* name the conve
 | Failure conditions | Over 16 minutes; elapsed window over 16 minutes; short sample without the assumption. |
 | Limitations | One result per sample; no peak profiling. |
 | Software verification | `test/calc.test.ts` STEL cases; STEL service flow in `review-regressions`. |
-| Findings | H1-F01 (roll-up) also applied to this method; fixed in 1.1.1. See §1.0. **Your disposition:** ☐ |
+| Findings | H1-F01 (roll-up) also applied to this method; fixed in 1.1.1. See §1.0. TR-01–TR-05 (1.2.0) and TR-06/TR-07 (1.3.0): `findings-register.md` §7–§7.2. **Your disposition:** ☐ |
 | Your decision | ☐ Approved ☐ With conditions ☐ Rejected ☐ Not needed for the pilot |
 
 ### 1.3 Unit conversion (engine 1.3.1)
@@ -109,7 +109,7 @@ Pilot substances are chosen by the pilot organisation (decision pack P4). For ea
 2. A platform operator, who is not you, records the decision for each method version:
 
    ```
-   platform-controls.ts method-review --method twa_8h --version 1.2.1 --status approved|approved_with_conditions|rejected \
+   platform-controls.ts method-review --method twa_8h --version 1.4.0 --status approved|approved_with_conditions|rejected \
      --reviewer "<you>" --competence "<competence>" --reviewed-on <date> --evidence "<document ref>" \
      --evidence-file <signed PDF> --scope "<permitted scope>" [--expires-on <date>] [--conditions "<text>"] --recorded-by "<operator>"
    ```

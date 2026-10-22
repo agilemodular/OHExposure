@@ -1,47 +1,56 @@
-# OHEA re-review package — engine 1.4.0 remediation
+# OHEA re-review package — engine 1.5.0 (TR-06, TR-07)
 
-**Responds to:** AI-assisted technical review of commit `ceec79f` (TR-01–TR-05, items A–D, synthetic report).
-**Engine:** 1.3.1 → **1.4.0** · **Methods:** `twa_8h` 1.2.1 → **1.3.0**, `stel_15` 1.1.1 → **1.2.0** · **Migrations:** 026, 027 · Commit and checksums: `07-identifiers/identifiers.json`, `MANIFEST.sha256`.
+**Responds to:** two findings on re-review package `9b87c17` (engine 1.4.0), supplied with the brief of 22 October 2026: duplicate-evidence dispositions (TR-06) and contradictory `detected_below_loq` inputs (TR-07).
+**Engine:** 1.4.0 → **1.5.0** · **Methods:** `twa_8h` 1.3.0 → **1.4.0**, `stel_15` 1.2.0 → **1.3.0** · **Migration:** 028 (schema now 001–028) · Commit, versions and checksums: `07-identifiers/identifiers.json`, `MANIFEST.sha256`.
 
-> **Not a professional sign-off.** This package is for technical re-review. No method version has a professional approval, and nothing approved for earlier versions transfers. The platform remains an **internal prototype; pilot gates remain open**. The internal reviews referred to (R1–R4) were made by separate AI review agents, not by people or an external firm.
+> **Not a professional sign-off, not a release.** This package is for technical re-review. The platform remains an **internal prototype; pilot gates remain open**. Passing automated tests is not occupational-hygiene approval or authorisation for pilot use. No method version has a professional approval, and nothing approved for any earlier version transfers.
+
+## Three kinds of evidence, kept apart
+
+| Kind | What exists for 1.5.0 |
+|---|---|
+| **Supplied test evidence** (run by the development team in its workspace) | Full suite, fixtures, application tests, browser checks, scenario run, impact scans — `03-fixtures-and-tests/results/`, `06-findings/` |
+| **Independent technical verification** | **None yet for 1.5.0.** (R4, an AI review agent, re-checked 1.4.0 only; it is not external professional validation) |
+| **Professional approval** | **None**, for any version |
 
 ## Status at a glance
 
 | State | Items |
 |---|---|
-| **Fixed and tested** | TR-01–TR-05; A–D; report corrections; R4 findings TR-N1–N8 (N7 partly, see below) |
-| **Awaiting technical re-review** | All of the above. TR-01–TR-05, A, D and the report were closed by R4 (an AI review agent) on `8f601b9`. TR-N1–N8 were fixed after it and have not been re-checked |
-| **Awaiting professional judgement** | STEL zero-remainder convention and sampling tolerance (0); generic "<LOQ" as 0–LOQ; method acceptance consequences per method version (including the MDHS14/4 volume basis); molar volume (EH40 24.05526); evidence-disposition model and decision table; shift and exposure-duration rules; display policy; H1-F01 disposition |
-| **Still open** | Narrative consistency check is heuristic (advisory only). TR-N7 residual: the database trusts the user identity set by the application process, which is the existing application-credential boundary (R2-N9), accepted with the same controls (proposal). Professional approval of every method version (G3) |
+| **Implemented and tested** | TR-06, TR-07 (both reproductions now refused / indeterminate; valid workflows still work) |
+| **Awaiting technical re-review** | TR-06 and TR-07 (all of this package); the 1.4.0 items TR-N1–N8 (fixed after R4, not re-checked) |
+| **Awaiting professional judgement** | Duplicate window thresholds (±1 min; ≥ 90 % overlap); higher-result conflict rule for paired samples; paired averaging (not implemented); inclusive [LOD, LOQ] for detected-below-LOQ estimates; laboratory-specific value mappings; everything listed for 1.4.0 (specification §0) |
+| **Still open** | Reassessment decisions for any real affected records (none in the development database); TR-N7 residual (application-credential boundary, R2-N9); professional approval of every method version (G3) |
 
 ## Contents
 
 | Folder | Content | Source |
 |---|---|---|
-| `01-source/` | Engine, relevant services (assessments, field, lab, instruments, register, narrative, usage, reports), display helpers, migrations 026–027 (in the diff), reproduction, impact and generator scripts, demonstration seed; `changes-since-ceec79f.diff` | Repository, unchanged; the diff is *generated at export* |
-| `02-reproductions/` | TR-01–TR-05 outputs **before** (1.3.1) and **after** (1.4.0); E1–E14 engine outputs before and after | Repository |
-| `03-fixtures-and-tests/` | `worked-examples.fixtures.json` (69 cases: exact inputs, independently derived expected values, statuses, flags, tolerances, method versions, explanation of each intentional change); `build_fixtures.py` (the independent Python calculation); fixture, service and engine tests; `results/` (*generated at export*): full test run (256 passed), desktop browser checks | Repository; results generated at export |
-| `04-specifications/` | Calculation specification (§0: 1.4.0 rules, numerical policy, references, decision table), hygienist review pack, professional review handover | Repository |
-| `05-synthetic-report/` | Revised synthetic report; the report as reviewed at `ceec79f` (*extracted at export from git*); demonstration walkthrough | Repository / git |
-| `06-findings/` | Findings register (§7 TR entries with closure evidence; §7.1 R4), remediation summary, impact report on the demonstration database, test evidence | Repository |
-| `07-identifiers/` | Commit, versions, migrations, per-file last commit (*generated at export*) | — |
+| `01-source/` | Engine; services (assessments, field, lab, reports); routes (assessments, field); field form script; migrations 026–028; reproduction, impact and scenario scripts; `changes-since-9b87c17.diff` | Repository, unchanged; the diff is *generated at export* |
+| `02-reproductions/` | TR-06/TR-07 **before** (engine 1.4.0, run from the reviewed code) and **after** (1.5.0), inputs unchanged plus labelled variants; application probe on 1.4.0; TR-01–TR-05 and E1–E14 outputs on 1.5.0 (unchanged apart from version labels) | Repository |
+| `03-fixtures-and-tests/` | `worked-examples.fixtures.json` (110 cases; groups TR-06 = 24, TR-07 = 17); `build_fixtures.py` (independent Python oracle); fixture runner; `tr06-tr07.test.ts`; `results/` (*generated at export*): full test run with per-test status, browser check logs | Repository; results generated at export |
+| `04-specifications/` | Calculation specification (§0.9 duplicates, §0.10 value-field meaning), hygienist review pack, professional review handover | Repository |
+| `05-synthetic-report/` | Synthetic report of the reassessed scenario showing the unresolved contradictory evidence and the rejected duplicate treatment; the scenario's approved 1.4.0 report is not reproduced (it is in the disposable database only) — the summary JSON records that it was unchanged; the demonstration report regenerated on 1.5.0, and as reviewed at `9b87c17` (*extracted at export from git*) | Repository / git |
+| `06-findings/` | Findings register (§7.2 TR-06, TR-07: implemented — awaiting technical re-review), remediation summary, impact scans (development database; scenario before and after reassessment), scenario summary with audit extract, test evidence | Repository |
+| `07-identifiers/` | Commit, engine and method versions, migration list, per-file last commit (*generated at export*) | — |
 
 ## Reproduce
 
 ```
-npm ci && npm test                                    # full suite (needs PostgreSQL 16; see README)
-npx tsx scripts/tr/reproductions.ts                   # TR-01–TR-05 on the current engine
-python3 scripts/tr/build_fixtures.py                  # regenerates the fixtures (byte-identical)
-DATABASE_ADMIN_URL=… npx tsx scripts/tr/engine-change-impact.ts   # read-only impact listing
-npx tsx scripts/export-example-report.ts              # rebuilds the synthetic report in a disposable database
+npm ci && npm test                                          # full suite (PostgreSQL 16; see README)
+npx tsx scripts/tr/reproductions-tr06-tr07.ts               # TR-06 / TR-07 on the current engine
+python3 scripts/tr/build_fixtures.py                        # regenerates the fixtures (byte-identical)
+DATABASE_ADMIN_URL=… npx tsx scripts/tr/tr06-tr07-impact.ts # read-only impact scan of any database
+bash scripts/tr/run-tr06-tr07-scenario.sh 9b87c17           # historical scenario: 1.4.0 code, then 1.5.0 (disposable database)
 ```
 
 ## Known limits of this evidence
 
-- The Python oracle implements the same documented rules as the engine; it verifies arithmetic and status logic against the specification, not whether the rules are methodologically right.
+- The Python oracle implements the documented rules: it verifies arithmetic and status logic, not whether the rules are methodologically right.
 - All runs are in a development workspace; browser checks are desktop Chromium, not device evidence.
-- The reviewing hygienist's scope of work (`docs/procurement/`) was written before this change and names `twa_8h` 1.2.1 and `stel_15` 1.1.1; the candidate versions are now 1.3.0 and 1.2.0.
+- The database cannot compare results, so the paired-result conflict rule is enforced by the engine and the service only.
+- The impact scan on real data has only been run on the development demonstration database (nothing found). A hosted database needs its own run.
 
 ## Exclusions
 
-No secrets, keys, environment files, database dumps or real worker data are included. The source and test files contain the repository's published **development defaults** (local disposable test databases, the synthetic demonstration accounts and test-fixture passwords). They give no access to any real system, and the server refuses to start in production with the development database password. Workers appear only as synthetic reference codes or fictional demonstration names.
+No secrets, keys, environment files, database dumps or real worker data are included. Source and test files contain the repository's published **development defaults** (local disposable databases, synthetic demonstration accounts, test passwords); they give no access to any real system. Workers appear only as synthetic reference codes or fictional demonstration names.

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Builds the re-review ZIP for the engine 1.4.0 remediation from the repository at HEAD.
+"""Builds the re-review ZIP for the engine 1.5.0 remediation (TR-06, TR-07) from the repository at HEAD.
 
 Run from the repository root after the test run:
   python3 scripts/tr/build_rereview_package.py <test-run.json> <browser-offline.log> <browser-online.log> <out-dir>
@@ -12,7 +12,8 @@ test_json, b_off, b_on, out_dir = sys.argv[1:5]
 git = lambda *a: subprocess.check_output(['git', *a], cwd=R).decode().strip()
 commit = git('rev-parse', 'HEAD'); short = commit[:7]
 assert git('status', '--porcelain') == '', 'working tree must be clean'
-name = f'OHEA-rereview-engine-1.4.0-{short}'
+BASE = '9b87c17'
+name = f'OHEA-rereview-engine-1.5.0-{short}'
 P = os.path.join(out_dir, name)
 shutil.rmtree(P, ignore_errors=True)
 
@@ -21,48 +22,55 @@ FILES = {
   '01-source/src/services/assessments.ts': 'src/services/assessments.ts',
   '01-source/src/services/field.ts': 'src/services/field.ts',
   '01-source/src/services/lab.ts': 'src/services/lab.ts',
-  '01-source/src/services/instruments.ts': 'src/services/instruments.ts',
-  '01-source/src/services/register.ts': 'src/services/register.ts',
-  '01-source/src/services/narrative.ts': 'src/services/narrative.ts',
-  '01-source/src/services/usage.ts': 'src/services/usage.ts',
   '01-source/src/services/reports.ts': 'src/services/reports.ts',
-  '01-source/src/ui/html.ts': 'src/ui/html.ts',
+  '01-source/src/routes/assessments.ts': 'src/routes/assessments.ts',
+  '01-source/src/routes/field.ts': 'src/routes/field.ts',
+  '01-source/public/field.js': 'public/field.js',
   '01-source/db/migrations/026_engine_1_4_remediation.sql': 'db/migrations/026_engine_1_4_remediation.sql',
   '01-source/db/migrations/027_disposition_roles.sql': 'db/migrations/027_disposition_roles.sql',
-  '01-source/scripts/tr/reproductions.ts': 'scripts/tr/reproductions.ts',
-  '01-source/scripts/tr/engine-change-impact.ts': 'scripts/tr/engine-change-impact.ts',
-  '01-source/scripts/generate-validation-examples.ts': 'scripts/generate-validation-examples.ts',
-  '01-source/scripts/export-example-report.ts': 'scripts/export-example-report.ts',
-  '01-source/scripts/seed-demo.ts': 'scripts/seed-demo.ts',
-  '02-reproductions/tr-reproductions.before-1.3.1.json': 'docs/remediation/tr-reproductions.before-1.3.1.json',
+  '01-source/db/migrations/028_duplicate_relationship_value_meaning.sql': 'db/migrations/028_duplicate_relationship_value_meaning.sql',
+  '01-source/scripts/tr/reproductions-tr06-tr07.ts': 'scripts/tr/reproductions-tr06-tr07.ts',
+  '01-source/scripts/tr/tr06-tr07-impact.ts': 'scripts/tr/tr06-tr07-impact.ts',
+  '01-source/scripts/tr/tr06-tr07-scenario.ts': 'scripts/tr/tr06-tr07-scenario.ts',
+  '01-source/scripts/tr/run-tr06-tr07-scenario.sh': 'scripts/tr/run-tr06-tr07-scenario.sh',
+  '02-reproductions/tr06-tr07.before-1.4.0.json': 'docs/remediation/tr06-tr07.before-1.4.0.json',
+  '02-reproductions/tr06-tr07.after-1.5.0.json': 'docs/remediation/tr06-tr07.after-1.5.0.json',
+  '02-reproductions/tr06-tr07.application-probe.before-1.4.0.txt': 'docs/remediation/tr06-tr07.application-probe.before-1.4.0.txt',
+  '02-reproductions/tr06-tr07.application-probe.test.ts.txt': 'docs/remediation/tr06-tr07.application-probe.test.ts.txt',
   '02-reproductions/tr-reproductions.after-1.4.0.json': 'docs/remediation/tr-reproductions.after-1.4.0.json',
-  '02-reproductions/validation-examples.before-1.3.1.json': 'docs/remediation/validation-examples.before-1.3.1.json',
+  '02-reproductions/tr-reproductions.after-1.5.0.json': 'docs/remediation/tr-reproductions.after-1.5.0.json',
   '02-reproductions/validation-examples.after-1.4.0.json': 'docs/remediation/validation-examples.after-1.4.0.json',
+  '02-reproductions/validation-examples.after-1.5.0.json': 'docs/remediation/validation-examples.after-1.5.0.json',
   '03-fixtures-and-tests/worked-examples.fixtures.json': 'test/fixtures/worked-examples.fixtures.json',
   '03-fixtures-and-tests/build_fixtures.py': 'scripts/tr/build_fixtures.py',
   '03-fixtures-and-tests/worked-examples.test.ts': 'test/worked-examples.test.ts',
+  '03-fixtures-and-tests/tr06-tr07.test.ts': 'test/tr06-tr07.test.ts',
   '03-fixtures-and-tests/tr-services.test.ts': 'test/tr-services.test.ts',
-  '03-fixtures-and-tests/calc.test.ts': 'test/calc.test.ts',
-  '03-fixtures-and-tests/review-regressions.test.ts': 'test/review-regressions.test.ts',
   '04-specifications/calculation-and-benchmark-specifications.md': 'docs/calculation-and-benchmark-specifications.md',
   '04-specifications/hygienist-review-pack.md': 'docs/hygienist-review-pack.md',
   '04-specifications/professional-review-handover.md': 'docs/professional-review-handover.md',
+  '05-synthetic-report/example-report-tr06-tr07.synthetic.html': 'docs/examples/example-report-tr06-tr07.synthetic.html',
   '05-synthetic-report/example-report.synthetic.html': 'docs/examples/example-report.synthetic.html',
-  '05-synthetic-report/demonstration-walkthrough.synthetic.md': 'docs/examples/demonstration-walkthrough.synthetic.md',
   '06-findings/findings-register.md': 'docs/findings-register.md',
-  '06-findings/remediation-summary.md': 'docs/remediation/remediation-summary.md',
-  '06-findings/engine-change-impact.demo.json': 'docs/remediation/engine-change-impact.demo.json',
+  '06-findings/remediation-summary-tr06-tr07.md': 'docs/remediation/remediation-summary-tr06-tr07.md',
+  '06-findings/tr06-tr07-impact.demo.json': 'docs/remediation/tr06-tr07-impact.demo.json',
+  '06-findings/tr06-tr07-impact.scenario.json': 'docs/remediation/tr06-tr07-impact.scenario.json',
+  '06-findings/tr06-tr07-impact.scenario-after-reassessment.json': 'docs/remediation/tr06-tr07-impact.scenario-after-reassessment.json',
+  '06-findings/tr06-tr07-scenario.summary.json': 'docs/remediation/tr06-tr07-scenario.summary.json',
   '06-findings/test-evidence.md': 'docs/test-evidence.md',
+  '06-findings/release-readiness-report.md': 'docs/release-readiness-report.md',
 }
 for dst, src in FILES.items():
     d = os.path.join(P, dst); os.makedirs(os.path.dirname(d), exist_ok=True); shutil.copy2(os.path.join(R, src), d)
 
 # Generated at export: previous synthetic report (as reviewed), diff, test results, browser logs, identifiers.
 os.makedirs(os.path.join(P, '05-synthetic-report'), exist_ok=True)
-open(os.path.join(P, '05-synthetic-report/example-report.synthetic.before-ceec79f.html'), 'w').write(git('show', 'ceec79f:docs/examples/example-report.synthetic.html'))
-open(os.path.join(P, '01-source/changes-since-ceec79f.diff'), 'w').write(git('diff', 'ceec79f', 'HEAD', '--', 'src', 'db', 'public/field.js', 'scripts/seed-demo.ts') + '\n')
+open(os.path.join(P, f'05-synthetic-report/example-report.synthetic.as-reviewed-{BASE}.html'), 'w').write(git('show', f'{BASE}:docs/examples/example-report.synthetic.html'))
+open(os.path.join(P, f'01-source/changes-since-{BASE}.diff'), 'w').write(git('diff', BASE, 'HEAD', '--', 'src', 'db', 'public/field.js', 'scripts/tr', 'test') + '\n')
 tr = json.load(open(test_json))
-summary = {'command': 'npx vitest run --reporter=json (full suite, disposable test database)', 'commit': commit, 'total': tr['numTotalTests'], 'passed': tr['numPassedTests'], 'failed': tr['numFailedTests'], 'success': tr['success'],
+import datetime
+summary = {'command': 'npx vitest run --reporter=json (full suite, disposable test database, application role with RLS)', 'environment': 'development workspace (Linux container); not the hosting environment', 'evidence_class': 'supplied test evidence (not independent verification, not professional approval)',
+           'started': datetime.datetime.fromtimestamp(tr['startTime'] / 1000, datetime.timezone.utc).isoformat(), 'commit': commit, 'total': tr['numTotalTests'], 'passed': tr['numPassedTests'], 'failed': tr['numFailedTests'], 'success': tr['success'],
            'suites': [{'file': os.path.relpath(f['name'], R), 'status': f['status'], 'tests': [{'title': ' > '.join(a['ancestorTitles'] + [a['title']]), 'status': a['status']} for a in f['assertionResults']]} for f in tr['testResults']]}
 os.makedirs(os.path.join(P, '03-fixtures-and-tests/results'), exist_ok=True)
 json.dump(summary, open(os.path.join(P, '03-fixtures-and-tests/results/test-run.json'), 'w'), indent=1, ensure_ascii=False)
@@ -70,10 +78,14 @@ for src, dst in [(b_off, 'browser-offline-protection.log'), (b_on, 'browser-onli
     lines = [l for l in open(src).read().splitlines() if l.startswith(('PASS', 'FAIL')) or 'checks passed' in l]
     open(os.path.join(P, '03-fixtures-and-tests/results', dst), 'w').write('\n'.join(lines) + '\n')
 eng = open(os.path.join(R, 'src/calc/engine.ts')).read()
-ident = {'repository': 'github.com/agilemodular/OHExposure', 'branch': 'main', 'commit': commit, 'commit_date': git('log', '-1', '--format=%cI'), 'reviewed_baseline': 'ceec79fd5462cd12ad7b4c1bf3695b5bc0f897c7',
+ident = {'repository': 'github.com/agilemodular/OHExposure', 'branch': 'main', 'commit': commit, 'commit_date': git('log', '-1', '--format=%cI'), 'reviewed_baseline': git('rev-parse', BASE),
          'engine_version': re.search(r"ENGINE_VERSION = '([^']+)'", eng).group(1),
          'methods': dict(re.findall(r"(twa_8h|stel_15): \{ code: '\w+', version: '([^']+)'", eng)),
-         'previous': {'engine': '1.3.1', 'twa_8h': '1.2.1', 'stel_15': '1.1.1'},
+         'previous': {'engine': '1.4.0', 'twa_8h': '1.3.0', 'stel_15': '1.2.0'},
+         'migrations_added': ['028_duplicate_relationship_value_meaning.sql'],
+         'findings': {'TR-06': 'implemented — awaiting technical re-review', 'TR-07': 'implemented — awaiting technical re-review'},
+         'evidence_classes': {'supplied_test_evidence': 'development workspace runs in this package', 'independent_technical_verification': 'none yet for engine 1.5.0', 'professional_approval': 'none for any version'},
+         'classification': 'internal prototype; pilot gates open; no release readiness declared',
          'molar_volume_L_per_mol': re.search(r'MOLAR_VOLUME_L = ([0-9.]+)', eng).group(1),
          'migrations': sorted(os.listdir(os.path.join(R, 'db/migrations'))),
          'method_review_status': 'not reviewed — no professional approval exists for any version; approvals are per version and do not transfer',

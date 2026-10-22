@@ -1,12 +1,15 @@
 # Test evidence
 
-Latest run: **22 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.4.0** (`twa_8h` 1.3.0, `stel_15` 1.2.0), 26 migrations, reviewed commit range `1fce123..` (Phase H2 and post-H2). Command: `npm test` (Vitest, files run sequentially). The test schema is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security and every trigger are active. Environment: development workspace (Linux container). **Not the hosting environment.**
+Latest run: **22 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.5.0** (`twa_8h` 1.4.0, `stel_15` 1.3.0), **28 migrations** (001–028), reviewed commit range `1fce123..` (Phase H2, post-H2, engine 1.4.0 and 1.5.0 remediation). The exact commit and per-test results of the packaged run are in the re-review package (`03-fixtures-and-tests/results/test-run.json`). Command: `npm test` (Vitest, files run sequentially). The test schema is dropped and migrated from scratch, and tests run as the least-privilege application role, so row-level security and every trigger are active. Environment: development workspace (Linux container). **Not the hosting environment.**
 
-**Result: 256 passed, 0 failed, across 9 suites** (169 before the engine 1.4.0 remediation; added: 70 structured fixture tests with independently derived expected values and 17 service/database tests (including the R4 re-check fixes); existing tests updated where behaviour changed intentionally — see `docs/remediation/remediation-summary.md` §5).
+**Result: 311 passed, 0 failed, across 10 suites** (169 before the engine 1.4.0 remediation; 256 after it; engine 1.5.0 added 42 fixture tests (TR-06 and TR-07 groups, plus a check that every fixture group runs) and 13 application tests in `tr06-tr07.test.ts`; one fixture expectation changed intentionally (TR-02b) — see `docs/remediation/remediation-summary-tr06-tr07.md` §6).
+
+These are **supplied test evidence** from the development workspace. They are not independent technical verification and not professional approval.
 
 | Suite | Tests | Covers |
 |---|---|---|
-| `worked-examples.test.ts` | 70 | **Engine 1.4.0 fixtures**: E1–E14 and variants, TR-01–TR-05 reproductions and variants, items A–B; expected values from `scripts/tr/build_fixtures.py` (independent Python calculation), not from the engine |
+| `worked-examples.test.ts` | 112 | **Engine 1.5.0 fixtures** (110 cases): E1–E14 and variants, TR-01–TR-05 reproductions and variants, items A–B, TR-06 (24) and TR-07 (17); expected values from `scripts/tr/build_fixtures.py` (independent Python calculation), not from the engine |
+| `tr06-tr07.test.ts` | 13 | Engine 1.5.0 at the application boundaries: the TR-06 reproduction through the service and the database; reviewer-only coverage route; refusals for different worker, substance, tasks, pair reference and instrument; supported pair with audit and report; same-event record; conflict and later amendment. TR-07 at entry, boundaries, amendments, CSV (rejection, preserved raw row, explicit mapping), database constraint, generic qualifiers unchanged, historical contradictory record |
 | `tr-services.test.ts` | 17 | Engine 1.4.0 at the application level: import/API validation shown separately from the engine, qualifier mapping, database constraint, acceptance and evidence dispositions (roles, draft-only, append-only), shift references, task records, report consistency, approval non-transfer |
 | `calc.test.ts` | 42 | Calculation engine (8-h TWA, 15-min STEL, unit conversion) with hand-calculated expected values; 1.3.1 roll-up |
 | `workflow.test.ts` | 22 | End-to-end workflow, tenant and client isolation, attachments, append-only evidence, governance, integrations |
@@ -35,8 +38,9 @@ Latest run: **22 October 2026**, Node 22.22, PostgreSQL 16.15, engine **1.4.0** 
 
 | Evidence | Environment | Result |
 |---|---|---|
-| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, development server, demo data | 24/24 (adds key replacement re-seal and recovery; post-H2: online-only part uses *Send again*). **Not mobile-device evidence.** |
-| `test/browser/field_online_only.py` (post-H2) | Desktop Chromium 141 headless, development server, demo organisation switched to online-only for the run | 17/17: the eight online-only requirements (`online-only-pilot-configuration.md` §2). **Not mobile-device evidence.** |
+| `test/browser/field_offline_protection.py` | Desktop Chromium 141 headless, development server, demo data | 24/24 (adds key replacement re-seal and recovery; post-H2: online-only part uses *Send again*). Re-run 22 Oct 2026 on engine 1.5.0 (pair reference added to the forms). **Not mobile-device evidence.** |
+| `test/browser/field_online_only.py` (post-H2) | Desktop Chromium 141 headless, development server, demo organisation switched to online-only for the run | 17/17: the eight online-only requirements (`online-only-pilot-configuration.md` §2). Re-run 22 Oct 2026 on engine 1.5.0. **Not mobile-device evidence.** |
+| `scripts/tr/run-tr06-tr07-scenario.sh` (engine 1.5.0) | Disposable development database; legacy phase on the code of `9b87c17`, current phase on 1.5.0 | Historical approved revision and issued report unchanged; impact scan classifies it as a confirmed changed outcome; new revision indeterminate (`docs/remediation/tr06-tr07-scenario.summary.json`) |
 | Release step on a database one migration behind | Development PostgreSQL | Pre-migration backup taken, then the migration applied |
 | Non-superuser BYPASSRLS owner: migrations, backup, restore verification, key verification | Development PostgreSQL | All succeeded (restore 0.6 s). Confirms the production role model. **Development evidence.** |
 | `docker compose config` for the production profile | Development | Valid. The image was **not built** (registry unreachable). |
