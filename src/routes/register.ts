@@ -56,6 +56,8 @@ export function registerRoutes(app: FastifyInstance) {
             <div class="row"><label>Task<input name="name" required></label><label>Frequency<input name="frequency" placeholder="e.g. daily, 3 times a week"></label></div>
             <div class="row"><label>Duration per shift (min)<input name="duration_min_per_shift" type="number" min="0" step="1"></label>
             <label>Duration is<select name="duration_basis">${BASIS.map(([v, l]) => html`<option value="${v}" ${v === 'user_estimate' ? html`selected` : ''}>${l}</option>`)}</select></label></div>
+            <div class="row"><label>Typical start (min from shift start)<input name="typical_start_min" type="number" min="0" max="1440" step="1"></label><label>Typical end (min from shift start)<input name="typical_end_min" type="number" min="0" max="1440" step="1"></label></div>
+            <p class="small muted">Optional. Times let overlapping tasks be counted once when checking the exposure period.</p>
             <label>Description<textarea name="description"></textarea></label><div><button>Add task</button></div></form></details>` : ''}`)}
         ${w ? html`<details><summary class="small">Add a process to ${a.name}</summary><form method="post" action="/processes" class="stack panel">${csrfField(c)}<input type="hidden" name="work_area_id" value="${a.id}">
           <label>Process<input name="name" required></label><label>Description<textarea name="description"></textarea></label><div><button>Add process</button></div></form></details>` : ''}

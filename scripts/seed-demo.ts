@@ -42,7 +42,7 @@ const site = await reg.createSite(A.prac, { client_id: C1, name: 'Northfield wor
 const area = await reg.createWorkArea(A.prac, { site_id: site.id, name: 'Fabrication bay 2' });
 const proc = await reg.createProcess(A.prac, { work_area_id: area.id, name: 'Weld finishing' });
 const task = await reg.createTask(A.prac, { process_id: proc.id, name: 'Disc grinding of weld seams', frequency: 'Daily', duration_min_per_shift: '360', duration_basis: 'recorded_fact' });
-const hazard = await reg.createHazard(A.prac, { task_id: task.id, substance_id: R.substanceId, physical_form: 'dust', exposure_routes: ['inhalation'], exposure_frequency: 'Daily', exposure_duration_min: '360', existing_controls: 'Extracted bench (partial), FFP3 masks', assessment_owner_id: A.prac.userId, review_due: '2027-03-31' });
+const hazard = await reg.createHazard(A.prac, { task_id: task.id, substance_id: R.substanceId, physical_form: 'dust', exposure_routes: ['inhalation'], exposure_frequency: 'Daily', exposure_duration_min: '360', exposure_basis: 'recorded_fact', existing_controls: 'Extracted bench (partial), FFP3 masks', assessment_owner_id: A.prac.userId, review_due: '2027-03-31' });
 const group = await reg.createGroup(A.prac, { site_id: site.id, name: 'Bay 2 grinders', rationale: 'Same grinding task with the same tools, material and bench layout; same shift pattern and controls.', task_ids: [task.id], hazard_ids: [hazard.id] });
 const workers = [];
 for (const [i, n] of ['Alex Demo', 'Bea Demo', 'Cal Demo'].entries()) {
@@ -87,17 +87,21 @@ await lab.commitImport(A.prac, batch.id);
 
 const { assessment, revision } = await asmt.createAssessment(A.prac, { group_id: group.id, substance_id: R.substanceId, plan_id: plan.id, title: 'Bay 2 grinders — Demo Dust X baseline', assessment_question: 'Is exposure of Bay 2 grinders to Demo Dust X adequately controlled under current controls?' });
 await asmt.updateDraft(A.prac, revision.id, { sample_ids: samples.map((s) => s.id), benchmark_version_id: R.benchmarkVersionId, exposure_minutes_per_shift: '360', unsampled_assumption: 'none',
-  interpretation: 'Results range up to roughly half the synthetic benchmark. One non-detect was collected with a pump whose calibration had expired, which qualifies that result. The data set is small and covers two days only.',
-  conclusion_category: 'improvement_required', limitations: 'Two production days; one result qualified by expired calibration evidence; synthetic benchmark used for demonstration.' });
+  interpretation: 'Four personal samples were taken: all three grinders on 2 March and one grinder (NF-W01) again on 3 March. The highest 8-hour TWA is about 68% of the synthetic benchmark (NF-W01, 3 March). NF-26-003 (NF-W03) was a non-detect collected with a pump whose calibration had expired; it is indicative only, so that worker is not assessed. The bench extraction was found defective on 3 March. Improvement is required: upgrade the extraction, then re-sample all grinders.',
+  conclusion_category: 'improvement_required', limitations: 'Four worker-days over two dates; NF-W03 not assessed (expired calibration); synthetic benchmark used for demonstration.' });
+// NF-26-003 cannot be formal evidence (expired calibration); record why and what it leaves unassessed (engine 1.4.0, TR-02).
+await asmt.recordEvidenceDisposition(A.prac, revision.id, { sample_id: samples[2].id, kind: 'not_replaced', reason: 'Pump PUMP-11 calibration had expired on the sampling date; the result is indicative only.', consequence: 'Worker NF-W03 has no formal result for this baseline; to be re-sampled after the extraction upgrade.' });
 await asmt.calculate(A.prac, revision.id);
-await asmt.submitForReview(A.prac, revision.id);
-await asmt.approve(A.rev, revision.id, { approval_scope: 'Bay 2 grinders at Northfield works, March 2026 baseline', approval_limitations: 'Small data set; demonstration benchmark; see qualified result NF-26-003', confirm_reviewed: 'on' });
-await rep.generateReport(A.rev, assessment.id, revision.id);
 
 const lev = await ctl.createControl(A.prac, { site_id: site.id, name: 'Bay 2 downdraught bench', kind: 'local_exhaust_ventilation', purpose: 'Capture grinding dust at source', group_id: group.id, owner_user_id: A.owner.userId, performance_criteria: 'Downdraught face velocity at least 1.0 m/s across the bench (demonstration criterion)', status: 'in_service' });
 await ctl.recordInspection(A.tech, lev.id, { at: '2026-03-03', kind: 'routine_inspection', outcome: 'defect_found', notes: 'Filter differential pressure high; airflow visibly reduced' });
 await ctl.createAction(A.prac, { title: 'Upgrade bench extraction and re-sample', source_type: 'assessment', source_id: assessment.id, control_id: lev.id, owner_user_id: A.owner.userId, priority: 'high', due_date: '2026-05-29',
   verification_requirement: 'Commissioning test of face velocity, then post-upgrade personal sampling of all grinders', requires_exposure_reassessment: 'on' });
+
+await asmt.submitForReview(A.prac, revision.id);
+await asmt.approve(A.rev, revision.id, { approval_scope: 'Bay 2 grinders at Northfield works, March 2026 baseline', approval_limitations: 'Small data set; demonstration benchmark; NF-W03 not assessed (NF-26-003 indicative only)', confirm_reviewed: 'on' });
+await rep.generateReport(A.rev, assessment.id, revision.id);
+
 await reg.reviewGroup(A.rev, group.id, { outcome: 'group_still_valid', notes: 'Control change noted; grouping basis unchanged pending upgrade.' });
 
 console.log(`Demo tenant created. Users (password: ${PASSWORD}):`);

@@ -27,7 +27,7 @@ describe('end-to-end vertical workflow (Client One)', () => {
     S.area = await reg.createWorkArea(prac, { site_id: S.site.id, name: 'Grinding bay' });
     S.proc = await reg.createProcess(prac, { work_area_id: S.area.id, name: 'Weld dressing' });
     S.task = await reg.createTask(prac, { process_id: S.proc.id, name: 'Disc grinding of welds', duration_min_per_shift: '240', duration_basis: 'recorded_fact' });
-    S.hazard = await reg.createHazard(prac, { task_id: S.task.id, substance_id: w.ref.substanceId, physical_form: 'dust', exposure_routes: ['inhalation'], exposure_duration_min: '240' });
+    S.hazard = await reg.createHazard(prac, { task_id: S.task.id, substance_id: w.ref.substanceId, physical_form: 'dust', exposure_routes: ['inhalation'], exposure_duration_min: '240', exposure_basis: 'recorded_fact' });
     await expect(reg.createGroup(prac, { site_id: S.site.id, name: 'Grinders', rationale: 'too short' })).rejects.toThrow(/rationale/);
     S.group = await reg.createGroup(prac, { site_id: S.site.id, name: 'Grinders', rationale: 'Same task, same tools, same bay and same shift pattern; observed comparable work methods.', task_ids: [S.task.id], hazard_ids: [S.hazard.id] });
     S.worker = await reg.createWorker(prac, { client_id: w.A.clients['Client One'], ref_code: `W-${w.tag}`, full_name: 'Alex Example', employee_number: 'E100' });

@@ -34,11 +34,12 @@ export const samplingInput = z.object({
   notes: optStr,
   handover_to: optStr,
   handover_local: localDT,
+  shift_ref: z.preprocess((v) => (typeof v === 'string' && !v.trim() ? undefined : v), z.string().trim().max(60).optional()).transform((v) => v ?? null),
 });
 export type SamplingInput = z.infer<typeof samplingInput>;
 
 const FIELD_COLUMNS = ['plan_id', 'sample_code', 'sample_type', 'worker_id', 'group_id_at_sampling', 'location_desc', 'substance_id', 'method_version_id', 'instrument_id', 'media_lot',
-  'start_at', 'end_at', 'timezone', 'interruptions', 'tasks_performed', 'flow_pre_lpm', 'flow_post_lpm', 'control_status', 'operating_conditions', 'deviations', 'notes', 'handover_to', 'handover_at'] as const;
+  'start_at', 'end_at', 'timezone', 'interruptions', 'tasks_performed', 'flow_pre_lpm', 'flow_post_lpm', 'control_status', 'operating_conditions', 'deviations', 'notes', 'handover_to', 'handover_at', 'shift_ref'] as const;
 
 /** Normalises and validates a capture against server state; returns column values and warnings (never hidden). */
 async function prepare(tx: Tx, a: Actor, d: SamplingInput) {
@@ -116,6 +117,7 @@ async function prepare(tx: Tx, a: Actor, d: SamplingInput) {
     media_lot: d.media_lot, start_at, end_at, timezone: tz, interruptions: JSON.stringify(interruptions), tasks_performed: d.tasks_performed,
     flow_pre_lpm: d.flow_pre_lpm, flow_post_lpm: d.flow_post_lpm, control_status: d.control_status, operating_conditions: d.operating_conditions,
     deviations: d.deviations, notes: d.notes, handover_to: d.handover_to, handover_at: d.handover_local ? zonedToUtc(d.handover_local, tz) : null,
+    shift_ref: d.shift_ref,
   };
   return { clientId, values, status, warnings };
 }
@@ -210,6 +212,29 @@ export async function addQcCheck(a: Actor, sampleId: string, input: unknown) {
     return r;
   });
 }
+/**
+ * TR-05: a technical reviewer accepts a failed method criterion (flow drift or minimum volume) for a sample, naming the
+ * supporting evidence and the scope of the acceptance. A criterion the method marks "invalid" cannot be accepted: the
+ * engine ignores such dispositions. Append-only; one per sample and criterion.
+ */
+export async function recordAcceptanceDisposition(a: Actor, sampleId: string, input: unknown) {
+  requirePerm(a, 'assess.approve');
+  const d = parse(z.object({ criterion: z.enum(['flow_drift', 'min_volume']), evidence: reqStr(10), scope: reqStr(5) }), input);
+  return withActor(a, async (tx) => {
+    await assertWorkflowActive(tx, 'field_sync');
+    const e = await one(tx, 'select e.*, v.flow_drift_consequence, v.min_volume_consequence from sampling_events e left join sampling_method_versions v on v.id=e.method_version_id where e.id=$1 for update of e', [sampleId]);
+    if (!e) throw notFound('Sampling event');
+    const consequence = d.criterion === 'flow_drift' ? e.flow_drift_consequence : e.min_volume_consequence;
+    if (consequence === 'invalid') throw invalid('The method treats this criterion as invalid; a failed sample cannot be accepted by disposition');
+    if (await one(tx, 'select 1 from sample_acceptance_dispositions where sampling_event_id=$1 and criterion=$2', [sampleId, d.criterion])) throw invalid('This criterion already has a disposition for this sample');
+    const r = await one(tx, `insert into sample_acceptance_dispositions (tenant_id,client_id,sampling_event_id,criterion,evidence,scope,authorised_by) values ($1,$2,$3,$4,$5,$6,$7) returning *`,
+      [e.tenant_id, e.client_id, sampleId, d.criterion, d.evidence, d.scope, a.userId]);
+    await tx.query('update sampling_events set version=version+1, updated_at=now() where id=$1', [sampleId]);
+    await audit(tx, a, 'sample.acceptance_disposition', 'sampling_event', sampleId, d);
+    return r;
+  });
+}
+
 export async function disposeQcFailure(a: Actor, checkId: string, input: unknown) {
   if (!can(a, 'assess.write') && !can(a, 'assess.approve')) throw forbidden('Only a practitioner or reviewer can disposition a failed check');
   const d = parse(z.object({ disposition: z.enum(['accepted_with_justification', 'sample_invalidated']), reason: reqStr(20) }), input);
@@ -371,7 +396,7 @@ export async function resolveConflict(a: Actor, id: string, input: unknown) {
 export async function sampleDetail(a: Actor, id: string) {
   return withActor(a, async (tx) => {
     const e = await one(tx, `select e.*, w.ref_code worker_ref, wi.full_name worker_name, g.name group_name, s.name substance_name, i.asset_tag, i.screening_only,
-        m.code method_code, mv.version method_version, p.title plan_title
+        m.code method_code, mv.version method_version, mv.flow_drift_tolerance_pct, mv.min_volume_l, mv.flow_drift_consequence, mv.min_volume_consequence, p.title plan_title
       from sampling_events e left join workers w on w.id=e.worker_id left join worker_identities wi on wi.worker_id=w.id and wi.disposed_at is null
       left join exposure_groups g on g.id=e.group_id_at_sampling left join substances s on s.id=e.substance_id left join instruments i on i.id=e.instrument_id
       left join sampling_method_versions mv on mv.id=e.method_version_id left join sampling_methods m on m.id=mv.method_id left join monitoring_plans p on p.id=e.plan_id where e.id=$1`, [id]);
@@ -381,9 +406,10 @@ export async function sampleDetail(a: Actor, id: string) {
       calibrationOk: e.instrument_id && e.start_at ? await calibrationValidAt(tx, e.instrument_id, e.start_at.toISOString()) : null,
       qc: await many(tx, 'select q.*, u.name disposition_by_name from sample_qc_checks q left join users u on u.id=q.disposition_by where sampling_event_id=$1 order by recorded_at', [id]),
       custody: await many(tx, 'select c.*, u.name recorded_by_name from custody_events c left join users u on u.id=c.recorded_by where sampling_event_id=$1 order by at, recorded_at', [id]),
-      results: await many(tx, `select r.*, s.name substance_name, v.value, v.unit, v.qualifier, v.lod, v.loq, v.lab_report_ref, v.analytical_method, v.uncertainty, v.lab_comments, v.sample_condition, v.revision, v.amendment_reason, v.entered_at
+      results: await many(tx, `select r.*, s.name substance_name, v.value, v.unit, v.qualifier, v.lab_qualifier, v.lod, v.loq, v.lab_report_ref, v.analytical_method, v.uncertainty, v.lab_comments, v.sample_condition, v.revision, v.amendment_reason, v.entered_at
         from lab_results r join lab_result_revisions v on v.result_id=r.id join substances s on s.id=r.substance_id where r.sampling_event_id=$1 order by s.name, v.revision desc`, [id]),
       conflicts: await many(tx, `select * from sync_conflicts where entity_id=$1 and status='open'`, [id]),
+      acceptance: await many(tx, 'select d.*, u.name authorised_by_name from sample_acceptance_dispositions d join users u on u.id=d.authorised_by where d.sampling_event_id=$1 order by recorded_at', [id]),
     };
   });
 }

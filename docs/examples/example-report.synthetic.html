@@ -20,8 +20,8 @@ footer{margin-top:36px;font:12px system-ui,sans-serif;color:#5c6670;border-top:1
 <h1>Bay 2 grinders — Demo Dust X baseline</h1>
 <table class="meta"><tr><th>Client</th><td>Northfield Fabrication (demo)</td><th>Site</th><td>Northfield works</td></tr>
 <tr><th>Report version</th><td>1 (issued)</td><th>Assessment revision</th><td>r1 — approved</td></tr>
-<tr><th>Generated</th><td>19 Oct 2026, 15:58</td><th>Prepared by</th><td>Priya Practitioner</td></tr></table>
-<p><span class="badge b-warn" title="Data quality">Data: qualified</span> <span class="badge b-neutral" title="Benchmark comparison (not a compliance conclusion)">Benchmark: below benchmark</span> <span class="badge b-ok" title="Professional assessment">Review: approved</span></p></header>
+<tr><th>Generated</th><td>22 Oct 2026, 12:26</td><th>Prepared by</th><td>Priya Practitioner</td></tr></table>
+<p><span class="badge b-warn" title="Data quality">Data: qualified</span> <span class="badge b-warn" title="Benchmark comparison (not a compliance conclusion)">Benchmark: indeterminate</span> <span class="badge b-ok" title="Professional assessment">Review: approved</span></p></header>
 
 <h2>1. Purpose and scope</h2>
 <p><strong>Assessment question:</strong> Is exposure of Bay 2 grinders to Demo Dust X adequately controlled under current controls?</p>
@@ -35,23 +35,27 @@ footer{margin-top:36px;font:12px system-ui,sans-serif;color:#5c6670;border-top:1
 <ul><li>Weld finishing — Disc grinding of weld seams</li></ul>
 
 <h2>3. Sampling strategy and methods</h2>
-<p><strong>Approach:</strong> personal. Full-shift personal sampling of all three grinders on two representative production days.</p>
+<p><strong>Planned approach:</strong> personal. Full-shift personal sampling of all three grinders on two representative production days.</p>
+<p><strong>Sampling achieved (from the records):</strong> 4 personal samples from 3 workers (NF-W01, NF-W02, NF-W03) on 2 dates (2026-03-02, 2026-03-03), giving 4 worker-days. 4 worker-shift results could be calculated, of which 3 are formal (compared with the benchmark). The highest formal result is 0.342 mg/m3 (NF-W01, 2026-03-03), 68% of the benchmark. 1 sample cannot be used as formal evidence and is unresolved or not replaced: NF-26-003.</p>
+<p class="draftnote"><strong>Deviation from the plan:</strong> The planned strategy implies every worker was sampled on every date (3 × 2 = 6 worker-days); the evidence has 4 worker-days.</p>
 <ul><li>DEMO-GRAV v1 — result basis mass on sample; flow tolerance 5%; suitable for formal assessment</li></ul>
 <p class="draftnote"><strong>Method review status at approval:</strong> not reviewed — this calculation method has not been approved by a competent occupational hygienist. Results are for discussion only and must not be relied upon for conclusions.</p>
 
 
-<p><strong>Calculation:</strong> twa_8h v1.2.1 (engine 1.3.1). Parameters: exposure per shift 360 min; unsampled period assumption: none.</p>
+<p><strong>Calculation:</strong> twa_8h v1.3.0 (engine 1.4.0). Parameters: exposure per shift 360 min; unsampled period assumption: none.</p>
 
 <h2>4. Instruments and quality checks</h2>
 <table><thead><tr><th>Instrument</th><th>Calibration at sampling</th><th>Designation</th></tr></thead><tbody>
 <tr><td>PUMP-07</td><td>Valid</td><td>Formal</td></tr><tr><td>PUMP-11</td><td>Expired or failed</td><td>Formal</td></tr>
 </tbody></table>
-<h3>Data quality findings</h3><ul class="issues"><li class="sev-qualify">[qualify] NF-26-003: Calibration for PUMP-11 was expired or failed at the sampling date; result treated as indicative only.</li><li class="sev-qualify">[qualify] NF-26-003: Non-detect (&lt; 20 ug). Carried as an interval from 0 to the reported limit; not replaced by zero.</li></ul>
+<h3>Data quality findings</h3><ul class="issues"><li class="sev-qualify">[qualify] NF-26-003: Calibration for PUMP-11 was expired or failed at the sampling date; result treated as indicative only.</li><li class="sev-qualify">[qualify] NF-26-003: Not detected (&lt; 20 ug) (laboratory reported &quot;&lt;LOD&quot;). Carried as an interval from 0 to the reported limit; not replaced by zero.</li></ul>
 
 <h2>5. Results</h2>
-<table><thead><tr><th>Sample</th><th>Type</th><th>Subject</th><th>Sampled (min)</th><th>Volume (L)</th><th>Concentration</th><th>Used</th></tr></thead><tbody>
-<tr><td>NF-26-001</td><td>personal</td><td>NF-W01</td><td>360.0</td><td>720.0</td><td>0.2917 mg/m3</td><td>Yes</td></tr><tr><td>NF-26-002</td><td>personal</td><td>NF-W02</td><td>360.0</td><td>716.4</td><td>0.2233 mg/m3</td><td>Yes</td></tr><tr><td>NF-26-003</td><td>personal</td><td>NF-W03</td><td>360.0</td><td>720.0</td><td>&lt; 0.02778 mg/m3 <span class="tag tag-q">range 0–0.02778</span> <span class="tag">indicative</span></td><td>Yes</td></tr><tr><td>NF-26-004</td><td>personal</td><td>NF-W01</td><td>360.0</td><td>723.6</td><td>0.4561 mg/m3</td><td>Yes</td></tr>
+<p><strong>Summary:</strong> 4 personal samples from 3 workers (NF-W01, NF-W02, NF-W03) on 2 dates (2026-03-02, 2026-03-03), giving 4 worker-days. 4 worker-shift results could be calculated, of which 3 are formal (compared with the benchmark). The highest formal result is 0.342 mg/m3 (NF-W01, 2026-03-03), 68% of the benchmark. 1 sample cannot be used as formal evidence and is unresolved or not replaced: NF-26-003. Calculation availability: complete. Evidence adequacy: coverage gap.</p>
+<table><thead><tr><th>Sample</th><th>Type</th><th>Subject</th><th>Sampled (min)</th><th>Volume (L)</th><th>Concentration</th><th>In report</th><th>In calculation</th><th>In formal comparison</th></tr></thead><tbody>
+<tr><td>NF-26-001</td><td>personal</td><td>NF-W01</td><td>360</td><td>720</td><td>0.2917 mg/m3</td><td>Yes</td><td>Yes</td><td>Yes</td></tr><tr><td>NF-26-002</td><td>personal</td><td>NF-W02</td><td>360</td><td>716.4</td><td>0.2233 mg/m3</td><td>Yes</td><td>Yes</td><td>Yes</td></tr><tr><td>NF-26-003</td><td>personal</td><td>NF-W03</td><td>360</td><td>720</td><td>&lt; 0.02778 mg/m3 <span class="tag tag-q">range 0–0.02778</span> <span class="tag">indicative</span></td><td>Yes</td><td>Yes</td><td>No — indicative only</td></tr><tr><td>NF-26-004</td><td>personal</td><td>NF-W01</td><td>360</td><td>723.6</td><td>0.4561 mg/m3</td><td>Yes</td><td>Yes</td><td>Yes</td></tr>
 </tbody></table>
+<p><strong>Evidence not used formally:</strong></p><ul><li>NF-26-003 (NF-W03): indicative only; not replaced — the worker or task it covered remains unassessed (Worker NF-W03 has no formal result for this baseline; to be re-sampled after the extraction upgrade.)</li></ul>
 <h3>8-hour time-weighted averages (personal)</h3>
 <table><thead><tr><th>Worker ref</th><th>Shift date</th><th>Samples</th><th>Coverage</th><th>8-h TWA</th><th>Benchmark comparison</th></tr></thead><tbody>
 <tr><td>NF-W01</td><td>2026-03-02</td><td>NF-26-001</td><td>100%</td><td>0.2188 mg/m3</td><td>below benchmark (ratio 0.4375)</td></tr><tr><td>NF-W01</td><td>2026-03-03</td><td>NF-26-004</td><td>100%</td><td>0.342 mg/m3</td><td>below benchmark (ratio 0.6841)</td></tr><tr><td>NF-W02</td><td>2026-03-02</td><td>NF-26-002</td><td>100%</td><td>0.1675 mg/m3</td><td>below benchmark (ratio 0.335)</td></tr><tr><td>NF-W03</td><td>2026-03-02</td><td>NF-26-003</td><td>100%</td><td>&lt; 0.02083 mg/m3 <span class="tag tag-q">range 0–0.02083</span></td><td>not compared</td></tr>
@@ -60,24 +64,26 @@ footer{margin-top:36px;font:12px system-ui,sans-serif;color:#5c6670;border-top:1
 
 <h2>6. Applicable benchmark</h2>
 <p>DEMO LTEL (480-min reference): 0.5 mg/m3. Source: SYNTHETIC DEMONSTRATION VALUE — not an exposure limit, demo-1; effective from 01 Jan 2020. Verification: verified. Provenance: synthetic demonstration value. <strong>SYNTHETIC DEMONSTRATION VALUE — not a real exposure limit.</strong></p>
-<p>3 formal worker-shift result(s) compared with DEMO LTEL 0.5 mg/m3 (SYNTHETIC DEMONSTRATION VALUE — not an exposure limit, demo-1).</p>
+<p>3 formal worker-shift result(s) compared with DEMO LTEL 0.5 mg/m3 (SYNTHETIC DEMONSTRATION VALUE — not an exposure limit, demo-1). Every calculated result is below the benchmark, but 1 personal sample(s) are unresolved (NF-26-003: indicative only; not replaced — the worker or task it covered remains unassessed (Worker NF-W03 has no formal result for this baseline; to be re-sampled after the extraction upgrade.)); no favourable overall comparison until they are dispositioned or replaced.</p>
 <p class="muted">Calculated outputs and benchmark comparisons are not a compliance conclusion. Professional interpretation by a competent person is required.</p>
 
 <h2>7. Limitations and uncertainty</h2>
-<p>Two production days; one result qualified by expired calibration evidence; synthetic benchmark used for demonstration.</p>
-<p><strong>Reviewer-stated limitations:</strong> Small data set; demonstration benchmark; see qualified result NF-26-003</p>
+<p>Four worker-days over two dates; NF-W03 not assessed (expired calibration); synthetic benchmark used for demonstration.</p>
+<p><strong>Reviewer-stated limitations:</strong> Small data set; demonstration benchmark; NF-W03 not assessed (NF-26-003 indicative only)</p>
 
 <h2>8. Professional interpretation</h2>
-<p>Results range up to roughly half the synthetic benchmark. One non-detect was collected with a pump whose calibration had expired, which qualifies that result. The data set is small and covers two days only.</p>
+<p>Four personal samples were taken: all three grinders on 2 March and one grinder (NF-W01) again on 3 March. The highest 8-hour TWA is about 68% of the synthetic benchmark (NF-W01, 3 March). NF-26-003 (NF-W03) was a non-detect collected with a pump whose calibration had expired; it is indicative only, so that worker is not assessed. The bench extraction was found defective on 3 March. Improvement is required: upgrade the extraction, then re-sample all grinders.</p>
+
 <p><strong>Conclusion category:</strong> improvement required</p>
 
 <h2>9. Required actions and verification requirements</h2>
-<p>No actions recorded against this assessment.</p>
+<table><thead><tr><th>Action</th><th>Priority</th><th>Due</th><th>Status</th><th>Verification required</th></tr></thead><tbody>
+<tr><td>Upgrade bench extraction and re-sample</td><td>high</td><td>29 May 2026</td><td>assigned</td><td>Commissioning test of face velocity, then post-upgrade personal sampling of all grinders</td></tr></tbody></table>
 
 <h2>10. Review and revision history</h2>
 <table><thead><tr><th>Revision</th><th>Status</th><th>Reviewer</th><th>Approved</th><th>Reason for revision</th></tr></thead><tbody>
-<tr><td>r1</td><td>approved</td><td>Rhys Reviewer</td><td>19 Oct 2026, 15:58</td><td>—</td></tr>
+<tr><td>r1</td><td>approved</td><td>Rhys Reviewer</td><td>22 Oct 2026, 12:26</td><td>—</td></tr>
 </tbody></table>
-<p class="sig">Approved by Rhys Reviewer (reviewer@demo.test) on 19 Oct 2026, 15:58. Approval record hash: <code>6f0fe13dd0d38aae2b8eee8cf3339aae085d1fee3003465fea25632f5ffb95b6</code></p>
+<p class="sig">Approved by Rhys Reviewer (reviewer@demo.test) on 22 Oct 2026, 12:26. Approval record hash: <code>d4fadcd73c1100208879d2fdc546626c1d38d7334fe687f8ef33f6b469ef9dd9</code></p>
 <footer>SHEQ Experts Limited · Occupational Hygiene &amp; Exposure Assurance by Assurentra. Clinical diagnosis and medical fitness decisions are outside the scope of this report.</footer>
 </body></html>

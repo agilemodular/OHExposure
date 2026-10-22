@@ -114,13 +114,17 @@ export async function createMethodVersion(a: Actor, input: unknown) {
     code: reqStr(2, 60), title: reqStr(3, 300), source_reference: reqStr(3, 500), version: reqStr(1, 30),
     collection_media: optStr, flow_rate_lpm_min: optNum, flow_rate_lpm_max: optNum, flow_drift_tolerance_pct: optNum, min_volume_l: optNum,
     result_basis: z.enum(['mass_on_sample', 'concentration']), suitable_for_formal_assessment: bool, notes: optStr,
+    flow_drift_consequence: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['advisory', 'disposition_required', 'invalid']).optional()).transform((v) => v ?? null),
+    min_volume_consequence: z.preprocess((v) => (v === '' ? undefined : v), z.enum(['advisory', 'disposition_required', 'invalid']).optional()).transform((v) => v ?? null),
   }), input);
   return withActor(a, async (tx) => {
     let m = await one(tx, 'select * from sampling_methods where tenant_id=$1 and code=$2', [a.tenantId, d.code]);
     if (!m) m = await one(tx, 'insert into sampling_methods (tenant_id,code,title,source_reference) values ($1,$2,$3,$4) returning *', [a.tenantId, d.code, d.title, d.source_reference]);
-    const v = await one(tx, `insert into sampling_method_versions (tenant_id,method_id,version,collection_media,flow_rate_lpm_min,flow_rate_lpm_max,flow_drift_tolerance_pct,min_volume_l,result_basis,suitable_for_formal_assessment,notes)
-      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) returning *`,
-      [a.tenantId, m.id, d.version, d.collection_media, d.flow_rate_lpm_min, d.flow_rate_lpm_max, d.flow_drift_tolerance_pct, d.min_volume_l, d.result_basis, d.suitable_for_formal_assessment, d.notes]);
+    for (const k of ['flow_rate_lpm_min', 'flow_rate_lpm_max', 'min_volume_l'] as const) if (d[k] != null && !(d[k]! > 0)) throw invalid(`${k} must be greater than zero`);
+    if (d.flow_drift_tolerance_pct != null && d.flow_drift_tolerance_pct < 0) throw invalid('flow_drift_tolerance_pct cannot be negative');
+    const v = await one(tx, `insert into sampling_method_versions (tenant_id,method_id,version,collection_media,flow_rate_lpm_min,flow_rate_lpm_max,flow_drift_tolerance_pct,min_volume_l,result_basis,suitable_for_formal_assessment,notes,flow_drift_consequence,min_volume_consequence)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) returning *`,
+      [a.tenantId, m.id, d.version, d.collection_media, d.flow_rate_lpm_min, d.flow_rate_lpm_max, d.flow_drift_tolerance_pct, d.min_volume_l, d.result_basis, d.suitable_for_formal_assessment, d.notes, d.flow_drift_consequence, d.min_volume_consequence]);
     await audit(tx, a, 'method.version_create', 'sampling_method', m.id, d);
     return v;
   });

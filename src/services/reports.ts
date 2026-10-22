@@ -4,6 +4,8 @@ import { audit, can, many, one, requirePerm, withActor, type Actor } from '../db
 import { AppError, forbidden, invalid, notFound } from '../errors.js';
 import { assertAssessmentNotOnHold, assertWorkflowActive, METHOD_APPROVED, methodReview, tenantControls } from './assurance.js';
 import { bmBadge, dqBadge, fmtDate, fmtDateTime, fmtNum, html, interval, label, psBadge, raw } from '../ui/html.js';
+import { evidenceFacts, factualSummary, narrativeChecks } from './narrative.js';
+import { usage } from './usage.js';
 
 /**
  * Generates an immutable report version from a specific assessment revision.
@@ -47,6 +49,10 @@ export async function generateReport(a: Actor, assessmentId: string, revisionId:
     const acts = await many(tx, `select title, status, verification_requirement, due_date, priority from actions where source_type='assessment' and source_id=$1 and status <> 'cancelled' order by created_at`, [assessmentId]);
     const history = await many(tx, `select r.revision, r.status, r.change_reason, r.approved_at, ru.name reviewer_name from assessment_revisions r left join users ru on ru.id=r.reviewer_id where r.assessment_id=$1 and r.revision <= $2 order by revision`, [assessmentId, rev.revision]);
     const out = rev.calc_output;
+    const facts = evidenceFacts(out);
+    const narrativeIssues = narrativeChecks(rev.interpretation, facts);
+    const planIssues = plan ? narrativeChecks(plan.strategy_rationale, facts, 'The planned strategy') : [];
+    const needsActions = ['improvement_required', 'urgent_action_required'].includes(rev.conclusion_category);
     const last = await one(tx, 'select coalesce(max(version),0)::int v from reports where assessment_id=$1', [assessmentId]);
     const version = last.v + 1;
     const b = config.branding;
@@ -74,7 +80,9 @@ ${issued ? html`<p><strong>Scope of approval:</strong> ${rev.approval_scope}</p>
 ${tasks.length ? html`<ul>${tasks.map((t) => html`<li>${t.process_name} — ${t.name}${t.description ? html`: ${t.description}` : ''}</li>`)}</ul>` : ''}
 
 <h2>3. Sampling strategy and methods</h2>
-${plan ? html`<p><strong>Approach:</strong> ${label(plan.approach)}. ${plan.strategy_rationale}</p>${plan.coverage_notes ? html`<p><strong>Coverage:</strong> ${plan.coverage_notes}</p>` : ''}` : html`<p>No monitoring plan linked.</p>`}
+${plan ? html`<p><strong>Planned approach:</strong> ${label(plan.approach)}. ${plan.strategy_rationale}</p>${plan.coverage_notes ? html`<p><strong>Coverage:</strong> ${plan.coverage_notes}</p>` : ''}` : html`<p>No monitoring plan linked.</p>`}
+<p><strong>Sampling achieved (from the records):</strong> ${factualSummary(facts, out.calcCode)}</p>
+${planIssues.length ? html`<p class="draftnote"><strong>Deviation from the plan:</strong> ${planIssues.join(' ')}</p>` : ''}
 <ul>${methods.map(([k, m]: any) => html`<li>${k} — result basis ${label(m.resultBasis)}; flow tolerance ${m.flowDriftTolerancePct ?? 'not defined'}%; ${m.suitableForFormalAssessment ? 'suitable for formal assessment' : 'indicative only'}</li>`)}</ul>
 <p class="${methodOk ? '' : 'draftnote'}"><strong>Method review status${issued ? ' at approval' : ''}:</strong> ${methodStatus === 'not_recorded' ? 'not recorded (approved before method review tracking)' : label(methodStatus)}${methodOk && review ? html` — ${review.reviewer_name}, ${fmtDate(review.reviewed_on)}${review.conditions ? html`. <strong>Conditions:</strong> ${review.conditions}` : ''}` : ''}${methodOk ? '' : ' — this calculation method has not been approved by a competent occupational hygienist. Results are for discussion only and must not be relied upon for conclusions.'}</p>
 ${issued && current.status !== methodStatus && methodStatus !== 'not_recorded' ? html`<p class="draftnote"><strong>Current method review status:</strong> ${label(current.status)} (changed since approval). Reassessment may be required.</p>` : ''}
@@ -90,12 +98,14 @@ ${instruments.map((i: any) => html`<tr><td>${i.assetTag}</td><td>${i.calibration
 ${out.issues.length ? html`<h3>Data quality findings</h3><ul class="issues">${out.issues.map((f: any) => html`<li class="sev-${f.severity}">[${label(f.severity)}] ${f.message}</li>`)}</ul>` : html`<p>No data quality findings.</p>`}
 
 <h2>5. Results</h2>
-<table><thead><tr><th>Sample</th><th>Type</th><th>Subject</th><th>Sampled (min)</th><th>Volume (L)</th><th>Concentration</th><th>Used</th></tr></thead><tbody>
-${out.samples.map((s: any) => html`<tr><td>${s.sampleCode}</td><td>${label(s.sampleType)}</td><td>${s.subjectRef ?? '—'}</td><td>${fmtNum(s.sampledMinutes)}</td><td>${fmtNum(s.volumeL)}</td><td>${interval(s.concentration)}${s.indicative ? html` <span class="tag">indicative</span>` : ''}</td><td>${s.included ? 'Yes' : 'Excluded'}</td></tr>`)}
+<p><strong>Summary:</strong> ${factualSummary(facts, out.calcCode)}${facts.calculationAvailability ? html` Calculation availability: ${label(facts.calculationAvailability)}. Evidence adequacy: ${label(facts.evidenceAdequacy)}.` : ''}</p>
+<table><thead><tr><th>Sample</th><th>Type</th><th>Subject</th><th>Sampled (min)</th><th>Volume (L)</th><th>Concentration</th><th>In report</th><th>In calculation</th><th>In formal comparison</th></tr></thead><tbody>
+${out.samples.map((s: any) => { const u = usage(out, s); return html`<tr><td>${s.sampleCode}</td><td>${label(s.sampleType)}</td><td>${s.subjectRef ?? '—'}</td><td>${fmtNum(s.sampledMinutes)}</td><td>${fmtNum(s.volumeL)}</td><td>${interval(s.concentration)}${s.indicative ? html` <span class="tag">indicative</span>` : ''}</td><td>Yes</td><td>${u.calculation}</td><td>${u.formal}</td></tr>`; })}
 </tbody></table>
+${out.unresolvedEvidence?.length ? html`<p><strong>Evidence not used formally:</strong></p><ul>${out.unresolvedEvidence.map((u: any) => html`<li>${u.sampleCode} (${u.subjectRef ?? '—'}): ${u.why}</li>`)}</ul>` : ''}
 <h3>${out.calcCode === 'stel_15' ? '15-minute short-term results (personal)' : '8-hour time-weighted averages (personal)'}</h3>
 <table><thead><tr><th>Worker ref</th><th>${out.calcCode === 'stel_15' ? 'Date' : 'Shift date'}</th><th>Samples</th><th>${out.calcCode === 'stel_15' ? 'Sampled (min)' : 'Coverage'}</th><th>${out.calcCode === 'stel_15' ? '15-min value' : '8-h TWA'}</th><th>Benchmark comparison</th></tr></thead><tbody>
-${out.shifts.length ? out.shifts.map((s: any) => html`<tr><td>${s.subjectRef}</td><td>${s.shiftDate}</td><td>${s.sampleCodes.join(', ')}</td><td>${out.calcCode === 'stel_15' ? fmtNum(s.sampledMinutes) : html`${s.coveragePct ?? '—'}%`}</td><td>${interval(s.result ?? s.twa8h)}${s.comparison?.converted ? html` (≈ ${interval(s.comparison.converted)})` : ''}</td><td>${s.comparison ? html`${label(s.comparison.state)}${s.comparison.ratio ? html` (ratio ${fmtNum(s.comparison.ratio.lower)}${s.comparison.ratio.upper !== s.comparison.ratio.lower ? html`–${fmtNum(s.comparison.ratio.upper)}` : ''})` : ''}` : 'not compared'}</td></tr>`) : html`<tr><td colspan="6">No personal results for this calculation.</td></tr>`}
+${out.shifts.length ? out.shifts.map((s: any) => html`<tr><td>${s.subjectRef}</td><td>${s.shiftDate}</td><td>${s.sampleCodes.join(', ')}</td><td>${out.calcCode === 'stel_15' ? fmtNum(s.sampledMinutes) : html`${fmtNum(s.coveragePct)}%`}</td><td>${interval(s.result ?? s.twa8h)}${s.comparison?.converted ? html` (≈ ${interval(s.comparison.converted)})` : ''}</td><td>${s.comparison ? html`${label(s.comparison.state)}${s.comparison.ratio ? html` (ratio ${fmtNum(s.comparison.ratio.lower)}${s.comparison.ratio.upper !== s.comparison.ratio.lower ? html`–${fmtNum(s.comparison.ratio.upper)}` : ''})` : ''}` : 'not compared'}</td></tr>`) : html`<tr><td colspan="6">No personal results for this calculation.</td></tr>`}
 </tbody></table>
 ${out.staticSamples.length ? html`<p class="muted">Static samples are reported as contextual evidence and are not compared with personal exposure benchmarks.</p>` : ''}
 
@@ -110,11 +120,14 @@ ${issued ? html`<p><strong>Reviewer-stated limitations:</strong> ${rev.approval_
 
 <h2>8. Professional interpretation</h2>
 <p>${rev.interpretation ?? 'Not yet provided.'}</p>
+${narrativeIssues.length ? html`<div class="draftnote"><strong>Consistency check (automatic):</strong> the interpretation appears to contradict the recorded results.<ul>${narrativeIssues.map((x) => html`<li>${x}</li>`)}</ul></div>` : ''}
 <p><strong>Conclusion category:</strong> ${label(rev.conclusion_category ?? 'not set')}</p>
 
 <h2>9. Required actions and verification requirements</h2>
 ${acts.length ? html`<table><thead><tr><th>Action</th><th>Priority</th><th>Due</th><th>Status</th><th>Verification required</th></tr></thead><tbody>
-${acts.map((x) => html`<tr><td>${x.title}</td><td>${x.priority}</td><td>${fmtDate(x.due_date)}</td><td>${label(x.status)}</td><td>${x.verification_requirement}</td></tr>`)}</tbody></table>` : html`<p>No actions recorded against this assessment.</p>`}
+${acts.map((x) => html`<tr><td>${x.title}</td><td>${x.priority}</td><td>${fmtDate(x.due_date)}</td><td>${label(x.status)}</td><td>${x.verification_requirement}</td></tr>`)}</tbody></table>` : needsActions
+  ? html`<p class="draftnote"><strong>No actions are linked to this assessment.</strong> The conclusion (${label(rev.conclusion_category)}) requires improvement, but no corrective action has been recorded against it in this system. Recommendations must be recorded as actions with an owner, a due date and a verification requirement before this report is relied upon.</p>`
+  : html`<p>No actions recorded against this assessment.</p>`}
 
 <h2>10. Review and revision history</h2>
 <table><thead><tr><th>Revision</th><th>Status</th><th>Reviewer</th><th>Approved</th><th>Reason for revision</th></tr></thead><tbody>

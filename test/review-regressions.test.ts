@@ -161,10 +161,15 @@ describe('M1/M2/M3 calculation fixes', () => {
   it('keeps a night shift crossing midnight together', () => {
     const a = sampleConcentration(base({ sampleCode: 'n1', startAt: '2026-01-01T22:00:00Z', endAt: '2026-01-02T02:00:00Z', result: { revision: 1, value: 480, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } }));
     const b = sampleConcentration(base({ sampleCode: 'n2', startAt: '2026-01-02T02:00:00Z', endAt: '2026-01-02T06:00:00Z', result: { revision: 1, value: 480, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } }));
-    const r = twa8h([a, b], { exposureMinutesPerShift: 480, unsampledAssumption: 'none' });
+    // 1.4.0 (item A): crossing midnight is not inferred; without a shift reference the result is withheld.
+    const inferred = twa8h([a, b], { exposureMinutesPerShift: 480, unsampledAssumption: 'none' });
+    expect(inferred.every((x) => x.flags.some((f) => f.code === 'SHIFT_ASSOCIATION_REQUIRED') && !x.twa8h)).toBe(true);
+    const withRef = (x: any) => ({ ...x, shiftRef: 'NIGHT-0101' });
+    const r = twa8h([withRef(a), withRef(b)], { exposureMinutesPerShift: 480, unsampledAssumption: 'none' });
     expect(r).toHaveLength(1);
     expect(r[0].twa8h!.upper).toBe(1);
     expect(r[0].shiftDate).toBe('2026-01-01');
+    expect(r[0].shiftRef).toBe('NIGHT-0101');
   });
   it('merges overlapping interruptions', () => {
     const o = sampleConcentration(base({ startAt: '2026-01-01T08:00:00Z', endAt: '2026-01-01T12:00:00Z', interruptions: [
@@ -314,7 +319,9 @@ describe('third-round review fixes', () => {
     const screen = base({ sampleCode: 'scr', subjectRef: 'W2', startAt: '2026-01-01T08:00:00Z', endAt: '2026-01-01T16:00:00Z', method: { code: 'D', version: '1', resultBasis: 'concentration', flowDriftTolerancePct: null, minVolumeL: null, suitableForFormalAssessment: false }, result: { revision: 1, value: 500, unit: 'ppm', qualifier: '=', lod: null, loq: null } });
     const o = runAssessment({ calc: 'twa_8h', samples: [formal, screen], parameters: { exposureMinutesPerShift: 480, unsampledAssumption: 'none' }, benchmark: bm });
     expect(o.benchmarkState).toBe('indeterminate');
-    expect(o.benchmarkNote).toMatch(/cannot be converted/);
+    // 1.4.0 (TR-02): the indicative sample is unresolved evidence until dispositioned.
+    expect(o.evidenceAdequacy).toBe('unresolved_evidence');
+    expect(o.unresolvedEvidence.map((u) => u.sampleCode)).toEqual(['scr']);
   });
   it('M1: evidence from another client cannot close an action', async () => {
     const c1 = await ctl.createControl(w.a.prac, { site_id: S.site1.id, name: 'C1 LEV', kind: 'local_exhaust_ventilation', purpose: 'Capture at source', performance_criteria: 'Face velocity 1 m/s' });

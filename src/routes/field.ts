@@ -7,7 +7,7 @@ import { lookups, substanceLabel, workerLabel } from '../services/lookups.js';
 import { controlsFor } from '../services/assurance.js';
 import { activeRecoveryKey, attestKeyFor, importRecoveryFile } from '../services/recovery.js';
 import { utcToZonedInput } from '../services/util.js';
-import { fmtDate, fmtDateTime, html, label } from '../ui/html.js';
+import { fmtDate, fmtDateTime, fmtNum, html, label } from '../ui/html.js';
 import { csrfField, empty, options, type PageCtx } from '../ui/layout.js';
 import { action, api, authed, authedMultipart, back, page, setFlash } from './kit.js';
 
@@ -154,18 +154,19 @@ export function fieldRoutes(app: FastifyInstance) {
         <dt>Flow (L/min)</dt><dd>pre ${e.flow_pre_lpm ?? '—'} / post ${e.flow_post_lpm ?? '—'}</dd>
         <dt>Tasks performed</dt><dd>${e.tasks_performed ?? '—'}</dd><dt>Control status</dt><dd>${e.control_status ?? '—'}</dd>
         <dt>Operating conditions</dt><dd>${e.operating_conditions ?? '—'}</dd><dt>Deviations</dt><dd>${e.deviations ?? '—'}</dd><dt>Notes</dt><dd>${e.notes ?? '—'}</dd>
+        <dt>Shift reference</dt><dd>${e.shift_ref ?? html`<span class="muted">not recorded — the shift is inferred from the date only when unambiguous</span>`}</dd>
         <dt>Media lot</dt><dd>${e.media_lot ?? '—'}</dd><dt>Captured</dt><dd>${e.captured_offline ? 'Offline client' : 'Online'}, record version ${e.version}</dd>
       </dl>
       <h2>Laboratory results</h2>
       ${d.results.length ? html`<div class="tablewrap"><table><thead><tr><th>Analyte</th><th>Rev</th><th>Result</th><th>LOD / LOQ</th><th>Report</th><th>Entered</th></tr></thead><tbody>
-        ${d.results.map((r) => html`<tr><td>${r.substance_name}</td><td>${r.revision}${r.amendment_reason ? html`<br><span class="small muted">${r.amendment_reason}</span>` : ''}</td><td>${r.qualifier === '=' ? '' : r.qualifier + ' '}${r.value ?? ''} ${r.unit}</td><td>${r.lod ?? '—'} / ${r.loq ?? '—'}</td><td>${r.lab_report_ref ?? '—'}</td><td>${fmtDateTime(r.entered_at)}</td></tr>`)}</tbody></table></div>` : empty('No results recorded.')}
+        ${d.results.map((r) => html`<tr><td>${r.substance_name}</td><td>${r.revision}${r.amendment_reason ? html`<br><span class="small muted">${r.amendment_reason}</span>` : ''}</td><td>${r.qualifier === '=' ? '' : label(r.qualifier) + ' '}${r.value ?? ''} ${r.unit}${r.lab_qualifier ? html`<br><span class="small muted">laboratory: "${r.lab_qualifier}"</span>` : ''}</td><td>${r.lod ?? '—'} / ${r.loq ?? '—'}</td><td>${r.lab_report_ref ?? '—'}</td><td>${fmtDateTime(r.entered_at)}</td></tr>`)}</tbody></table></div>` : empty('No results recorded.')}
       ${can(c.actor, 'lab.write') && ['collected', 'dispatched', 'received', 'analysed'].includes(e.status) ? html`<details class="panel"><summary>Record or amend a result</summary>
         <form method="post" action="/lab/results" class="stack">${csrfField(c)}<input type="hidden" name="sampling_event_id" value="${e.id}">
         <div class="row"><label>Analyte<select name="substance_id" required>${options(lk.substances, 'id', substanceLabel, e.substance_id)}</select></label>
-        <label>Qualifier<select name="qualifier"><option value="=">= (detected)</option><option value="<LOD">&lt; LOD (not detected)</option><option value="<LOQ">&lt; LOQ</option><option value=">">&gt; (over range)</option><option value="estimated">estimated</option></select></label>
+        <label>Qualifier<select name="qualifier"><option value="=">= (detected)</option><option value="<LOD">&lt; LOD (not detected)</option><option value="<LOQ">&lt; LOQ (detection not confirmed)</option><option value="detected_below_loq">Detected, below LOQ (laboratory confirms detection)</option><option value=">">&gt; (over range)</option><option value="estimated">estimated</option></select></label>
         <label>Value<input name="value" type="number" step="any" min="0"></label><label>Unit<select name="unit">${['ug', 'mg', 'ug/m3', 'mg/m3', 'ppm', 'f/ml'].map((u) => html`<option>${u}</option>`)}</select></label></div>
         <div class="row"><label>LOD<input name="lod" type="number" step="any" min="0"></label><label>LOQ<input name="loq" type="number" step="any" min="0"></label>
-        <label>Laboratory<select name="laboratory_id">${options(lk.labs, 'id', (l) => l.name)}</select></label><label>Report reference<input name="lab_report_ref"></label></div>
+        <label>Laboratory<select name="laboratory_id">${options(lk.labs, 'id', (l) => l.name)}</select></label><label>Report reference<input name="lab_report_ref"></label><label>Qualifier as reported<input name="lab_qualifier" placeholder="laboratory's own text"></label></div>
         <div class="row"><label>Analytical method<input name="analytical_method"></label><label>Uncertainty<input name="uncertainty"></label><label>Sample condition<input name="sample_condition"></label></div>
         <label>Laboratory comments<textarea name="lab_comments"></textarea></label>
         <label>Amendment reason <span class="hint">Required when a result already exists; the earlier revision is kept</span><input name="amendment_reason"></label>
@@ -179,13 +180,27 @@ export function fieldRoutes(app: FastifyInstance) {
         <div class="row"><label>Time zone<input name="timezone" value="${tz}"></label><label>Start<input type="datetime-local" name="start_local" value="${utcToZonedInput(e.start_at?.toISOString?.() ?? e.start_at, tz)}"></label>
         <label>Finish<input type="datetime-local" name="end_local" value="${utcToZonedInput(e.end_at?.toISOString?.() ?? e.end_at, tz)}"></label></div>
         <label>Interruptions <span class="hint">JSON list of {"start","end","reason"} in local time</span><input name="interruptions" value="${JSON.stringify((e.interruptions ?? []).map((i: any) => ({ start: utcToZonedInput(i.start, tz), end: utcToZonedInput(i.end, tz), reason: i.reason })))}"></label>
-        <div class="row"><label>Flow pre (L/min)<input type="number" step="any" name="flow_pre_lpm" value="${e.flow_pre_lpm ?? ''}"></label><label>Flow post (L/min)<input type="number" step="any" name="flow_post_lpm" value="${e.flow_post_lpm ?? ''}"></label><label>Media lot<input name="media_lot" value="${e.media_lot ?? ''}"></label></div>
+        <div class="row"><label>Flow pre (L/min)<input type="number" step="any" name="flow_pre_lpm" value="${e.flow_pre_lpm ?? ''}"></label><label>Flow post (L/min)<input type="number" step="any" name="flow_post_lpm" value="${e.flow_post_lpm ?? ''}"></label><label>Media lot<input name="media_lot" value="${e.media_lot ?? ''}"></label><label>Shift reference<input name="shift_ref" maxlength="60" value="${e.shift_ref ?? ''}" placeholder="e.g. NIGHT-2026-03-02"></label></div>
         <label>Tasks performed<textarea name="tasks_performed">${e.tasks_performed ?? ''}</textarea></label>
         <div class="row"><label>Control status<input name="control_status" value="${e.control_status ?? ''}"></label><label>Operating conditions<input name="operating_conditions" value="${e.operating_conditions ?? ''}"></label></div>
         <label>Deviations<textarea name="deviations">${e.deviations ?? ''}</textarea></label><label>Notes<textarea name="notes">${e.notes ?? ''}</textarea></label>
         <div><button>Save changes</button></div></form></details>` : ''}
       ${e.status !== 'void' && (can(c.actor, 'field.capture') || can(c.actor, 'assess.write')) ? html`<details class="panel"><summary>Void this sample</summary><form method="post" action="/samples/${e.id}/void" class="stack">${csrfField(c)}<label>Reason<input name="reason" required></label><div><button class="danger">Void sample</button></div></form></details>` : ''}
       </div><div>
+        <h2>Method acceptance</h2>
+        ${(() => {
+          const drift = e.flow_pre_lpm && e.flow_post_lpm ? Math.abs(e.flow_post_lpm - e.flow_pre_lpm) / e.flow_pre_lpm * 100 : null;
+          const failed = e.flow_drift_tolerance_pct != null && drift != null && drift > Number(e.flow_drift_tolerance_pct);
+          const rule = (x: string | null) => x ? label(x) : 'not stated by the method (treated as disposition required)';
+          return html`<p class="small">Flow tolerance ${e.flow_drift_tolerance_pct ?? 'not defined'}% — consequence of failure: ${rule(e.flow_drift_consequence)}. Minimum volume ${e.min_volume_l ?? 'not defined'} L — consequence: ${rule(e.min_volume_consequence)}.</p>
+            ${failed ? html`<p class="sev-exclude">Flow changed by ${fmtNum(drift)}%, beyond the tolerance.</p>` : ''}
+            ${d.acceptance.length ? html`<ul>${d.acceptance.map((x: any) => html`<li><b>${label(x.criterion)}</b> accepted by ${x.authorised_by_name} for ${x.scope}. Evidence: ${x.evidence}</li>`)}</ul>` : ''}
+            ${can(c.actor, 'assess.approve') ? html`<details class="panel"><summary>Accept a failed method criterion</summary><form method="post" action="/samples/${e.id}/acceptance" class="stack">${csrfField(c)}
+              <label>Criterion<select name="criterion"><option value="flow_drift">Flow drift</option><option value="min_volume">Minimum volume</option></select></label>
+              <label>Supporting evidence<textarea name="evidence" required minlength="10" placeholder="e.g. mid-sampling flow checks within tolerance; pump log"></textarea></label>
+              <label>Scope of acceptance<input name="scope" required minlength="5" placeholder="e.g. this sample, for the March 2026 baseline only"></label>
+              <p class="small muted">A criterion the method marks "invalid" cannot be accepted. Free text does not override it.</p><div><button class="secondary">Record acceptance</button></div></form></details>` : ''}`;
+        })()}
         <h2>Quality checks</h2>
         ${d.qc.length ? html`<ul class="issues">${d.qc.map((q) => html`<li class="${q.outcome === 'fail' ? (q.disposition === 'accepted_with_justification' ? 'sev-qualify' : 'sev-exclude') : ''}"><b>${q.check_type}</b>: ${label(q.outcome)}${q.detail ? html` — ${q.detail}` : ''}
           ${q.outcome === 'fail' ? (q.disposition ? html`<br><span class="small">Disposition: ${label(q.disposition)} by ${q.disposition_by_name} — ${q.disposition_reason}</span>`
@@ -206,6 +221,7 @@ export function fieldRoutes(app: FastifyInstance) {
   action(app, '/samples/:id/edit', async (c) => { const r = await field.updateSamplingEvent(c.actor, c.params.id, c.body); return { to: `/samples/${c.params.id}`, ok: 'Sample updated', ...(r.warnings.length ? { warn: r.warnings.join(' ') } : {}) }; });
   action(app, '/samples/:id/void', async (c) => { await field.voidSamplingEvent(c.actor, c.params.id, c.body); return { to: `/samples/${c.params.id}`, ok: 'Sample voided' }; });
   action(app, '/samples/:id/qc', async (c) => { await field.addQcCheck(c.actor, c.params.id, c.body); return { to: `/samples/${c.params.id}`, ok: 'Check recorded' }; });
+  action(app, '/samples/:id/acceptance', async (c) => { await field.recordAcceptanceDisposition(c.actor, c.params.id, c.body); return { to: back(c), ok: 'Acceptance recorded' }; });
   action(app, '/qc/:id/dispose', async (c) => { await field.disposeQcFailure(c.actor, c.params.id, c.body); return { to: back(c), ok: 'Disposition recorded' }; });
   action(app, '/samples/:id/custody', async (c) => { await field.recordCustody(c.actor, c.params.id, c.body); return { to: `/samples/${c.params.id}`, ok: 'Custody event recorded' }; });
 

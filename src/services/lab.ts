@@ -10,7 +10,8 @@ const resultSchema = z.object({
   substance_id: uuid,
   value: optNum,
   unit: z.enum(['ug', 'mg', 'ug/m3', 'mg/m3', 'ppm', 'f/ml']),
-  qualifier: z.enum(['=', '<LOD', '<LOQ', '>', 'estimated']),
+  qualifier: z.enum(['=', '<LOD', '<LOQ', 'detected_below_loq', '>', 'estimated']),
+  lab_qualifier: z.preprocess((v) => (typeof v === 'string' && !v.trim() ? undefined : v), z.string().trim().max(40).optional()).transform((v) => v ?? null),
   lod: optNum,
   loq: optNum,
   analytical_method: optStr,
@@ -30,7 +31,21 @@ function validateResult(d: ResultIn) {
   if (d.qualifier === '<LOQ' && d.loq == null && d.value == null) throw invalid('A below-LOQ result needs the quantification limit');
   for (const k of ['value', 'lod', 'loq'] as const) if (d[k] != null && d[k]! < 0) throw invalid(`${k} cannot be negative`);
   if (d.lod != null && d.loq != null && d.loq < d.lod) throw invalid('LOQ cannot be below LOD');
+  if (d.qualifier === 'detected_below_loq' && (d.lod == null || d.loq == null || !(d.lod < d.loq))) throw invalid('A detected-below-LOQ result needs both limits, with the LOD below the LOQ');
 }
+
+/**
+ * Laboratory qualifier text → interpreted qualifier (engine 1.4.0, item C). Detection below the LOQ is recorded only when
+ * the laboratory says so; a generic "<LOQ" is not read as a detection even if an LOD is supplied. The original text is kept.
+ */
+export const QUALIFIER_MAP: Record<string, ResultIn['qualifier']> = {
+  '': '=', '=': '=', 'detected': '=',
+  '<lod': '<LOD', 'nd': '<LOD', 'n.d.': '<LOD', 'not detected': '<LOD', '<dl': '<LOD',
+  '<loq': '<LOQ', '<lor': '<LOQ', 'below loq': '<LOQ',
+  'detected_below_loq': 'detected_below_loq', 'detected <loq': 'detected_below_loq', 'det<loq': 'detected_below_loq', 'detected below loq': 'detected_below_loq', 'trace': 'detected_below_loq',
+  '>': '>', 'over range': '>', 'estimated': 'estimated', 'est': 'estimated',
+};
+export const mapQualifier = (raw: string) => QUALIFIER_MAP[raw.trim().toLowerCase().replace(/\s+/g, ' ')];
 
 async function writeResult(tx: Tx, a: Actor, d: ResultIn, batchId: string | null) {
   validateResult(d);
@@ -50,9 +65,9 @@ async function writeResult(tx: Tx, a: Actor, d: ResultIn, batchId: string | null
   } else {
     res = await one(tx, 'insert into lab_results (tenant_id,client_id,sampling_event_id,substance_id,analyte_name) values ($1,$2,$3,$4,$5) returning *', [e.tenant_id, e.client_id, d.sampling_event_id, d.substance_id, sub.name]);
   }
-  const rev = await one(tx, `insert into lab_result_revisions (tenant_id,client_id,result_id,revision,value,unit,qualifier,lod,loq,analytical_method,laboratory_id,lab_report_ref,uncertainty,sample_condition,lab_comments,source_attachment_id,amendment_reason,import_batch_id,entered_by)
-    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19) returning *`,
-    [e.tenant_id, e.client_id, res.id, revision, d.value, d.unit, d.qualifier, d.lod, d.loq, d.analytical_method, d.laboratory_id, d.lab_report_ref, d.uncertainty, d.sample_condition, d.lab_comments, d.source_attachment_id, revision > 1 ? d.amendment_reason : null, batchId, a.userId]);
+  const rev = await one(tx, `insert into lab_result_revisions (tenant_id,client_id,result_id,revision,value,unit,qualifier,lod,loq,analytical_method,laboratory_id,lab_report_ref,uncertainty,sample_condition,lab_comments,source_attachment_id,amendment_reason,import_batch_id,entered_by,lab_qualifier)
+    values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20) returning *`,
+    [e.tenant_id, e.client_id, res.id, revision, d.value, d.unit, d.qualifier, d.lod, d.loq, d.analytical_method, d.laboratory_id, d.lab_report_ref, d.uncertainty, d.sample_condition, d.lab_comments, d.source_attachment_id, revision > 1 ? d.amendment_reason : null, batchId, a.userId, d.lab_qualifier]);
   await tx.query('insert into custody_events (tenant_id,client_id,sampling_event_id,event,at,notes,recorded_by) values ($1,$2,$3,$4,now(),$5,$6)',
     [e.tenant_id, e.client_id, e.id, revision > 1 ? 'result_amended' : 'analysed', revision > 1 ? d.amendment_reason : d.lab_report_ref, a.userId]);
   if (e.status !== 'analysed') await tx.query(`update sampling_events set status='analysed', version=version+1, updated_at=now() where id=$1`, [e.id]);
@@ -165,11 +180,12 @@ export async function stageImport(a: Actor, input: { filename: string; csv: stri
       if (!sub) errs.push(`Unknown analyte "${raw.analyte || raw.cas_number}"`);
       const num = (k: string) => (raw[k] === '' || raw[k] === undefined ? null : Number(raw[k]));
       const parsed: any = {
-        sampling_event_id: ev?.id, substance_id: sub?.id, value: num('value'), unit: raw.unit, qualifier: raw.qualifier || '=', lod: num('lod'), loq: num('loq'),
+        sampling_event_id: ev?.id, substance_id: sub?.id, value: num('value'), unit: raw.unit, qualifier: mapQualifier(raw.qualifier ?? '') ?? raw.qualifier, lab_qualifier: raw.qualifier || null, lod: num('lod'), loq: num('loq'),
         analytical_method: raw.analytical_method || null, laboratory_id: input.laboratory_id ?? null, lab_report_ref: raw.lab_report_ref || null, uncertainty: raw.uncertainty || null,
         sample_condition: raw.sample_condition || null, lab_comments: raw.lab_comments || null, source_attachment_id: input.source_attachment_id ?? null, amendment_reason: raw.amendment_reason || null,
       };
       for (const k of ['value', 'lod', 'loq']) if (parsed[k] !== null && !Number.isFinite(parsed[k])) errs.push(`${k} "${raw[k]}" is not a number`);
+      if (raw.qualifier && !mapQualifier(raw.qualifier)) errs.push(`Qualifier "${raw.qualifier}" is not recognised. Accepted: ${Object.keys(QUALIFIER_MAP).filter(Boolean).join(', ')}`);
       const chk = resultSchema.safeParse(parsed);
       if (!chk.success) errs.push(...chk.error.issues.map((x) => `${x.path.join('.')}: ${x.message}`));
       else { try { validateResult(chk.data); } catch (e: any) { errs.push(e.message); } }

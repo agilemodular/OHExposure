@@ -10,20 +10,32 @@ import { config } from '../config.js';
 import { evidenceStrip, fmtDate, fmtDateTime, fmtNum, html, interval, label } from '../ui/html.js';
 import { csrfField, empty, options, type PageCtx } from '../ui/layout.js';
 import { action, back, page } from './kit.js';
+import { evidenceFacts, factualSummary, narrativeChecks } from '../services/narrative.js';
+import { usage } from '../services/usage.js';
+import { STEL_REMAINDER_EVIDENCE } from '../calc/engine.js';
 import { authed } from './kit.js';
 
 const CONCLUSIONS = [['insufficient_evidence', 'Insufficient evidence to conclude'], ['improvement_required', 'Improvement required'], ['urgent_action_required', 'Urgent action required'], ['exposure_adequately_controlled', 'Exposure adequately controlled (professional judgement)']];
 
-function calcOutput(out: any) {
+function calcOutput(out: any, dispo?: { c: PageCtx; revId: string; samples: any[] } | null) {
   if (!out) return empty('Not calculated yet. Save the draft inputs, then run the calculation.');
+  const facts = evidenceFacts(out);
   return html`
+    <p><b>Summary (from the records):</b> ${factualSummary(facts, out.calcCode)}</p>
+    ${out.calculationAvailability ? html`<dl class="kv"><dt>Calculation availability</dt><dd>${label(out.calculationAvailability)}</dd><dt>Evidence adequacy</dt><dd>${label(out.evidenceAdequacy)}</dd><dt>Overall comparison</dt><dd>${label(out.benchmarkState)}</dd></dl>` : ''}
     <h3>Per-sample concentrations</h3>
-    <div class="tablewrap"><table><thead><tr><th>Sample</th><th>Type</th><th>Subject</th><th class="num">Sampled min</th><th class="num">Volume L</th><th>Concentration</th><th>Used</th></tr></thead><tbody>
-    ${out.samples.map((s: any) => html`<tr><td>${s.sampleCode}</td><td>${label(s.sampleType)}</td><td>${s.subjectRef ?? '—'}</td><td class="num">${fmtNum(s.sampledMinutes)}</td><td class="num">${fmtNum(s.volumeL)}</td>
-      <td>${interval(s.concentration)}${s.indicative ? html` <span class="tag tag-q">indicative</span>` : ''}</td><td>${s.included ? 'Yes' : html`<span class="badge b-bad">Excluded</span>`}</td></tr>`)}</tbody></table></div>
+    <div class="tablewrap"><table><thead><tr><th>Sample</th><th>Type</th><th>Subject</th><th class="num">Sampled min</th><th class="num">Volume L</th><th>Concentration</th><th>In calculation</th><th>In formal comparison</th></tr></thead><tbody>
+    ${out.samples.map((s: any) => { const u = usage(out, s); return html`<tr><td>${s.sampleCode}</td><td>${label(s.sampleType)}</td><td>${s.subjectRef ?? '—'}</td><td class="num">${fmtNum(s.sampledMinutes)}</td><td class="num">${fmtNum(s.volumeL)}</td>
+      <td>${interval(s.concentration)}${s.indicative ? html` <span class="tag tag-q">indicative</span>` : ''}${s.included ? '' : html` <span class="badge b-bad">Excluded</span>`}</td><td>${u.calculation}</td><td>${u.formal}</td></tr>`; })}</tbody></table></div>
+    ${out.unresolvedEvidence?.length ? html`<h3>Evidence not used formally</h3><p class="small">Until each sample below has a disposition, no favourable overall comparison is possible.</p><ul class="issues">${out.unresolvedEvidence.map((u: any) => html`<li class="sev-${u.disposition === 'not_replaced' ? 'incomplete' : 'exclude'}"><b>${u.sampleCode}</b> (${u.subjectRef ?? '—'}): ${u.why}</li>`)}</ul>
+      ${dispo ? html`<details class="panel"><summary>Record an evidence disposition</summary><form method="post" action="/assessments/rev/${dispo.revId}/disposition" class="stack">${csrfField(dispo.c)}
+        <div class="row"><label>Sample<select name="sample_id" required>${dispo.samples.filter((x: any) => out.unresolvedEvidence.some((u: any) => u.sampleCode === x.sample_code)).map((x: any) => html`<option value="${x.id}">${x.sample_code}</option>`)}</select></label>
+        <label>Disposition<select name="kind"><option value="duplicate">Duplicate of a valid sample</option><option value="outside_scope">Outside the scope of this assessment</option><option value="not_replaced">Not replaced — the worker or task remains unassessed</option>${can(dispo.c.actor, 'assess.approve') ? html`<option value="remaining_coverage_adequate">Remaining coverage adequate (reviewer judgement)</option>` : ''}</select></label>
+        <label>Duplicate of<select name="related_sample_id"><option value="">—</option>${dispo.samples.map((x: any) => html`<option value="${x.id}">${x.sample_code}</option>`)}</select></label></div>
+        <label>Reason<textarea name="reason" required minlength="10"></textarea></label><label>Consequences for this assessment<textarea name="consequence" required minlength="10" placeholder="Which worker, task or period is affected, and what remains covered"></textarea></label><div><button class="secondary">Record disposition</button></div></form></details>` : ''}` : ''}
     ${out.calcCode === 'stel_15' ? html`<h3>15-minute short-term results</h3>` : html`<h3>8-hour TWA by worker and shift</h3>`}
     ${out.shifts.length ? html`<div class="tablewrap"><table><thead><tr><th>Worker</th><th>${out.calcCode === 'stel_15' ? 'Date' : 'Shift'}</th><th>Samples</th><th class="num">${out.calcCode === 'stel_15' ? 'Sampled min' : 'Coverage'}</th><th>${out.calcCode === 'stel_15' ? '15-min value' : '8-h TWA'}</th><th>Benchmark comparison</th></tr></thead><tbody>
-      ${out.shifts.map((s: any) => html`<tr><td>${s.subjectRef}</td><td>${s.shiftDate}</td><td>${s.sampleCodes.join(', ')}</td><td class="num">${out.calcCode === 'stel_15' ? fmtNum(s.sampledMinutes) : html`${s.coveragePct ?? '—'}%`}</td><td>${interval(s.result ?? s.twa8h)}${s.comparison?.converted ? html`<br><span class="small muted">≈ ${interval(s.comparison.converted)}</span>` : ''}</td>
+      ${out.shifts.map((s: any) => html`<tr><td>${s.subjectRef}</td><td>${s.shiftDate}</td><td>${s.sampleCodes.join(', ')}</td><td class="num">${out.calcCode === 'stel_15' ? fmtNum(s.sampledMinutes) : html`${fmtNum(s.coveragePct)}%`}</td><td>${interval(s.result ?? s.twa8h)}${s.comparison?.converted ? html`<br><span class="small muted">≈ ${interval(s.comparison.converted)}</span>` : ''}</td>
         <td>${s.comparison ? html`${label(s.comparison.state)}${s.comparison.ratio ? html` <span class="small muted">(${fmtNum(s.comparison.ratio.lower)}${s.comparison.ratio.upper !== s.comparison.ratio.lower ? html`–${fmtNum(s.comparison.ratio.upper)}` : ''} × benchmark)</span>` : ''}` : html`<span class="muted">not compared</span>`}</td></tr>`)}</tbody></table></div>` : empty('No personal worker-shift results.')}
     ${out.staticSamples.length ? html`<p class="note">Static samples are shown as contextual evidence only and are never compared with personal exposure benchmarks.</p>` : ''}
     <p><b>Benchmark:</b> ${out.benchmarkNote}</p>
@@ -52,7 +64,9 @@ function draftForm(c: PageCtx, d: any) {
         <option value="none" ${p.shortSampleAssumption !== 'zero_remainder' ? html`selected` : ''}>No assumption — do not calculate</option>
         <option value="zero_remainder" ${p.shortSampleAssumption === 'zero_remainder' ? html`selected` : ''}>Assume no exposure for the rest of the 15 minutes</option></select></label>
       <label>Justification for the short-sample assumption<textarea name="short_sample_justification">${p.shortSampleJustification ?? ''}</textarea></label>
-      <p class="small muted">Samples longer than 15 minutes cannot be used for a short-term result.</p></fieldset>
+      <div class="row"><label>Supporting evidence for zero exposure in the rest of the period<select name="short_sample_evidence_basis"><option value="">— none —</option>${STEL_REMAINDER_EVIDENCE.map((b) => html`<option value="${b}" ${p.shortSampleEvidenceBasis === b ? html`selected` : ''}>${label(b)}</option>`)}</select></label>
+      <label>Evidence reference<input name="short_sample_evidence_ref" value="${p.shortSampleEvidenceRef ?? ''}" placeholder="e.g. observation log, instrument record"></label></div>
+      <p class="small muted">Only an uninterrupted sample of exactly 15 minutes gives a direct result. Shorter or interrupted samples need the assumption, a justification and supporting evidence (completion of the task alone is not evidence); the result is marked assumption-dependent. Samples longer than 15 minutes cannot be used for a short-term result.</p></fieldset>
     <h3>Professional interpretation</h3>
     <label>Interpretation<textarea name="interpretation" rows="5">${r.interpretation ?? ''}</textarea></label>
     <label>Conclusion<select name="conclusion_category">${options(CONCLUSIONS.map(([v, l]) => ({ v, l })), 'v', (x: any) => x.l, r.conclusion_category, '— select —')}</select></label>
@@ -116,10 +130,12 @@ export function assessmentRoutes(app: FastifyInstance) {
         ? html`<span class="badge b-ok">Method approved${d.method.status === 'approved_with_conditions' ? ' with conditions' : ''}</span> <span class="small muted">${d.method.reviewer}, ${fmtDate(d.method.reviewedOn)}${d.method.conditions ? ` — ${d.method.conditions}` : ''}</span>`
         : d.method.status === 'rejected' ? html`<span class="badge b-bad">Method rejected by professional review — unavailable for conclusions</span>`
         : html`<span class="badge b-warn">Method not reviewed</span> <span class="small">${d.controls.assuranceLevel === 'pilot' ? 'Results are shown for reconciliation only; this revision cannot be submitted or approved until the method is approved.' : 'Results are for discussion only and are labelled as unreviewed in reports.'}</span>`}</p>` : ''}
-      ${calcOutput(r.calc_output)}
+      ${calcOutput(r.calc_output, isDraft && (can(c.actor, 'assess.write') || can(c.actor, 'assess.approve')) ? { c, revId: r.id, samples: d.candidates.filter((x: any) => r.sample_ids.includes(x.id)) } : null)}
       ${r.parameters?.unsampledAssumption && r.parameters.unsampledAssumption !== 'none' ? html`<p class="note">Unsampled-time assumption: ${label(r.parameters.unsampledAssumption)} — ${r.parameters.unsampledJustification}</p>` : ''}
 
       <h2>Interpretation</h2>
+      ${r.interpretation && r.calc_output ? (() => { const issues = narrativeChecks(r.interpretation, evidenceFacts(r.calc_output)); return issues.length ? html`<div class="flash warn" role="status"><b>The interpretation may contradict the recorded results.</b><ul>${issues.map((x) => html`<li>${x}</li>`)}</ul>The text is not changed; edit it if needed.</div>` : ''; })() : ''}
+      ${['improvement_required', 'urgent_action_required'].includes(r.conclusion_category) && !d.actions.length ? html`<div class="flash warn" role="status">The conclusion requires improvement but no action is linked to this assessment. Raise the corrective actions below, or the report will state that none are recorded.</div>` : ''}
       ${r.interpretation ? html`<p>${r.interpretation}</p><p><b>Conclusion:</b> ${label(r.conclusion_category ?? 'not set')}</p><p><b>Limitations:</b> ${r.limitations ?? '—'}</p>` : empty('No interpretation yet.')}
       ${isDraft && can(c.actor, 'assess.write') ? draftForm(c, d) : ''}
       ${isDraft && can(c.actor, 'assess.write') ? html`<p class="small muted">${config.aiProvider === 'none' ? 'AI drafting assistance is not configured for this deployment.' : ''}${suggestions.length ? ` ${suggestions.length} AI suggestion(s) recorded.` : ''}</p>` : ''}
@@ -158,6 +174,7 @@ export function assessmentRoutes(app: FastifyInstance) {
 
   action(app, '/assessments/rev/:id/draft', async (c) => { const r = await asmt.updateDraft(c.actor, c.params.id, c.body); return { to: `/assessments/${r.assessment_id}`, ok: 'Draft saved. Run the calculation to update results.' }; });
   action(app, '/assessments/rev/:id/calculate', async (c) => { const r = await asmt.calculate(c.actor, c.params.id); return { to: `/assessments/${r.assessment_id}`, ok: `Calculated: data ${label(r.data_quality_state)}, benchmark ${label(r.benchmark_state)}` }; });
+  action(app, '/assessments/rev/:id/disposition', async (c) => { await asmt.recordEvidenceDisposition(c.actor, c.params.id, c.body); return { to: back(c, '/assessments'), ok: 'Disposition recorded. Run the calculation again.' }; });
   action(app, '/assessments/rev/:id/submit', async (c) => { const r = await asmt.submitForReview(c.actor, c.params.id); return { to: `/assessments/${r.assessment_id}`, ok: 'Submitted for professional review' }; });
   action(app, '/assessments/rev/:id/approve', async (c) => { const r = await asmt.approve(c.actor, c.params.id, c.body); return { to: `/assessments/${r.assessment_id}`, ok: `Revision ${r.revision} approved` }; });
   action(app, '/assessments/rev/:id/return', async (c) => { await asmt.returnToDraft(c.actor, c.params.id, c.body); return { to: back(c, '/assessments'), ok: 'Returned to draft' }; });

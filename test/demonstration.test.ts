@@ -105,7 +105,7 @@ describe('SYNTHETIC DEMONSTRATION: monitoring plan → verification decision, wi
     const area = await reg.createWorkArea(prac, { site_id: site.id, name: 'Mixing room' });
     const proc = await reg.createProcess(prac, { work_area_id: area.id, name: 'Powder charging' });
     const task = await reg.createTask(prac, { process_id: proc.id, name: 'Tipping sacks into the mixer', duration_min_per_shift: '480', duration_basis: 'recorded_fact' });
-    const hz = await reg.createHazard(prac, { task_id: task.id, substance_id: S.sub, physical_form: 'dust', exposure_routes: ['inhalation'], exposure_duration_min: '480' });
+    const hz = await reg.createHazard(prac, { task_id: task.id, substance_id: S.sub, physical_form: 'dust', exposure_routes: ['inhalation'], exposure_duration_min: '480', exposure_basis: 'recorded_fact' });
     S.group = await reg.createGroup(prac, { site_id: site.id, name: 'Mixer operators', rationale: 'Same task, same mixer, same shift pattern; comparable work methods observed on the walk-through.', task_ids: [task.id], hazard_ids: [hz.id] });
     S.worker = await reg.createWorker(prac, { client_id: w.A.clients['Client One'], ref_code: `MX-${w.tag}`, full_name: 'Synthetic Worker One' });
     await reg.addMembership(prac, { group_id: S.group.id, worker_id: S.worker.id, valid_from: '2026-01-01' });

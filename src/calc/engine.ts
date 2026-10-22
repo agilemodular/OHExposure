@@ -1,17 +1,22 @@
 /**
  * Deterministic, versioned exposure calculations. No AI involvement.
  *
- * Design rules (see docs/calculation-specifications.md):
+ * Design rules (see docs/calculation-and-benchmark-specifications.md):
  *  - Non-detects are never replaced by zero. They are carried as an interval [lower, upper];
  *    no single point estimate is produced from a qualified result.
- *  - Missing durations, flows, results or exposure periods produce explicit "incomplete" outputs,
- *    never silent defaults.
- *  - Unsampled exposure time is only filled when the caller selects a documented assumption with a
- *    written justification; otherwise no 8-hour TWA is produced.
+ *  - Inputs are validated in the engine as well as at the import and API boundaries; contradictory or non-finite
+ *    inputs produce no numeric result and a specific validation reason (1.4.0, TR-03).
+ *  - Full double precision is kept through every step; rounding is applied only for display (1.4.0, TR-04).
+ *  - Missing durations, flows, results or exposure periods produce explicit "incomplete" outputs, never silent defaults.
+ *  - Unsampled exposure time is only filled when the caller selects a documented assumption with a written
+ *    justification; otherwise no 8-hour TWA is produced.
  *  - Static samples are never compared with personal benchmarks.
- *  - Results from screening-only instruments, or methods not suitable for formal assessment,
- *    are labelled indicative and excluded from the formal benchmark comparison.
+ *  - Results from screening-only instruments, or methods not suitable for formal assessment, are labelled indicative
+ *    and excluded from the formal benchmark comparison.
  *  - Failed QC checks without an authorised disposition exclude the sample and remain listed.
+ *  - Method acceptance failures have method-specific consequences; a hard prohibition cannot be overridden (1.4.0, TR-05).
+ *  - Excluded, indicative or uncalculable personal evidence must be dispositioned before a favourable overall
+ *    comparison is possible (1.4.0, TR-02).
  */
 
 // 1.1.0: voided samples excluded; overlapping interruptions merged; shifts clustered across midnight;
@@ -20,11 +25,38 @@
 // 1.3.0: results without valid calibration or instrument evidence are indicative only; unconvertible indicative/excluded
 // results block a favourable roll-up; STEL requires the elapsed window to be 15 minutes.
 // 1.3.1: roll-up treats uncalculable formal results as indeterminate (was not comparable); clearer comparison notes.
-export const ENGINE_VERSION = '1.3.1';
+// 1.4.0 (technical review of ceec79f, TR-01–TR-05 and items A–D):
+//   TR-01 STEL: a result is formal only for an uninterrupted sample of exactly 15 min (no sampling tolerance unless a
+//         versioned convention is approved); shorter or interrupted windows need the zero-remainder assumption WITH
+//         supporting evidence and are marked assumption-dependent; longer samples give no result.
+//   TR-02 roll-up: unresolved excluded / indicative / uncalculable personal evidence blocks a favourable overall
+//         comparison until dispositioned (duplicate, outside scope, not replaced, or remaining coverage adequate).
+//   TR-03 inputs validated (finite, non-negative, LOD ≤ LOQ, units, qualifiers, positive flows and benchmarks,
+//         interval order); unbounded upper results carry upperUnbounded = true.
+//   TR-04 no intermediate rounding; comparisons on full precision with a documented relative tolerance applied
+//         conservatively; molar volume per EH40 para 68 (24.05526 L/mol).
+//   TR-05 flow-drift and minimum-volume failures have method-specific consequences (advisory, disposition required,
+//         invalid); unknown rules are treated as disposition required and flagged.
+//   A explicit shift association (shiftRef); inference only when unambiguous.  B exposure duration from task records
+//   as a range (overlap-aware).  C below-LOQ semantics: generic "<LOQ" is 0–LOQ; detection only when the laboratory
+//   reports it.  D separate status axes: calculation availability, evidence adequacy, numerical comparison.
+export const ENGINE_VERSION = '1.4.0';
 
-export type Qualifier = '=' | '<LOD' | '<LOQ' | '>' | 'estimated';
+export type Qualifier = '=' | '<LOD' | '<LOQ' | 'detected_below_loq' | '>' | 'estimated';
+export const QUALIFIERS: Qualifier[] = ['=', '<LOD', '<LOQ', 'detected_below_loq', '>', 'estimated'];
 export type MassUnit = 'ug' | 'mg';
 export type ConcUnit = 'ug/m3' | 'mg/m3' | 'ppm' | 'f/ml';
+export const RESULT_UNITS = ['ug', 'mg', 'ug/m3', 'mg/m3', 'ppm', 'f/ml'] as const;
+export const BENCHMARK_UNITS: ConcUnit[] = ['mg/m3', 'ppm', 'f/ml'];
+
+/** Consequence of failing a method acceptance criterion (method-specific; set on the method version). */
+export type AcceptanceConsequence = 'advisory' | 'disposition_required' | 'invalid';
+export type AcceptanceCriterion = 'flow_drift' | 'min_volume';
+export interface AcceptanceDisposition { criterion: AcceptanceCriterion; evidence: string; authorisedBy: string; scope: string }
+
+/** Disposition of a personal sample that cannot be used as formal evidence in this assessment (TR-02). */
+export type EvidenceDispositionKind = 'duplicate' | 'outside_scope' | 'not_replaced' | 'remaining_coverage_adequate';
+export interface EvidenceDisposition { kind: EvidenceDispositionKind; reason: string; consequence: string; authorisedBy: string; relatedSampleCode?: string | null }
 
 export interface SampleInput {
   sampleId: string;
@@ -35,6 +67,8 @@ export interface SampleInput {
   startAt: string | null;
   endAt: string | null;
   timezone: string | null;
+  /** Explicit shift / assessment-period association recorded with the sample (1.4.0). */
+  shiftRef?: string | null;
   interruptions: { start: string; end: string; reason?: string }[];
   flowPreLpm: number | null;
   flowPostLpm: number | null;
@@ -45,9 +79,13 @@ export interface SampleInput {
     flowDriftTolerancePct: number | null;
     minVolumeL: number | null;
     suitableForFormalAssessment: boolean;
+    /** Consequences of acceptance failures for this method version; null/absent = not stated (treated as disposition required). */
+    acceptance?: { flowDrift?: AcceptanceConsequence | null; minVolume?: AcceptanceConsequence | null } | null;
   } | null;
   instrument: { assetTag: string; screeningOnly: boolean; calibrationValidAtSampling: boolean | null } | null;
   qc: { checkType: string; outcome: 'pass' | 'fail' | 'not_applicable'; disposition: 'accepted_with_justification' | 'sample_invalidated' | null }[];
+  acceptanceDispositions?: AcceptanceDisposition[];
+  evidenceDisposition?: EvidenceDisposition | null;
   result: {
     revision: number;
     value: number | null;
@@ -55,60 +93,113 @@ export interface SampleInput {
     qualifier: Qualifier;
     lod: number | null;
     loq: number | null;
+    /** The laboratory's own qualifier text, preserved alongside the mapped qualifier (1.4.0). */
+    labQualifier?: string | null;
   } | null;
 }
 
 export type Flag = { code: string; severity: 'info' | 'qualify' | 'incomplete' | 'exclude'; message: string };
 
-export interface Interval { lower: number; upper: number; unit: ConcUnit } // upper may be Infinity
+/** A concentration interval. When the upper bound is unknown, upper = Infinity and upperUnbounded = true (never null). */
+export interface Interval { lower: number; upper: number; unit: ConcUnit; upperUnbounded?: boolean }
+export function interval(lower: number, upper: number, unit: ConcUnit): Interval {
+  return Number.isFinite(upper) ? { lower, upper, unit } : { lower, upper: Infinity, unit, upperUnbounded: true };
+}
+
 export interface SampleOutput {
   sampleId: string;
   sampleCode: string;
   sampleType: SampleInput['sampleType'];
   subjectRef: string | null;
   shiftDate: string | null;
+  /** Local date of the end of sampling (to detect samples that cross midnight). */
+  endDate: string | null;
+  shiftRef: string | null;
   startMs: number | null;
   endMs: number | null;
+  /** Elapsed time from start to end (min). */
+  elapsedMinutes: number | null;
+  /** Time the sampler was running (elapsed minus interruptions) (min). */
   sampledMinutes: number | null;
   volumeL: number | null;
   concentration: Interval | null; // null when not calculable
   isPointValue: boolean;          // true only for unqualified detected results
   indicative: boolean;
   included: boolean;
+  /** Laboratory qualifier as reported and as interpreted. */
+  qualifier: { reported: string | null; interpreted: Qualifier } | null;
   flags: Flag[];
 }
 
 const MIN = 60_000;
-const round = (x: number, dp = 6) => (Number.isFinite(x) ? Math.round(x * 10 ** dp) / 10 ** dp : x);
+/** Numerical tolerance for timestamps (0.1 s): absorbs floating-point error only; not a sampling tolerance. */
+export const TIME_EPS_MIN = 0.1 / 60;
+/** Relative tolerance for benchmark comparisons, applied conservatively (a value within it of the benchmark counts as at or above). */
+export const COMPARISON_REL_TOL = 1e-9;
+const isNum = (x: unknown): x is number => typeof x === 'number' && Number.isFinite(x);
 
-function localDate(iso: string, tz: string | null) {
+function localDate(ms: number, tz: string | null) {
   try {
-    return new Intl.DateTimeFormat('en-CA', { timeZone: tz ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(iso));
+    return new Intl.DateTimeFormat('en-CA', { timeZone: tz ?? 'UTC', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(ms));
   } catch {
-    return iso.slice(0, 10);
+    return new Date(ms).toISOString().slice(0, 10);
   }
 }
 
-/** sample_concentration v1.0.0 — converts one laboratory result into an airborne concentration interval. */
+// ───────────────────────── Display policy (presentation only) ─────────────────────────
+
+/** Formats a value to 4 significant figures for display. Never shows a positive value as zero. */
+export function formatValue(x: number | null | undefined, sig = 4): string {
+  if (x === null || x === undefined || Number.isNaN(x)) return '—';
+  if (x === Infinity) return '∞';
+  if (x === 0) return '0';
+  const a = Math.abs(x);
+  if (a < 1e-3 || a >= 1e6) return x.toExponential(sig - 1).replace(/e\+?/, ' × 10^');
+  return String(Number(x.toPrecision(sig)));
+}
+export function formatInterval(i: Interval | null | undefined): string {
+  if (!i) return 'not calculated';
+  if (i.upperUnbounded || i.upper === Infinity || (i as any).upper === 'Infinity') return `> ${formatValue(i.lower)} ${i.unit} (upper bound unknown)`;
+  if (i.lower === i.upper) return `${formatValue(i.lower)} ${i.unit}`;
+  return `${formatValue(i.lower)} – ${formatValue(i.upper)} ${i.unit}`;
+}
+
+// ───────────────────────── Sample concentration ─────────────────────────
+
+function acceptanceCheck(s: SampleInput, criterion: AcceptanceCriterion, failed: boolean, detail: string, flags: Flag[]) {
+  if (!failed) return;
+  const label = criterion === 'flow_drift' ? 'flow drift' : 'minimum air volume';
+  const code = criterion === 'flow_drift' ? 'FLOW_DRIFT' : 'VOLUME_BELOW_MIN';
+  const stated = criterion === 'flow_drift' ? s.method?.acceptance?.flowDrift : s.method?.acceptance?.minVolume;
+  if (stated === 'advisory') { flags.push({ code: `${code}_ADVISORY`, severity: 'qualify', message: `${detail} The method treats this as advisory.` }); return; }
+  if (stated === 'invalid') { flags.push({ code: `${code}_INVALID`, severity: 'exclude', message: `${detail} The method treats this as invalid; it cannot be accepted by disposition.` }); return; }
+  if (!stated) flags.push({ code: 'ACCEPTANCE_RULE_UNDEFINED', severity: 'qualify', message: `The method version does not state the consequence of a ${label} failure; it is treated as requiring a disposition pending professional review.` });
+  const d = (s.acceptanceDispositions ?? []).find((x) => x.criterion === criterion);
+  const complete = d && d.evidence?.trim().length >= 10 && d.authorisedBy?.trim() && d.scope?.trim().length >= 5;
+  if (complete) flags.push({ code: `${code}_ACCEPTED`, severity: 'qualify', message: `${detail} Accepted by ${d!.authorisedBy} for ${d!.scope}. Evidence: ${d!.evidence}` });
+  else flags.push({ code: `${code}_DISPOSITION_REQUIRED`, severity: 'exclude', message: `${detail} A disposition by an authorised reviewer (criterion, supporting evidence, scope) is required before the sample can be used.` });
+}
+
+/** sample_concentration — converts one laboratory result into an airborne concentration interval. */
 export function sampleConcentration(s: SampleInput): SampleOutput {
   const flags: Flag[] = [];
+  const startMs = s.startAt ? Date.parse(s.startAt) : null, endMs = s.endAt ? Date.parse(s.endAt) : null;
   const out: SampleOutput = {
     sampleId: s.sampleId, sampleCode: s.sampleCode, sampleType: s.sampleType, subjectRef: s.subjectRef,
-    shiftDate: s.startAt ? localDate(s.startAt, s.timezone) : null,
-    startMs: s.startAt ? Date.parse(s.startAt) : null, endMs: s.endAt ? Date.parse(s.endAt) : null,
-    sampledMinutes: null, volumeL: null, concentration: null, isPointValue: false, indicative: false, included: true, flags,
+    shiftDate: isNum(startMs) ? localDate(startMs, s.timezone) : null, endDate: isNum(endMs) ? localDate(endMs - 1, s.timezone) : null, shiftRef: s.shiftRef?.trim() || null,
+    startMs: isNum(startMs) ? startMs : null, endMs: isNum(endMs) ? endMs : null, elapsedMinutes: null,
+    sampledMinutes: null, volumeL: null, concentration: null, isPointValue: false, indicative: false, included: true,
+    qualifier: s.result ? { reported: s.result.labQualifier ?? null, interpreted: s.result.qualifier } : null, flags,
   };
+  const invalid = (code: string, message: string) => flags.push({ code: `INPUT_INVALID_${code}`, severity: 'incomplete', message });
 
-  if (s.voided) {
-    flags.push({ code: 'SAMPLE_VOID', severity: 'exclude', message: 'Sample has been voided and cannot be used as evidence.' });
-  }
+  if (s.voided) flags.push({ code: 'SAMPLE_VOID', severity: 'exclude', message: 'Sample has been voided and cannot be used as evidence.' });
   if (s.sampleType === 'field_blank') {
     flags.push({ code: 'FIELD_BLANK', severity: 'exclude', message: 'Field blank — used for quality control, not as an exposure result.' });
     out.included = false;
     return out;
   }
 
-  // QC checks
   for (const q of s.qc) {
     if (q.outcome !== 'fail') continue;
     if (q.disposition === 'accepted_with_justification')
@@ -119,9 +210,6 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
       flags.push({ code: 'QC_FAIL_UNRESOLVED', severity: 'exclude', message: `Failed QC check "${q.checkType}" has no authorised disposition; sample cannot be used as evidence.` });
   }
 
-  // Instrument / method suitability
-  // Without instrument and valid calibration evidence a result cannot be formal evidence: it is kept, visible and
-  // labelled indicative, and it can still make a favourable roll-up indeterminate.
   if (!s.instrument) {
     out.indicative = true;
     flags.push({ code: 'NO_INSTRUMENT', severity: 'qualify', message: 'No instrument recorded for this sample; result treated as indicative only.' });
@@ -140,39 +228,43 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
   }
   if (!s.method) {
     flags.push({ code: 'NO_METHOD', severity: 'incomplete', message: 'No sampling/analytical method version recorded.' });
-  } else if (!s.method.suitableForFormalAssessment) {
-    out.indicative = true;
-    flags.push({ code: 'METHOD_INDICATIVE', severity: 'qualify', message: `Method ${s.method.code} v${s.method.version} is not designated suitable for formal exposure assessment.` });
+  } else {
+    if (!s.method.suitableForFormalAssessment) {
+      out.indicative = true;
+      flags.push({ code: 'METHOD_INDICATIVE', severity: 'qualify', message: `Method ${s.method.code} v${s.method.version} is not designated suitable for formal exposure assessment.` });
+    }
+    if (s.method.flowDriftTolerancePct != null && !(isNum(s.method.flowDriftTolerancePct) && s.method.flowDriftTolerancePct >= 0)) invalid('METHOD_TOLERANCE', 'The method flow tolerance is not a non-negative number.');
+    if (s.method.minVolumeL != null && !(isNum(s.method.minVolumeL) && s.method.minVolumeL > 0)) invalid('METHOD_MIN_VOLUME', 'The method minimum volume is not a positive number.');
   }
 
   // Duration
   if (!s.startAt || !s.endAt) {
     flags.push({ code: 'DURATION_MISSING', severity: 'incomplete', message: 'Sampling start or end time is missing.' });
+  } else if (!isNum(startMs) || !isNum(endMs)) {
+    invalid('TIME', 'Sampling start or end time is not a valid timestamp.');
+  } else if (!(endMs > startMs)) {
+    flags.push({ code: 'DURATION_INVALID', severity: 'incomplete', message: 'Sampling end is not after start.' });
   } else {
-    const start = Date.parse(s.startAt), end = Date.parse(s.endAt);
-    if (!(end > start)) flags.push({ code: 'DURATION_INVALID', severity: 'incomplete', message: 'Sampling end is not after start.' });
-    else {
-      // Clip interruptions to the sampling window and merge overlaps so no time is subtracted twice.
-      const spans: [number, number][] = [];
-      for (const i of s.interruptions) {
-        if (!(Date.parse(i.end) > Date.parse(i.start))) {
-          flags.push({ code: 'INTERRUPTION_INVALID', severity: 'incomplete', message: 'An interruption has an end before its start.' });
-          continue;
-        }
-        const a = Math.max(start, Date.parse(i.start)), b = Math.min(end, Date.parse(i.end));
-        if (b > a) spans.push([a, b]);
-      }
-      spans.sort((x, y) => x[0] - y[0]);
-      let paused = 0, curA = -Infinity, curB = -Infinity;
-      for (const [a, b] of spans) {
-        if (a > curB) { if (curB > curA) paused += curB - curA; curA = a; curB = b; }
-        else curB = Math.max(curB, b);
-      }
-      if (curB > curA) paused += curB - curA;
-      out.sampledMinutes = round((end - start - paused) / MIN, 3);
-      if (paused > 0) flags.push({ code: 'INTERRUPTED', severity: 'info', message: `Sampling interrupted for ${round(paused / MIN, 1)} min; excluded from sampled duration.` });
-      if (out.sampledMinutes <= 0) flags.push({ code: 'DURATION_INVALID', severity: 'incomplete', message: 'No sampled time after interruptions.' });
+    out.elapsedMinutes = (endMs - startMs) / MIN;
+    // Clip interruptions to the sampling window and merge overlaps so no time is subtracted twice.
+    const spans: [number, number][] = [];
+    for (const i of s.interruptions) {
+      const a0 = Date.parse(i.start), b0 = Date.parse(i.end);
+      if (!isNum(a0) || !isNum(b0)) { invalid('INTERRUPTION_TIME', 'An interruption has an invalid timestamp.'); continue; }
+      if (!(b0 > a0)) { flags.push({ code: 'INTERRUPTION_INVALID', severity: 'incomplete', message: 'An interruption has an end before its start.' }); continue; }
+      const a = Math.max(startMs, a0), b = Math.min(endMs, b0);
+      if (b > a) spans.push([a, b]);
     }
+    spans.sort((x, y) => x[0] - y[0]);
+    let paused = 0, curA = -Infinity, curB = -Infinity;
+    for (const [a, b] of spans) {
+      if (a > curB) { if (curB > curA) paused += curB - curA; curA = a; curB = b; }
+      else curB = Math.max(curB, b);
+    }
+    if (curB > curA) paused += curB - curA;
+    out.sampledMinutes = (endMs - startMs - paused) / MIN;
+    if (paused > 0) flags.push({ code: 'INTERRUPTED', severity: 'info', message: `Sampling interrupted for ${formatValue(paused / MIN)} min; excluded from sampled duration.` });
+    if (out.sampledMinutes <= 0) flags.push({ code: 'DURATION_INVALID', severity: 'incomplete', message: 'No sampled time after interruptions.' });
   }
 
   const r = s.result;
@@ -180,63 +272,84 @@ export function sampleConcentration(s: SampleInput): SampleOutput {
     flags.push({ code: 'RESULT_MISSING', severity: 'incomplete', message: 'No laboratory or measurement result recorded.' });
     return finalise(out);
   }
+  // Input validation (TR-03): reject contradictory or non-finite inputs before any calculation.
+  if (!(RESULT_UNITS as readonly string[]).includes(r.unit)) { invalid('UNIT', `Result unit "${r.unit}" is not recognised.`); return finalise(out); }
+  if (!QUALIFIERS.includes(r.qualifier)) { invalid('QUALIFIER', `Qualifier "${r.qualifier}" is not recognised.`); return finalise(out); }
+  for (const [k, v] of [['value', r.value], ['LOD', r.lod], ['LOQ', r.loq]] as const) {
+    if (v === null || v === undefined) continue;
+    if (!isNum(v)) { invalid('NUMBER', `${k} is not a finite number.`); return finalise(out); }
+    if (v < 0) { invalid('NEGATIVE', `${k} is negative.`); return finalise(out); }
+  }
+  if (r.lod != null && r.loq != null && r.lod > r.loq) { invalid('LIMITS', `LOD (${r.lod} ${r.unit}) exceeds LOQ (${r.loq} ${r.unit}); the limits contradict each other.`); return finalise(out); }
 
   const isMass = r.unit === 'ug' || r.unit === 'mg';
   if (s.method && (s.method.resultBasis === 'mass_on_sample') !== isMass)
     flags.push({ code: 'RESULT_BASIS_MISMATCH', severity: 'incomplete', message: `Result unit ${r.unit} does not match the method's result basis (${s.method.resultBasis}).` });
 
-  // Interval in the reported unit
+  const reported = r.labQualifier ? ` (laboratory reported "${r.labQualifier}")` : '';
   let lo: number, hi: number;
   switch (r.qualifier) {
     case '=':
-      if (r.value === null || r.value < 0) { flags.push({ code: 'VALUE_INVALID', severity: 'incomplete', message: 'Reported value missing or negative.' }); return finalise(out); }
+      if (r.value === null) { flags.push({ code: 'VALUE_INVALID', severity: 'incomplete', message: 'Reported value missing.' }); return finalise(out); }
       lo = hi = r.value; out.isPointValue = true; break;
     case 'estimated':
-      if (r.value === null || r.value < 0) { flags.push({ code: 'VALUE_INVALID', severity: 'incomplete', message: 'Estimated value missing or negative.' }); return finalise(out); }
-      lo = hi = r.value; flags.push({ code: 'ESTIMATED', severity: 'qualify', message: 'Laboratory reported an estimated value.' }); break;
+      if (r.value === null) { flags.push({ code: 'VALUE_INVALID', severity: 'incomplete', message: 'Estimated value missing.' }); return finalise(out); }
+      lo = hi = r.value; flags.push({ code: 'ESTIMATED', severity: 'qualify', message: `Laboratory reported an estimated quantitative value${reported}.` }); break;
     case '<LOD': {
       const bound = r.value ?? r.lod;
       if (bound === null) { flags.push({ code: 'ND_NO_LIMIT', severity: 'incomplete', message: 'Non-detect reported without a detection limit.' }); return finalise(out); }
       lo = 0; hi = bound;
-      flags.push({ code: 'NON_DETECT', severity: 'qualify', message: `Non-detect (< ${bound} ${r.unit}). Carried as an interval from 0 to the reported limit; not replaced by zero.` });
+      flags.push({ code: 'NON_DETECT', severity: 'qualify', message: `Not detected (< ${formatValue(bound)} ${r.unit})${reported}. Carried as an interval from 0 to the reported limit; not replaced by zero.` });
       break;
     }
     case '<LOQ': {
+      // Generic "less than LOQ": detection is NOT confirmed, even if the laboratory also states an LOD (1.4.0, item C).
       const upper = r.loq ?? r.value;
       if (upper === null) { flags.push({ code: 'LOQ_NO_LIMIT', severity: 'incomplete', message: 'Below-LOQ result reported without a quantification limit.' }); return finalise(out); }
-      lo = r.lod ?? 0; hi = upper;
-      flags.push({ code: 'BELOW_LOQ', severity: 'qualify', message: `Detected below the limit of quantification; carried as an interval ${lo}–${hi} ${r.unit}.` });
+      lo = 0; hi = upper;
+      flags.push({ code: 'BELOW_LOQ', severity: 'qualify', message: `Less than the limit of quantification (< ${formatValue(upper)} ${r.unit})${reported}; detection not confirmed, carried as 0–LOQ.` });
+      break;
+    }
+    case 'detected_below_loq': {
+      // Laboratory confirms detection above the LOD but below the LOQ.
+      if (r.lod === null || r.loq === null) { invalid('LIMITS', 'A detected-below-LOQ result needs both the LOD and the LOQ.'); return finalise(out); }
+      if (!(r.lod < r.loq)) { invalid('LIMITS', 'A detected-below-LOQ result needs LOD below LOQ.'); return finalise(out); }
+      lo = r.lod; hi = r.loq;
+      flags.push({ code: 'DETECTED_BELOW_LOQ', severity: 'qualify', message: `Detected but below the limit of quantification${reported}; carried as LOD–LOQ (${formatValue(lo)}–${formatValue(hi)} ${r.unit}).` });
       break;
     }
     case '>':
       if (r.value === null) { flags.push({ code: 'VALUE_INVALID', severity: 'incomplete', message: 'Over-range result without a value.' }); return finalise(out); }
       lo = r.value; hi = Infinity;
-      flags.push({ code: 'OVER_RANGE', severity: 'qualify', message: `Result exceeded the reportable range (> ${r.value} ${r.unit}); upper bound unknown.` });
+      flags.push({ code: 'OVER_RANGE', severity: 'qualify', message: `Result exceeded the reportable range (> ${formatValue(r.value)} ${r.unit})${reported}; upper bound unknown.` });
       break;
   }
+  if (lo! > hi!) { invalid('INTERVAL', `Lower bound ${lo!} exceeds upper bound ${hi!}.`); return finalise(out); }
 
   if (isMass) {
-    // Volume from mean of pre- and post-sampling flow.
-    if (s.flowPreLpm == null || s.flowPostLpm == null || s.flowPreLpm <= 0 || s.flowPostLpm <= 0) {
+    if (s.flowPreLpm == null || s.flowPostLpm == null) {
       flags.push({ code: 'FLOW_MISSING', severity: 'incomplete', message: 'Pre- and post-sampling flow rates are both required to calculate air volume.' });
+      return finalise(out);
+    }
+    if (!isNum(s.flowPreLpm) || !isNum(s.flowPostLpm) || s.flowPreLpm <= 0 || s.flowPostLpm <= 0) {
+      invalid('FLOW', 'Flow rates must be finite and greater than zero.');
       return finalise(out);
     }
     const drift = (Math.abs(s.flowPostLpm - s.flowPreLpm) / s.flowPreLpm) * 100;
     const tol = s.method?.flowDriftTolerancePct ?? null;
-    if (tol === null) flags.push({ code: 'FLOW_TOLERANCE_UNDEFINED', severity: 'qualify', message: `Flow changed by ${round(drift, 1)}%; the method version defines no acceptance tolerance.` });
-    else if (drift > tol) flags.push({ code: 'FLOW_DRIFT_EXCEEDED', severity: 'qualify', message: `Flow changed by ${round(drift, 1)}%, exceeding the method tolerance of ${tol}%.` });
+    if (tol === null) flags.push({ code: 'FLOW_TOLERANCE_UNDEFINED', severity: 'qualify', message: `Flow changed by ${formatValue(drift)}%; the method version defines no acceptance tolerance (professional review required).` });
+    else acceptanceCheck(s, 'flow_drift', drift > tol * (1 + COMPARISON_REL_TOL), `Flow changed by ${formatValue(drift)}% (${s.flowPreLpm} → ${s.flowPostLpm} L/min), exceeding the method tolerance of ${tol}%.`, flags);
     if (out.sampledMinutes === null || out.sampledMinutes <= 0) return finalise(out);
     const meanFlow = (s.flowPreLpm + s.flowPostLpm) / 2;
-    out.volumeL = round(meanFlow * out.sampledMinutes, 3);
-    if (s.method?.minVolumeL != null && out.volumeL < s.method.minVolumeL)
-      flags.push({ code: 'VOLUME_BELOW_MIN', severity: 'qualify', message: `Air volume ${out.volumeL} L is below the method minimum of ${s.method.minVolumeL} L.` });
+    out.volumeL = meanFlow * out.sampledMinutes;
+    if (s.method?.minVolumeL != null)
+      acceptanceCheck(s, 'min_volume', out.volumeL < s.method.minVolumeL, `Air volume ${formatValue(out.volumeL)} L is below the method minimum of ${s.method.minVolumeL} L.`, flags);
     const toMg = r.unit === 'ug' ? 1 / 1000 : 1;
     const m3 = out.volumeL / 1000;
-    out.concentration = { lower: round((lo * toMg) / m3), upper: hi === Infinity ? Infinity : round((hi * toMg) / m3), unit: 'mg/m3' };
+    out.concentration = interval((lo! * toMg) / m3, hi! === Infinity ? Infinity : (hi! * toMg) / m3, 'mg/m3');
   } else {
     const unit = r.unit as ConcUnit;
-    if (unit === 'ug/m3') out.concentration = { lower: round(lo / 1000), upper: hi === Infinity ? Infinity : round(hi / 1000), unit: 'mg/m3' };
-    else out.concentration = { lower: lo, upper: hi, unit };
+    out.concentration = unit === 'ug/m3' ? interval(lo! / 1000, hi! === Infinity ? Infinity : hi! / 1000, 'mg/m3') : interval(lo!, hi!, unit);
   }
   return finalise(out);
 }
@@ -250,18 +363,23 @@ function finalise(o: SampleOutput): SampleOutput {
 // ───────────────────────── 8-hour TWA ─────────────────────────
 
 export type UnsampledAssumption = 'none' | 'zero_exposure' | 'same_as_sampled';
+/** A task or hazard exposure duration from the register (minutes per shift); optional interval from shift start. */
+export interface ExposureRecord { ref: string; minutes: number | null; basis: string | null; startMin?: number | null; endMin?: number | null }
 export interface TwaParameters {
-  /** Total minutes of exposure to the substance in the shift for this group (from task records); required. */
+  /** Total minutes of exposure to the substance in the shift for this group; required. */
   exposureMinutesPerShift: number | null;
   unsampledAssumption: UnsampledAssumption;
   unsampledJustification?: string;
-  /** Longest exposure duration recorded in the register (task/hazard) for this group and substance; set by the service, not the user. */
+  /** Task/hazard exposure records from the register for this group and substance; set by the service, not the user. */
+  exposureRecords?: ExposureRecord[] | null;
+  /** Legacy (≤ 1.3.1): the longest recorded duration. Used only when exposureRecords is absent. */
   recordedExposureMinutes?: number | null;
 }
 
 export interface ShiftTwa {
   subjectRef: string;
   shiftDate: string;
+  shiftRef: string | null;
   sampleCodes: string[];
   sampledMinutes: number;
   exposureMinutes: number | null;
@@ -271,175 +389,232 @@ export interface ShiftTwa {
   result: Interval | null;
   averagingMinutes: number;
   indicative: boolean;
+  /** True when the result depends on an assumption about unsampled time. */
+  assumptionDependent: boolean;
   flags: Flag[];
 }
 
 export const REFERENCE_PERIOD_MIN = 480;
-export const SHIFT_GAP_MIN = 240;
 
-/** twa_8h v1.0.0 — EH40 8-hour TWA: Σ(Cᵢ·Tᵢ)/480 min, by worker and shift date (personal samples only). */
-export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
-  // A shift is a run of a worker's samples separated by gaps of less than SHIFT_GAP_MIN, so night shifts
-  // that cross midnight are not split by calendar date. The shift is labelled by its first sample's local date.
+/** Range of total exposure implied by the register records: overlap-aware when intervals are known (item B). */
+export function exposureRange(records: ExposureRecord[]) {
+  const timed = records.filter((r) => isNum(r.startMin) && isNum(r.endMin) && r.endMin! > r.startMin!);
+  const untimed = records.filter((r) => !timed.includes(r) && isNum(r.minutes) && r.minutes! > 0);
+  const spans = timed.map((r) => [r.startMin!, r.endMin!] as [number, number]).sort((a, b) => a[0] - b[0]);
+  let union = 0, a = -Infinity, b = -Infinity;
+  for (const [x, y] of spans) { if (x > b) { if (b > a) union += b - a; a = x; b = y; } else b = Math.max(b, y); }
+  if (b > a) union += b - a;
+  const maxUntimed = untimed.reduce((m, r) => Math.max(m, r.minutes!), 0);
+  const sumUntimed = untimed.reduce((s, r) => s + r.minutes!, 0);
+  return { lower: Math.max(union, maxUntimed), upper: union + sumUntimed, overlapUnknown: untimed.length > 1 || (untimed.length > 0 && timed.length > 0), estimated: records.filter((r) => r.basis && r.basis !== 'recorded_fact'), count: timed.length + untimed.length };
+}
+
+/** Groups a worker's samples into shifts: by explicit shift reference, or by local date only when unambiguous (item A). */
+function groupShifts(samples: SampleOutput[]) {
   const bySubject = new Map<string, SampleOutput[]>();
   for (const s of samples) {
     if (!s.included || s.sampleType !== 'personal') continue;
     const k = s.subjectRef ?? '?';
     bySubject.set(k, [...(bySubject.get(k) ?? []), s]);
   }
-  const groups = new Map<string, SampleOutput[]>();
+  const groups: { subject: string; key: string; label: string; shiftRef: string | null; samples: SampleOutput[]; flags: Flag[] }[] = [];
   for (const [subject, list] of bySubject) {
-    const sorted = [...list].sort((a, b) => (a.startMs ?? 0) - (b.startMs ?? 0));
-    let cur: SampleOutput[] = [];
-    let lastEnd = -Infinity;
-    const flush = () => { if (cur.length) groups.set(`${subject}|${cur[0].shiftDate ?? '?'}|${groups.size}`, cur); cur = []; };
-    for (const s of sorted) {
-      // Start a new shift only when the gap is long AND the local date differs: this keeps night shifts that
-      // cross midnight together, and keeps split shifts on the same day together.
-      const sameDay = cur.length > 0 && s.shiftDate === cur[0].shiftDate;
-      if (s.startMs === null || (!sameDay && s.startMs - lastEnd > SHIFT_GAP_MIN * MIN)) flush();
-      cur.push(s);
-      lastEnd = Math.max(lastEnd, s.endMs ?? s.startMs ?? lastEnd);
+    const withRef = list.filter((s) => s.shiftRef), without = list.filter((s) => !s.shiftRef);
+    const byRef = new Map<string, SampleOutput[]>();
+    for (const s of withRef) byRef.set(s.shiftRef!, [...(byRef.get(s.shiftRef!) ?? []), s]);
+    for (const [ref, ss] of byRef) {
+      const sorted = [...ss].sort((x, y) => (x.startMs ?? 0) - (y.startMs ?? 0));
+      groups.push({ subject, key: `${subject}|ref:${ref}`, label: sorted[0].shiftDate ?? '?', shiftRef: ref, samples: sorted, flags: [] });
     }
-    flush();
+    // Without an explicit association, group by local start date, but refuse to guess when the pattern is ambiguous.
+    const byDate = new Map<string, SampleOutput[]>();
+    for (const s of without) byDate.set(s.shiftDate ?? '?', [...(byDate.get(s.shiftDate ?? '?') ?? []), s]);
+    const dates = [...byDate.keys()].sort();
+    for (const d of dates) {
+      const ss = [...byDate.get(d)!].sort((x, y) => (x.startMs ?? 0) - (y.startMs ?? 0));
+      const flags: Flag[] = [];
+      const crossesMidnight = ss.some((s) => s.endDate !== null && s.shiftDate !== null && s.endDate !== s.shiftDate);
+      const neighbour = [...byDate.entries()].some(([d2, s2]) => d2 !== d && s2.some((x) => ss.some((y) => x.startMs !== null && y.startMs !== null && Math.abs(x.startMs - y.startMs) < 16 * 60 * MIN)));
+      if (withRef.length) flags.push({ code: 'SHIFT_ASSOCIATION_REQUIRED', severity: 'incomplete', message: 'Some of this worker\'s samples have a shift reference and these do not; record the shift for every sample.' });
+      else if (crossesMidnight || neighbour) flags.push({ code: 'SHIFT_ASSOCIATION_REQUIRED', severity: 'incomplete', message: 'Samples cross midnight or fall within 16 hours of samples on another date, so the shift cannot be inferred safely. Record the shift for each sample.' });
+      else flags.push({ code: 'SHIFT_INFERRED', severity: 'info', message: `No shift reference recorded; samples grouped by local start date ${d}.` });
+      groups.push({ subject, key: `${subject}|date:${d}`, label: d, shiftRef: null, samples: ss, flags });
+    }
   }
+  return groups;
+}
+
+/** twa_8h — EH40 8-hour TWA: Σ(Cᵢ·Tᵢ)/480 min, by worker and shift (personal samples only). */
+export function twa8h(samples: SampleOutput[], p: TwaParameters): ShiftTwa[] {
   const res: ShiftTwa[] = [];
-  for (const [k, ss] of groups) {
-    const [subjectRef, shiftDate] = k.split('|');
+  const groups = groupShifts(samples);
+  for (const g of groups) {
+    const ss = g.samples;
+    // Blocking association problems first; the informational 'inferred' note is appended after the calculation flags.
+    const flags: Flag[] = g.flags.filter((f) => f.severity !== 'info');
     const overlaps = ss.some((s, i) => i > 0 && s.startMs !== null && ss[i - 1].endMs !== null && s.startMs < ss[i - 1].endMs!);
-    const flags: Flag[] = [];
     const sampled = ss.reduce((a, s) => a + (s.sampledMinutes ?? 0), 0);
     const out: ShiftTwa = {
-      subjectRef, shiftDate, sampleCodes: ss.map((s) => s.sampleCode), sampledMinutes: round(sampled, 3),
+      subjectRef: g.subject, shiftDate: g.label, shiftRef: g.shiftRef, sampleCodes: ss.map((s) => s.sampleCode), sampledMinutes: sampled,
       exposureMinutes: p.exposureMinutesPerShift, coveragePct: null, twa8h: null, result: null, averagingMinutes: REFERENCE_PERIOD_MIN,
-      indicative: ss.some((s) => s.indicative), flags,
+      indicative: ss.some((s) => s.indicative), assumptionDependent: false, flags,
     };
     res.push(out);
-
-    const units = new Set(ss.map((s) => s.concentration?.unit));
-    if (ss.some((s) => !s.concentration)) {
-      flags.push({ code: 'SAMPLE_NOT_CALCULABLE', severity: 'incomplete', message: 'One or more samples in this shift have no calculable concentration.' });
-      continue;
-    }
+    if (flags.some((f) => f.severity === 'incomplete')) continue;
+    if (ss.some((s) => !s.concentration)) { flags.push({ code: 'SAMPLE_NOT_CALCULABLE', severity: 'incomplete', message: 'One or more samples in this shift have no calculable concentration.' }); continue; }
+    const units = new Set(ss.map((s) => s.concentration!.unit));
     if (units.size !== 1) { flags.push({ code: 'UNIT_MISMATCH', severity: 'incomplete', message: 'Samples in this shift use incompatible units.' }); continue; }
     const unit = ss[0].concentration!.unit;
-    // overlapping samples on the same subject would double count
-    if (p.exposureMinutesPerShift == null || !(p.exposureMinutesPerShift > 0)) {
-      flags.push({ code: 'EXPOSURE_PERIOD_MISSING', severity: 'incomplete', message: 'Exposure duration per shift is not recorded; 8-hour TWA cannot be calculated.' });
-      continue;
-    }
     const E = p.exposureMinutesPerShift;
+    if (E == null || !isNum(E) || !(E > 0)) { flags.push({ code: 'EXPOSURE_PERIOD_MISSING', severity: 'incomplete', message: 'Exposure duration per shift is not recorded or not a positive number; 8-hour TWA cannot be calculated.' }); continue; }
+    if (E > 24 * 60) { flags.push({ code: 'INPUT_INVALID_EXPOSURE_PERIOD', severity: 'incomplete', message: 'Exposure duration per shift exceeds 24 hours.' }); continue; }
     if (overlaps) { flags.push({ code: 'SAMPLES_OVERLAP', severity: 'incomplete', message: 'Samples for this worker overlap in time and would be double counted.' }); continue; }
-    if (p.recordedExposureMinutes === null) {
-      flags.push({ code: 'EXPOSURE_NOT_IN_REGISTER', severity: 'incomplete', message: 'No exposure duration is recorded in the exposure register for this group and substance, so the exposure period entered cannot be checked. Link the group to its tasks/hazards and record their durations.' });
-      continue;
+    // Exposure duration against the register (item B).
+    const records = p.exposureRecords ?? (p.recordedExposureMinutes === undefined ? undefined : p.recordedExposureMinutes === null ? [] : [{ ref: 'register', minutes: p.recordedExposureMinutes, basis: 'recorded_fact' }]);
+    if (records !== undefined) {
+      const range = exposureRange(records);
+      if (!range.count) {
+        flags.push({ code: 'EXPOSURE_NOT_IN_REGISTER', severity: 'incomplete', message: 'No exposure duration is recorded in the exposure register for this group and substance, so the exposure period entered cannot be checked. Link the group to its tasks/hazards and record their durations.' });
+        continue;
+      }
+      if (E < range.lower - TIME_EPS_MIN) {
+        flags.push({ code: 'EXPOSURE_BELOW_RECORDED', severity: 'incomplete', message: `The exposure period entered (${E} min) is shorter than the register supports (at least ${formatValue(range.lower)} min). Correct the entry or update the register; unsampled time must not be dropped silently.` });
+        continue;
+      }
+      if (range.overlapUnknown && E < range.upper - TIME_EPS_MIN)
+        flags.push({ code: 'EXPOSURE_OVERLAP_UNKNOWN', severity: 'qualify', message: `Task records without times imply a total exposure between ${formatValue(range.lower)} and ${formatValue(range.upper)} min depending on overlap; ${E} min was entered. Record task times or confirm the overlap.` });
+      if (range.estimated.length) flags.push({ code: 'EXPOSURE_DURATION_ESTIMATED', severity: 'qualify', message: `Exposure durations for ${range.estimated.map((r) => r.ref).join(', ')} are estimates, not recorded facts.` });
     }
-    if (p.recordedExposureMinutes !== undefined && E < p.recordedExposureMinutes - 0.5) {
-      flags.push({ code: 'EXPOSURE_BELOW_RECORDED', severity: 'incomplete', message: `The exposure period entered (${E} min) is shorter than the duration recorded in the exposure register (${p.recordedExposureMinutes} min). Correct the entry or update the register; unsampled time must not be dropped silently.` });
-      continue;
-    }
-    out.coveragePct = round(Math.min(100, (sampled / E) * 100), 1);
-    if (sampled > E + 0.5) flags.push({ code: 'SAMPLED_EXCEEDS_EXPOSURE', severity: 'qualify', message: `Sampled time (${round(sampled, 1)} min) exceeds the recorded exposure period (${E} min); the recorded exposure period may be wrong.` });
+    out.coveragePct = Math.min(100, (sampled / E) * 100);
+    if (sampled > E + TIME_EPS_MIN) flags.push({ code: 'SAMPLED_EXCEEDS_EXPOSURE', severity: 'qualify', message: `Sampled time (${formatValue(sampled)} min) exceeds the recorded exposure period (${E} min); the recorded exposure period may be wrong.` });
     if (E > REFERENCE_PERIOD_MIN) flags.push({ code: 'EXTENDED_SHIFT', severity: 'info', message: `Exposure period ${E} min exceeds 8 h; total exposure is still referenced to 480 min.` });
 
     let lo = ss.reduce((a, s) => a + s.concentration!.lower * s.sampledMinutes!, 0);
     let hi = ss.reduce((a, s) => a + s.concentration!.upper * s.sampledMinutes!, 0);
     const unsampled = Math.max(0, E - sampled);
-    if (unsampled > 0.5) {
+    if (unsampled > TIME_EPS_MIN) {
       const just = (p.unsampledJustification ?? '').trim();
       if (p.unsampledAssumption === 'none') {
-        flags.push({ code: 'COVERAGE_INCOMPLETE', severity: 'incomplete', message: `${round(unsampled, 1)} min of exposure was not sampled and no documented assumption was selected; no 8-hour TWA is produced.` });
+        flags.push({ code: 'COVERAGE_INCOMPLETE', severity: 'incomplete', message: `${formatValue(unsampled)} min of exposure was not sampled and no documented assumption was selected; no 8-hour TWA is produced.` });
         continue;
       }
       if (just.length < 20) {
         flags.push({ code: 'ASSUMPTION_UNJUSTIFIED', severity: 'incomplete', message: 'An unsampled-period assumption requires a written justification (min 20 characters).' });
         continue;
       }
+      out.assumptionDependent = true;
       if (p.unsampledAssumption === 'same_as_sampled') {
         lo += (lo / sampled) * unsampled;
         hi += (hi / sampled) * unsampled;
-        flags.push({ code: 'EXTRAPOLATED', severity: 'qualify', message: `Unsampled ${round(unsampled, 1)} min assumed at the sampled mean concentration. Justification: ${just}` });
+        flags.push({ code: 'EXTRAPOLATED', severity: 'qualify', message: `Unsampled ${formatValue(unsampled)} min assumed at the sampled mean concentration. Justification: ${just}` });
       } else {
-        flags.push({ code: 'UNSAMPLED_ZERO', severity: 'qualify', message: `Unsampled ${round(unsampled, 1)} min assumed to involve no exposure. Justification: ${just}` });
+        flags.push({ code: 'UNSAMPLED_ZERO', severity: 'qualify', message: `Unsampled ${formatValue(unsampled)} min assumed to involve no exposure. Justification: ${just}` });
       }
     }
-    out.twa8h = { lower: round(lo / REFERENCE_PERIOD_MIN), upper: Number.isFinite(hi) ? round(hi / REFERENCE_PERIOD_MIN) : Infinity, unit };
+    out.twa8h = interval(lo / REFERENCE_PERIOD_MIN, Number.isFinite(hi) ? hi / REFERENCE_PERIOD_MIN : Infinity, unit);
     out.result = out.twa8h;
   }
+  groups.forEach((g, i) => res[i].flags.push(...g.flags.filter((f) => f.severity === 'info')));
   return res;
 }
 
 // ───────────────────────── 15-minute STEL ─────────────────────────
 
 export const STEL_PERIOD_MIN = 15;
-export const STEL_TOLERANCE_MIN = 1;
+/**
+ * Occupational-hygiene sampling tolerance around the 15-minute reference period. 0 in stel_15 1.2.0: EH40 (Schedule,
+ * para 8) says short-term exposure "should be determined by sampling over that period". Any non-zero tolerance is a
+ * methodological convention and needs a new method version with professional approval.
+ */
+export const STEL_SAMPLING_TOLERANCE_MIN = 0;
+/** Bases accepted as supporting evidence for the zero-remainder assumption. Task completion alone is not one of them. */
+export const STEL_REMAINDER_EVIDENCE = ['continuous_observation', 'direct_reading_instrument', 'process_record'] as const;
 export interface StelParameters {
-  /** How to treat a sample shorter than 15 minutes. 'none' = not calculated. */
+  /** How to treat a sample shorter than 15 minutes (or an interrupted window). 'none' = not calculated. */
   shortSampleAssumption?: 'none' | 'zero_remainder';
   shortSampleJustification?: string;
+  /** Supporting evidence for zero exposure during the rest of the 15-minute period (required with zero_remainder). */
+  shortSampleEvidenceBasis?: (typeof STEL_REMAINDER_EVIDENCE)[number] | string | null;
+  shortSampleEvidenceRef?: string | null;
 }
 
 /**
- * stel_15 v1.0.0 — one result per personal sample intended as a 15-minute reference-period measurement.
- *  - 14–16 min sampled: the measured concentration is the 15-minute value.
- *  - < 14 min: only with the documented 'zero_remainder' assumption (C × T / 15) and a justification.
- *  - > 16 min: not valid — averaging over a longer period dilutes peaks; flagged incomplete.
+ * stel_15 — one result per personal sample intended as a 15-minute reference-period measurement (TR-01).
+ *  - Sampled time T, elapsed window W (start to end) and reference period 15 min are kept distinct.
+ *  - T = 15 min (within the sampling tolerance, 0 in 1.2.0) and uninterrupted: the measured concentration is the result.
+ *  - T > 15 min: no result. The average over a longer period cannot establish the highest 15-minute exposure, and it
+ *    is not scaled by T/15.
+ *  - Interrupted with W > 15 min: no result (not a single 15-minute period).
+ *  - T < 15 min, or interrupted within 15 min: only with the 'zero_remainder' assumption, a written justification AND
+ *    supporting evidence (observation, direct-reading instrument or process record). The result C × T / 15 is marked
+ *    assumption-dependent; short peaks inside the sample are not resolved.
  */
 export function stel15(samples: SampleOutput[], p: StelParameters): ShiftTwa[] {
   const res: ShiftTwa[] = [];
+  const tolerance = STEL_SAMPLING_TOLERANCE_MIN;
   for (const s of samples) {
     if (!s.included || s.sampleType !== 'personal') continue;
     const flags: Flag[] = [];
     const out: ShiftTwa = {
-      subjectRef: s.subjectRef ?? '?', shiftDate: s.shiftDate ?? '?', sampleCodes: [s.sampleCode], sampledMinutes: s.sampledMinutes ?? 0,
-      exposureMinutes: null, coveragePct: null, twa8h: null, result: null, averagingMinutes: STEL_PERIOD_MIN, indicative: s.indicative, flags,
+      subjectRef: s.subjectRef ?? '?', shiftDate: s.shiftDate ?? '?', shiftRef: s.shiftRef, sampleCodes: [s.sampleCode], sampledMinutes: s.sampledMinutes ?? 0,
+      exposureMinutes: null, coveragePct: null, twa8h: null, result: null, averagingMinutes: STEL_PERIOD_MIN, indicative: s.indicative, assumptionDependent: false, flags,
     };
     res.push(out);
-    if (!s.concentration || s.sampledMinutes == null) {
+    if (!s.concentration || s.sampledMinutes == null || s.elapsedMinutes == null) {
       flags.push({ code: 'SAMPLE_NOT_CALCULABLE', severity: 'incomplete', message: 'Sample has no calculable concentration.' });
       continue;
     }
-    const T = s.sampledMinutes, c = s.concentration;
-    const elapsed = s.startMs !== null && s.endMs !== null ? (s.endMs - s.startMs) / MIN : T;
-    if (elapsed > STEL_PERIOD_MIN + STEL_TOLERANCE_MIN && T <= STEL_PERIOD_MIN + STEL_TOLERANCE_MIN) {
-      flags.push({ code: 'STEL_WINDOW_TOO_LONG', severity: 'incomplete', message: `Sampling was spread over ${round(elapsed, 1)} min with interruptions; a short-term result needs a continuous window of about 15 minutes.` });
+    const T = s.sampledMinutes, W = s.elapsedMinutes, c = s.concentration;
+    const interrupted = W - T > TIME_EPS_MIN;
+    if (T > STEL_PERIOD_MIN + tolerance + TIME_EPS_MIN) {
+      flags.push({ code: 'STEL_SAMPLE_TOO_LONG', severity: 'incomplete', message: `Sampled for ${formatValue(T)} min. The average over a period longer than 15 minutes cannot establish the highest 15-minute exposure and is not scaled to 15 minutes.` });
       continue;
     }
-    if (T > STEL_PERIOD_MIN + STEL_TOLERANCE_MIN) {
-      flags.push({ code: 'STEL_SAMPLE_TOO_LONG', severity: 'incomplete', message: `Sampled for ${round(T, 1)} min. A sample longer than 15 minutes averages out peaks and cannot be used as a short-term result.` });
+    if (interrupted && W > STEL_PERIOD_MIN + tolerance + TIME_EPS_MIN) {
+      flags.push({ code: 'STEL_WINDOW_TOO_LONG', severity: 'incomplete', message: `Sampling was spread over ${formatValue(W)} min with interruptions; a short-term result needs a single period of 15 minutes.` });
       continue;
     }
-    if (T < STEL_PERIOD_MIN - STEL_TOLERANCE_MIN) {
-      const just = (p.shortSampleJustification ?? '').trim();
-      if (p.shortSampleAssumption !== 'zero_remainder') {
-        flags.push({ code: 'STEL_SAMPLE_SHORT', severity: 'incomplete', message: `Sampled for ${round(T, 1)} min, less than 15 min, and no documented assumption was selected for the rest of the period.` });
-        continue;
-      }
-      if (just.length < 20) {
-        flags.push({ code: 'ASSUMPTION_UNJUSTIFIED', severity: 'incomplete', message: 'The short-sample assumption requires a written justification (min 20 characters).' });
-        continue;
-      }
-      out.result = { lower: round((c.lower * T) / STEL_PERIOD_MIN), upper: Number.isFinite(c.upper) ? round((c.upper * T) / STEL_PERIOD_MIN) : Infinity, unit: c.unit };
-      flags.push({ code: 'STEL_ZERO_REMAINDER', severity: 'qualify', message: `Exposure assumed to be zero for the remaining ${round(STEL_PERIOD_MIN - T, 1)} min of the 15-minute period. Justification: ${just}` });
+    if (!interrupted && Math.abs(T - STEL_PERIOD_MIN) <= tolerance + TIME_EPS_MIN) {
+      out.result = { ...c };
+      if (Math.abs(T - STEL_PERIOD_MIN) > TIME_EPS_MIN) flags.push({ code: 'STEL_DURATION_TOLERANCE', severity: 'qualify', message: `Sampled for ${formatValue(T)} min, accepted under the sampling tolerance of ±${tolerance} min.` });
       continue;
     }
-    out.result = { ...c };
+    // Shorter than 15 minutes, or interrupted within a 15-minute window: unsampled time inside the reference period.
+    const unsampled = STEL_PERIOD_MIN - T;
+    const just = (p.shortSampleJustification ?? '').trim();
+    if (p.shortSampleAssumption !== 'zero_remainder') {
+      flags.push({ code: 'STEL_SAMPLE_SHORT', severity: 'incomplete', message: `Sampled for ${formatValue(T)} min of the 15-minute period${interrupted ? ' (interrupted)' : ''}; no documented assumption was selected for the remaining ${formatValue(unsampled)} min.` });
+      continue;
+    }
+    if (just.length < 20) {
+      flags.push({ code: 'ASSUMPTION_UNJUSTIFIED', severity: 'incomplete', message: 'The short-sample assumption requires a written justification (min 20 characters).' });
+      continue;
+    }
+    const basis = p.shortSampleEvidenceBasis ?? null, ref = (p.shortSampleEvidenceRef ?? '').trim();
+    if (!basis || !(STEL_REMAINDER_EVIDENCE as readonly string[]).includes(basis) || ref.length < 5) {
+      flags.push({ code: 'STEL_REMAINDER_EVIDENCE_REQUIRED', severity: 'incomplete', message: `Zero exposure for the remaining ${formatValue(unsampled)} min needs supporting evidence (continuous observation, a direct-reading instrument or a process record) with a reference. Completion of the task alone does not establish zero exposure.` });
+      continue;
+    }
+    out.result = interval((c.lower * T) / STEL_PERIOD_MIN, Number.isFinite(c.upper) ? (c.upper * T) / STEL_PERIOD_MIN : Infinity, c.unit);
+    out.assumptionDependent = true;
+    flags.push({ code: 'STEL_ZERO_REMAINDER', severity: 'qualify', message: `ASSUMPTION-DEPENDENT: exposure assumed to be zero for the remaining ${formatValue(unsampled)} min of the 15-minute period. Evidence: ${basis.replace(/_/g, ' ')} (${ref}). Justification: ${just}` });
+    flags.push({ code: 'STEL_SHORT_PEAK_LIMITATION', severity: 'info', message: 'Short-duration peaks within the sampled period are not resolved by a 15-minute average.' });
   }
   return res;
 }
 
 // ───────────────────────── Unit conversion ─────────────────────────
 
-/** Molar volume of an ideal gas at 20 °C and 101.325 kPa (R·T/P), L/mol — reference conditions used for GB limits. */
-export const MOLAR_VOLUME_L = round((8.314462618 * 293.15) / 101.325, 4);
+/** Molar volume of an ideal gas at 20 °C and 1 atm (101.325 kPa), L/mol, as stated in EH40/2005 (4th ed. 2020) para 68. */
+export const MOLAR_VOLUME_L = 24.05526;
 
 /** Converts an interval between ppm and mg/m³ using molecular weight (g/mol). Returns null when not possible. */
 export function convertInterval(i: Interval, to: ConcUnit, molecularWeight: number | null | undefined): Interval | null {
   if (i.unit === to) return i;
-  if (!molecularWeight || !(molecularWeight > 0)) return null;
+  if (!isNum(molecularWeight) || !(molecularWeight > 0)) return null;
   const f = i.unit === 'ppm' && to === 'mg/m3' ? molecularWeight / MOLAR_VOLUME_L : i.unit === 'mg/m3' && to === 'ppm' ? MOLAR_VOLUME_L / molecularWeight : null;
   if (f === null) return null;
-  return { lower: round(i.lower * f), upper: Number.isFinite(i.upper) ? round(i.upper * f) : Infinity, unit: to };
+  return interval(i.lower * f, Number.isFinite(i.upper) ? i.upper * f : Infinity, to);
 }
 
 // ───────────────────────── Benchmark comparison ─────────────────────────
@@ -456,15 +631,30 @@ export interface BenchmarkRef {
 }
 export type ComparisonState = 'below_benchmark' | 'at_or_above_benchmark' | 'indeterminate' | 'not_comparable';
 
+export function benchmarkProblem(b: BenchmarkRef): string | null {
+  if (!isNum(b.value) || !(b.value > 0)) return 'Benchmark value is not a positive finite number.';
+  if (!isNum(b.averagingMinutes) || !(b.averagingMinutes > 0)) return 'Benchmark averaging period is not a positive number.';
+  if (!BENCHMARK_UNITS.includes(b.unit)) return `Benchmark unit "${b.unit}" is not recognised.`;
+  return null;
+}
+
+/**
+ * Compares a result interval with a benchmark on full precision. A bound within COMPARISON_REL_TOL of the benchmark
+ * counts as at or above it (conservative): below only if upper < value × (1 − tol); at or above if lower ≥ value × (1 − tol).
+ */
 export function compareInterval(i0: Interval | null, b: BenchmarkRef, molecularWeight?: number | null): { state: ComparisonState; ratio: { lower: number; upper: number } | null; reason?: string; converted?: Interval } {
   if (!i0) return { state: 'not_comparable', ratio: null, reason: 'No calculated exposure.' };
+  const bp = benchmarkProblem(b);
+  if (bp) return { state: 'not_comparable', ratio: null, reason: bp };
+  if (!(isNum(i0.lower) && i0.lower >= 0) || !(i0.upper === Infinity || isNum(i0.upper)) || i0.lower > i0.upper) return { state: 'not_comparable', ratio: null, reason: 'The result interval is invalid (non-finite, negative or reversed bounds).' };
   const i = convertInterval(i0, b.unit, molecularWeight);
   if (!i) return { state: 'not_comparable', ratio: null, reason: `Exposure unit ${i0.unit} differs from benchmark unit ${b.unit} and cannot be converted${i0.unit === 'f/ml' || b.unit === 'f/ml' ? '' : ' (no molecular weight recorded for the substance)'}.` };
   const conv = i0.unit !== b.unit ? { converted: i, reason: `Converted from ${i0.unit} to ${b.unit} at 20 °C, 101.325 kPa (molar volume ${MOLAR_VOLUME_L} L/mol, molecular weight ${molecularWeight} g/mol).` } : {};
-  const ratio = { lower: round(i.lower / b.value, 4), upper: Number.isFinite(i.upper) ? round(i.upper / b.value, 4) : Infinity };
-  if (i.upper < b.value) return { state: 'below_benchmark', ratio, ...conv };
-  if (i.lower >= b.value) return { state: 'at_or_above_benchmark', ratio, ...conv };
-  return { state: 'indeterminate', ratio, ...conv, reason: `The result interval spans the benchmark value (e.g. a non-detect whose limit exceeds the benchmark).${'reason' in conv ? ' ' + conv.reason : ''}` };
+  const ratio = { lower: i.lower / b.value, upper: Number.isFinite(i.upper) ? i.upper / b.value : Infinity };
+  const threshold = b.value * (1 - COMPARISON_REL_TOL);
+  if (i.upper < threshold) return { state: 'below_benchmark', ratio, ...conv };
+  if (i.lower >= threshold) return { state: 'at_or_above_benchmark', ratio, ...conv };
+  return { state: 'indeterminate', ratio, ...conv, reason: `The result interval spans the benchmark value${i.upperUnbounded ? ' (upper bound unknown)' : ''}.${'reason' in conv ? ' ' + conv.reason : ''}` };
 }
 
 // ───────────────────────── Assessment roll-up ─────────────────────────
@@ -478,6 +668,7 @@ export interface AssessmentInput {
   /** Molecular weight (g/mol) of the substance, used only for ppm ↔ mg/m³ conversion. */
   molecularWeight?: number | null;
 }
+export interface UnresolvedEvidence { sampleCode: string; subjectRef: string | null; why: string; interval: Interval | null; disposition: EvidenceDispositionKind | null }
 export interface AssessmentOutput {
   engineVersion: string;
   calcCode: string;
@@ -485,7 +676,14 @@ export interface AssessmentOutput {
   samples: SampleOutput[];
   shifts: (ShiftTwa & { comparison: ReturnType<typeof compareInterval> | null })[];
   staticSamples: { sampleCode: string; concentration: Interval | null; note: string }[];
+  /** Quality of the data used (flags). */
   dataQualityState: 'complete' | 'qualified' | 'incomplete' | 'failed';
+  /** Whether formal results could be calculated: all, some or none of the formal worker-shift / 15-minute results. */
+  calculationAvailability: 'complete' | 'partial' | 'none';
+  /** Whether all personal evidence in scope is either formal or dispositioned (TR-02). */
+  evidenceAdequacy: 'adequate' | 'adequate_with_accepted_gaps' | 'unresolved_evidence' | 'coverage_gap' | 'no_formal_evidence';
+  unresolvedEvidence: UnresolvedEvidence[];
+  /** Overall numerical comparison, gated by calculation availability and evidence adequacy (decision table in the specification). */
   benchmarkState: 'below_benchmark' | 'at_or_above_benchmark' | 'indeterminate' | 'not_comparable' | 'no_verified_benchmark';
   benchmarkNote: string;
   issues: Flag[];
@@ -493,9 +691,18 @@ export interface AssessmentOutput {
 }
 
 export const CALCULATIONS: Record<CalcCode, { code: CalcCode; version: string; averagingMinutes: number; label: string }> = {
-  twa_8h: { code: 'twa_8h', version: '1.2.1', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
-  stel_15: { code: 'stel_15', version: '1.1.1', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
+  twa_8h: { code: 'twa_8h', version: '1.3.0', averagingMinutes: REFERENCE_PERIOD_MIN, label: '8-hour time-weighted average' },
+  stel_15: { code: 'stel_15', version: '1.2.0', averagingMinutes: STEL_PERIOD_MIN, label: '15-minute short-term exposure' },
 };
+
+function dispositionProblem(d: EvidenceDisposition | null | undefined, formalCodes: Set<string>): string | null {
+  if (!d) return 'no disposition recorded';
+  if (!(d.reason?.trim().length >= 10)) return 'disposition reason missing';
+  if (!(d.consequence?.trim().length >= 10)) return 'assessment of consequences missing';
+  if (!d.authorisedBy?.trim()) return 'disposition not authorised';
+  if (d.kind === 'duplicate' && !(d.relatedSampleCode && formalCodes.has(d.relatedSampleCode))) return 'duplicate disposition does not name a valid formal sample in this assessment';
+  return null;
+}
 
 export function runAssessment(input: AssessmentInput): AssessmentOutput {
   const calc = CALCULATIONS[input.calc] ?? CALCULATIONS.twa_8h;
@@ -509,60 +716,64 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
     .map((s) => ({ sampleCode: s.sampleCode, concentration: s.concentration, note: 'Static/area sample — contextual evidence only; not compared with personal exposure benchmarks.' }));
 
   const b = input.benchmark;
+  const bProblem = b ? benchmarkProblem(b) : null;
+  const usable = b && !bProblem && b.verificationStatus === 'verified' && b.averagingMinutes === REF;
+  const withCmp = shifts.map((sh) => ({ ...sh, comparison: usable && !sh.indicative ? compareInterval(sh.result, b!, input.molecularWeight) : null }));
+
+  // ── Calculation availability: formal (non-indicative) results that could / could not be calculated.
+  const formalShifts = withCmp.filter((s) => !s.indicative);
+  const calculated = formalShifts.filter((s) => s.result);
+  const calculationAvailability: AssessmentOutput['calculationAvailability'] = !calculated.length ? 'none' : calculated.length === formalShifts.length ? 'complete' : 'partial';
+
+  // ── Evidence adequacy (TR-02): every personal sample in scope that is not formal evidence needs a disposition.
+  const formalCodes = new Set(calculated.flatMap((s) => s.sampleCodes));
+  const inputByCode = new Map(input.samples.map((s) => [s.sampleCode, s]));
+  const unresolved: UnresolvedEvidence[] = [];
+  let acceptedGaps = 0, coverageGap = false;
+  for (const s of samples) {
+    if (s.sampleType !== 'personal') continue;
+    const why = !s.included ? 'excluded' : s.indicative ? 'indicative only' : !s.concentration ? 'not calculable' : !formalCodes.has(s.sampleCode) ? 'its worker-shift result could not be calculated' : null;
+    if (!why) continue;
+    const d = inputByCode.get(s.sampleCode)?.evidenceDisposition ?? null;
+    const problem = dispositionProblem(d, formalCodes);
+    if (problem) { unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; ${problem}`, interval: s.concentration, disposition: d?.kind ?? null }); continue; }
+    if (d!.kind === 'not_replaced') { coverageGap = true; unresolved.push({ sampleCode: s.sampleCode, subjectRef: s.subjectRef, why: `${why}; not replaced — the worker or task it covered remains unassessed (${d!.consequence})`, interval: s.concentration, disposition: d!.kind }); }
+    else if (d!.kind === 'remaining_coverage_adequate') acceptedGaps++;
+  }
+  const evidenceAdequacy: AssessmentOutput['evidenceAdequacy'] = !calculated.length ? 'no_formal_evidence'
+    : unresolved.some((u) => u.disposition !== 'not_replaced') ? 'unresolved_evidence' : coverageGap ? 'coverage_gap' : acceptedGaps ? 'adequate_with_accepted_gaps' : 'adequate';
+
+  // ── Numerical comparison, gated (decision table: docs/calculation-and-benchmark-specifications.md §3a).
   let benchmarkState: AssessmentOutput['benchmarkState'];
   let benchmarkNote = '';
-  const usable = b && b.verificationStatus === 'verified' && b.averagingMinutes === REF;
-  const withCmp = shifts.map((sh) => ({
-    ...sh,
-    comparison: usable && !sh.indicative ? compareInterval(sh.result, b!, input.molecularWeight) : null,
-  }));
-
   if (!b) { benchmarkState = 'no_verified_benchmark'; benchmarkNote = 'No benchmark selected.'; }
+  else if (bProblem) { benchmarkState = 'not_comparable'; benchmarkNote = `Benchmark rejected: ${bProblem}`; }
   else if (b.verificationStatus !== 'verified') { benchmarkState = 'no_verified_benchmark'; benchmarkNote = `Selected benchmark version is ${b.verificationStatus}; it cannot be used for comparison until verified.`; }
   else if (b.averagingMinutes !== REF) { benchmarkState = 'not_comparable'; benchmarkNote = `Benchmark averaging period (${b.averagingMinutes} min) does not match the ${calc.label} calculation (${REF} min).`; }
   else {
-    // Only calculated, non-indicative results take part in the formal comparison.
     const formal = withCmp.filter((s) => s.comparison && s.result);
-    const uncalculated = withCmp.filter((s) => !s.indicative && !s.result).length;
+    const uncalculated = formalShifts.length - calculated.length;
+    const couldBeAtOrAbove = (i: Interval | null) => { if (!i) return true; const c = convertInterval(i, b.unit, input.molecularWeight); return !c || c.upper >= b.value * (1 - COMPARISON_REL_TOL); };
     if (!formal.length) {
-      if (uncalculated) {
-        // 1.3.1: an uncalculable formal result leaves the comparison open rather than "not comparable".
-        benchmarkState = 'indeterminate';
-        benchmarkNote = `${uncalculated} ${what} result(s) could not be calculated; no formal benchmark comparison is possible.`;
-      } else if (shifts.length) {
-        benchmarkState = 'not_comparable';
-        benchmarkNote = 'Only indicative personal results are available (screening-only instrument, method not designated for formal assessment, or missing, expired or failed calibration); no formal benchmark comparison.';
-      } else {
-        benchmarkState = 'not_comparable';
-        benchmarkNote = staticSamples.length
-          ? `No personal ${calc.label} results are available; static results are not comparable with personal benchmarks.`
-          : `No usable personal ${calc.label} results are available (all samples excluded or not calculable).`;
-      }
+      if (uncalculated) { benchmarkState = 'indeterminate'; benchmarkNote = `${uncalculated} ${what} result(s) could not be calculated; no formal benchmark comparison is possible.`; }
+      else if (unresolved.some((u) => couldBeAtOrAbove(u.interval))) { benchmarkState = 'indeterminate'; benchmarkNote = 'No formal results. Excluded or indicative evidence could be at or above the benchmark (it is not proof either way) and must be resolved.'; }
+      else if (shifts.length) { benchmarkState = 'not_comparable'; benchmarkNote = 'Only indicative personal results are available (screening-only instrument, method not designated for formal assessment, or missing, expired or failed calibration); no formal benchmark comparison.'; }
+      else { benchmarkState = 'not_comparable'; benchmarkNote = staticSamples.length ? `No personal ${calc.label} results are available; static results are not comparable with personal benchmarks.` : `No usable personal ${calc.label} results are available (all samples excluded or not calculable).`; }
     } else {
       const st = formal.map((s) => s.comparison!.state);
       benchmarkState = st.includes('at_or_above_benchmark') ? 'at_or_above_benchmark'
         : st.every((x) => x === 'not_comparable') ? 'not_comparable'
         : st.includes('indeterminate') || st.includes('not_comparable') ? 'indeterminate'
         : 'below_benchmark';
-      const incompleteShifts = withCmp.filter((s) => !s.result).length;
-      if (incompleteShifts && benchmarkState === 'below_benchmark') benchmarkState = 'indeterminate';
-      benchmarkNote = `${formal.length} formal ${what} result(s) compared with ${b.type} ${b.value} ${b.unit} (${b.source}).`;
-      if (incompleteShifts) benchmarkNote += ` ${incompleteShifts} ${what} result(s) could not be calculated.`;
-      const conv = formal.find((s) => s.comparison?.converted);
-      if (conv) benchmarkNote += ` Results were converted to ${b.unit} at 20 °C and 101.325 kPa (molar volume ${MOLAR_VOLUME_L} L/mol) using molecular weight ${input.molecularWeight} g/mol.`;
-    }
-    // Evidence that was excluded or is only indicative must not be outweighed silently: if any such personal
-    // result is itself at or above the benchmark, a favourable roll-up becomes indeterminate.
-    const sideSet = samples.filter((s) => s.sampleType === 'personal' && (!s.included || s.indicative) && s.concentration);
-    const highSet = sideSet.filter((s) => { const c = convertInterval(s.concentration!, b.unit, input.molecularWeight); return !!c && c.lower >= b.value; });
-    const unknownSet = sideSet.filter((s) => !convertInterval(s.concentration!, b.unit, input.molecularWeight));
-    if (unknownSet.length && (benchmarkState === 'below_benchmark' || benchmarkState === 'not_comparable')) {
-      benchmarkState = 'indeterminate';
-      benchmarkNote += ` ${unknownSet.length} excluded or indicative result(s) (${unknownSet.map((s) => s.sampleCode).join(', ')}) are in a unit that cannot be converted to ${b.unit}; they cannot be ruled out as at or above the benchmark.`;
-    }
-    if (highSet.length && (benchmarkState === 'below_benchmark' || benchmarkState === 'not_comparable')) {
-      benchmarkState = 'indeterminate';
-      benchmarkNote += ` ${highSet.length} excluded or indicative result(s) (${highSet.map((s) => s.sampleCode).join(', ')}) are at or above the benchmark value; they must be explained before any favourable conclusion.`;
+      benchmarkNote = `${formal.length} formal ${what} result(s) compared with ${b.type} ${formatValue(b.value)} ${b.unit} (${b.source}).`;
+      if (uncalculated) { benchmarkNote += ` ${uncalculated} ${what} result(s) could not be calculated.`; if (benchmarkState === 'below_benchmark') benchmarkState = 'indeterminate'; }
+      if (benchmarkState === 'below_benchmark' && (evidenceAdequacy === 'unresolved_evidence' || evidenceAdequacy === 'coverage_gap')) {
+        benchmarkState = 'indeterminate';
+        benchmarkNote += ` Every calculated result is below the benchmark, but ${unresolved.length} personal sample(s) are unresolved (${unresolved.map((u) => `${u.sampleCode}: ${u.why}`).join('; ')}); no favourable overall comparison until they are dispositioned or replaced.`;
+      }
+      if (benchmarkState === 'below_benchmark' && evidenceAdequacy === 'adequate_with_accepted_gaps') benchmarkNote += ` ${acceptedGaps} sample(s) were set aside with an authorised judgement that the remaining coverage is adequate.`;
+      if (formal.some((s) => s.assumptionDependent)) benchmarkNote += ' Some results depend on a documented assumption about unsampled time.';
+      if (formal.some((s) => s.comparison?.converted)) benchmarkNote += ` Results were converted to ${b.unit} at 20 °C and 101.325 kPa (molar volume ${MOLAR_VOLUME_L} L/mol, EH40 para 68) using molecular weight ${input.molecularWeight} g/mol.`;
     }
     if (b.isSynthetic && !/synthetic/i.test(b.source)) benchmarkNote += ' SYNTHETIC DEMONSTRATION BENCHMARK — not a real exposure limit.';
   }
@@ -580,10 +791,14 @@ export function runAssessment(input: AssessmentInput): AssessmentOutput {
 
   return {
     engineVersion: ENGINE_VERSION, calcCode: calc.code, calcVersion: calc.version,
-    samples, shifts: withCmp, staticSamples, dataQualityState: dq, benchmarkState, benchmarkNote, issues,
+    samples, shifts: withCmp, staticSamples, dataQualityState: dq, calculationAvailability, evidenceAdequacy, unresolvedEvidence: unresolved,
+    benchmarkState, benchmarkNote, issues,
     disclaimer: 'Calculated outputs and benchmark comparisons are not a compliance conclusion. Professional interpretation by a competent person is required.',
   };
 }
+
+/** Serialises engine output without losing unbounded values: Infinity becomes the string "Infinity" (with upperUnbounded = true). */
+export const serialiseOutput = (o: unknown) => JSON.stringify(o, (_k, v) => (v === Infinity ? 'Infinity' : v));
 
 // ───────────────────────── Before / after comparability ─────────────────────────
 
@@ -605,6 +820,6 @@ export function comparability(before: ComparabilityInput, after: ComparabilityIn
   }
   const b = before.meanSampledMinutes, a = after.meanSampledMinutes;
   if (b == null || a == null || Math.abs(a - b) / Math.max(a, b) > 0.2)
-    diff.push({ aspect: 'Mean sampled duration (min)', before: String(b ?? '—'), after: String(a ?? '—') });
+    diff.push({ aspect: 'Mean sampled duration (min)', before: b == null ? '—' : formatValue(b), after: a == null ? '—' : formatValue(a) });
   return { comparable: diff.length === 0, differences: diff };
 }

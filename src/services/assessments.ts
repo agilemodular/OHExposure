@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { sha256 } from '../auth/crypto.js';
-import { CALCULATIONS, comparability, runAssessment, type BenchmarkRef, type CalcCode, type SampleInput } from '../calc/engine.js';
-import { audit, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
+import { CALCULATIONS, comparability, runAssessment, serialiseOutput, STEL_REMAINDER_EVIDENCE, type BenchmarkRef, type CalcCode, type ExposureRecord, type SampleInput } from '../calc/engine.js';
+import { audit, can, many, one, requirePerm, withActor, type Actor, type Tx } from '../db.js';
 import { conflict, forbidden, invalid, notFound } from '../errors.js';
 import { calibrationValidAt } from './instruments.js';
 import { enqueue } from './integrations.js';
@@ -50,7 +50,7 @@ export async function listBenchmarks(a: Actor, substanceId?: string) {
 }
 
 // ───── Inputs
-type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any; recordedExposureMinutes: number | null; molecularWeight?: number | null };
+type Snapshot = { samples: SampleInput[]; refs: { sampleId: string; version: number; resultRevisionId: string | null; qcIds: string[] }[]; benchmark: BenchmarkRef | null; parameters: any; exposureRecords: ExposureRecord[]; molecularWeight?: number | null };
 
 async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Snapshot> {
   const samples: SampleInput[] = [];
@@ -63,14 +63,21 @@ async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Sna
     const cal = e.instrument_id && e.start_at ? await calibrationValidAt(tx, e.instrument_id, e.start_at.toISOString()) : null;
     const qc = await many(tx, 'select id, check_type, outcome, disposition from sample_qc_checks where sampling_event_id=$1 order by recorded_at, id', [sid]);
     const res = await one(tx, `select v.* from lab_results r join lab_result_revisions v on v.result_id=r.id and v.revision=r.current_revision where r.sampling_event_id=$1 and r.substance_id=$2`, [sid, substanceId]);
+    // TR-05: reviewer acceptances of failed method criteria; TR-02: the latest evidence disposition for this revision.
+    const acc = await many(tx, 'select d.criterion, d.evidence, d.scope, u.name from sample_acceptance_dispositions d join users u on u.id=d.authorised_by where d.sampling_event_id=$1 order by d.criterion', [sid]);
+    const disp = await one(tx, `select d.kind, d.reason, d.consequence, u.name, rs.sample_code related from assessment_evidence_dispositions d join users u on u.id=d.recorded_by
+      left join sampling_events rs on rs.id=d.related_sampling_event_id where d.revision_id=$1 and d.sampling_event_id=$2 order by d.seq desc limit 1`, [rev.id, sid]);
     samples.push({
       sampleId: e.id, sampleCode: e.sample_code, sampleType: e.sample_type, subjectRef: e.sample_type === 'personal' ? e.ref_code : e.location_desc, voided: e.status === 'void',
-      startAt: e.start_at?.toISOString() ?? null, endAt: e.end_at?.toISOString() ?? null, timezone: e.timezone,
+      startAt: e.start_at?.toISOString() ?? null, endAt: e.end_at?.toISOString() ?? null, timezone: e.timezone, shiftRef: e.shift_ref ?? null,
       interruptions: e.interruptions ?? [], flowPreLpm: e.flow_pre_lpm, flowPostLpm: e.flow_post_lpm,
-      method: mv ? { code: mv.code, version: mv.version, resultBasis: mv.result_basis, flowDriftTolerancePct: mv.flow_drift_tolerance_pct, minVolumeL: mv.min_volume_l, suitableForFormalAssessment: mv.suitable_for_formal_assessment } : null,
+      method: mv ? { code: mv.code, version: mv.version, resultBasis: mv.result_basis, flowDriftTolerancePct: mv.flow_drift_tolerance_pct, minVolumeL: mv.min_volume_l, suitableForFormalAssessment: mv.suitable_for_formal_assessment,
+        acceptance: { flowDrift: mv.flow_drift_consequence ?? null, minVolume: mv.min_volume_consequence ?? null } } : null,
+      acceptanceDispositions: acc.map((x) => ({ criterion: x.criterion, evidence: x.evidence, scope: x.scope, authorisedBy: x.name })),
+      evidenceDisposition: disp ? { kind: disp.kind, reason: disp.reason, consequence: disp.consequence, authorisedBy: disp.name, relatedSampleCode: disp.related ?? null } : null,
       instrument: inst ? { assetTag: inst.asset_tag, screeningOnly: inst.screening_only, calibrationValidAtSampling: cal } : null,
       qc: qc.map((q) => ({ checkType: q.check_type, outcome: q.outcome, disposition: q.disposition })),
-      result: res ? { revision: res.revision, value: res.value, unit: res.unit, qualifier: res.qualifier, lod: res.lod, loq: res.loq } : null,
+      result: res ? { revision: res.revision, value: res.value, unit: res.unit, qualifier: res.qualifier, lod: res.lod, loq: res.loq, labQualifier: res.lab_qualifier ?? null } : null,
     });
     refs.push({ sampleId: e.id, version: e.version, resultRevisionId: res?.id ?? null, qcIds: qc.map((q) => `${q.id}:${q.disposition ?? ''}`) });
   }
@@ -79,15 +86,22 @@ async function buildSnapshot(tx: Tx, rev: any, substanceId: string): Promise<Sna
     const b = await one(tx, `select v.*, b.benchmark_type, b.averaging_minutes, b.jurisdiction from benchmark_versions v join benchmarks b on b.id=v.benchmark_id where v.id=$1`, [rev.benchmark_version_id]);
     if (b) benchmark = { versionId: b.id, type: `${b.jurisdiction} ${b.benchmark_type}`, averagingMinutes: b.averaging_minutes, value: b.value, unit: b.unit, verificationStatus: b.verification_status, isSynthetic: b.is_synthetic, source: `${b.source_title}, ${b.source_version}` };
   }
-  // Longest exposure duration recorded in the register for this group and substance (hazard or task level).
-  const rec = await one(tx, `select greatest(max(h.exposure_duration_min), max(t.duration_min_per_shift)) m
-    from exposure_group_hazards gh join hazards h on h.id=gh.hazard_id left join tasks t on t.id=h.task_id
-    where gh.group_id=$1 and h.substance_id=$2`, [rev.group_id, substanceId]);
+  // Exposure records from the register for this group and substance (engine 1.4.0, item B). One record per task (a task
+  // with several hazards for the substance counts once, at its longest stated duration); hazards without a task count alone.
+  const recs = await many(tx, `select t.id, t.name ref,
+      max(coalesce(h.exposure_duration_min, t.duration_min_per_shift)) minutes,
+      case when bool_and(case when h.exposure_duration_min is not null then h.exposure_basis else t.duration_basis end in ('recorded_fact','professionally_reviewed'))
+        then 'recorded_fact' else 'user_estimate' end basis,
+      min(t.typical_start_min) start_min, max(t.typical_end_min) end_min
+    from exposure_group_hazards gh join hazards h on h.id=gh.hazard_id join tasks t on t.id=h.task_id
+    where gh.group_id=$1 and h.substance_id=$2 group by t.id, t.name order by t.name`, [rev.group_id, substanceId]);
+  const exposureRecords: ExposureRecord[] = recs.filter((r) => r.minutes != null || r.start_min != null)
+    .map((r) => ({ ref: r.ref, minutes: r.minutes == null ? null : Number(r.minutes), basis: r.basis, startMin: r.start_min, endMin: r.end_min }));
   const mw = (await one(tx, 'select molecular_weight from substances where id=$1', [substanceId]))?.molecular_weight ?? null;
-  return { samples, refs, benchmark, parameters: rev.parameters, recordedExposureMinutes: rec?.m ?? null, molecularWeight: mw };
+  return { samples, refs, benchmark, parameters: rev.parameters, exposureRecords, molecularWeight: mw };
 }
 const calcOf = (code: string | null | undefined) => CALCULATIONS[(code as CalcCode) ?? 'twa_8h'] ?? CALCULATIONS.twa_8h;
-const hashOf = (s: Snapshot, calcCode: string | null | undefined) => sha256(JSON.stringify({ samples: s.samples, refs: s.refs, benchmark: s.benchmark, parameters: s.parameters, recorded: s.recordedExposureMinutes, mw: s.molecularWeight ?? null, calc: calcOf(calcCode) }));
+const hashOf = (s: Snapshot, calcCode: string | null | undefined) => sha256(JSON.stringify({ samples: s.samples, refs: s.refs, benchmark: s.benchmark, parameters: s.parameters, exposure: s.exposureRecords, mw: s.molecularWeight ?? null, calc: calcOf(calcCode) }));
 
 // ───── Lifecycle
 export async function createAssessment(a: Actor, input: unknown) {
@@ -111,6 +125,8 @@ const draftSchema = z.object({
   calc_code: z.enum(['twa_8h', 'stel_15']).default('twa_8h'),
   short_sample_assumption: z.enum(['none', 'zero_remainder']).default('none'),
   short_sample_justification: optStr,
+  short_sample_evidence_basis: z.preprocess((v) => (v === '' ? undefined : v), z.enum(STEL_REMAINDER_EVIDENCE).optional()).transform((v) => v ?? null),
+  short_sample_evidence_ref: optStr,
   sample_ids: strArray.pipe(z.array(uuid)),
   benchmark_version_id: optUuid,
   exposure_minutes_per_shift: optNum,
@@ -148,13 +164,42 @@ export async function updateDraft(a: Actor, revId: string, input: unknown) {
       if (b.substance_id !== r.substance_id) throw invalid('Benchmark is for a different substance');
     }
     const parameters = d.calc_code === 'stel_15'
-      ? { shortSampleAssumption: d.short_sample_assumption, shortSampleJustification: d.short_sample_justification ?? undefined }
+      ? { shortSampleAssumption: d.short_sample_assumption, shortSampleJustification: d.short_sample_justification ?? undefined, shortSampleEvidenceBasis: d.short_sample_evidence_basis, shortSampleEvidenceRef: d.short_sample_evidence_ref }
       : { exposureMinutesPerShift: d.exposure_minutes_per_shift, unsampledAssumption: d.unsampled_assumption, unsampledJustification: d.unsampled_justification ?? undefined };
     const out = await one(tx, `update assessment_revisions set sample_ids=$2, benchmark_version_id=$3, parameters=$4, interpretation=$5, conclusion_category=$6, limitations=$7,
         calc_code=$8, calc_version=$9, calc_output=null, data_quality_state=null, benchmark_state=null, inputs_snapshot=null, inputs_hash=null where id=$1 returning *`,
       [revId, d.sample_ids, d.benchmark_version_id, parameters, d.interpretation, d.conclusion_category, d.limitations, d.calc_code, calcOf(d.calc_code).version]);
     await audit(tx, a, 'assessment.draft_update', 'assessment_revision', revId, { ...d, interpretation: d.interpretation ? `[${d.interpretation.length} chars]` : null });
     return out;
+  });
+}
+
+/**
+ * TR-02: disposition of a personal sample that cannot serve as formal evidence in this draft revision (excluded,
+ * indicative or uncalculable). The engine needs a disposition before a favourable overall comparison is possible:
+ *  - duplicate: the same exposure is covered by a named valid sample in this revision;
+ *  - outside_scope: the sample is not part of what this assessment covers;
+ *  - not_replaced: the worker or task it covered remains unassessed (blocks a favourable overall comparison);
+ *  - remaining_coverage_adequate: a technical reviewer judges the remaining evidence adequate (stated consequence).
+ * Append-only; the latest row per sample applies. Recorded on draft revisions only.
+ */
+export async function recordEvidenceDisposition(a: Actor, revId: string, input: unknown) {
+  if (!can(a, 'assess.write') && !can(a, 'assess.approve')) throw forbidden('Only a practitioner or technical reviewer can disposition evidence');
+  const d = parse(z.object({ sample_id: uuid, kind: z.enum(['duplicate', 'outside_scope', 'not_replaced', 'remaining_coverage_adequate']), reason: reqStr(10), consequence: reqStr(10), related_sample_id: optUuid }), input);
+  if (d.kind === 'duplicate' && !d.related_sample_id) throw invalid('A duplicate must name the valid sample it duplicates');
+  if (d.kind === 'remaining_coverage_adequate' && !can(a, 'assess.approve')) throw forbidden('Only a technical reviewer can accept that the remaining coverage is adequate');
+  return withActor(a, async (tx) => {
+    const r = await loadRev(tx, revId, true);
+    await assertAssessmentNotOnHold(tx, r.assessment_id);
+    if (r.status !== 'draft') throw invalid('Evidence can only be dispositioned on a draft revision');
+    if (!r.sample_ids.includes(d.sample_id)) throw invalid('The sample is not part of this revision');
+    if (d.related_sample_id && !r.sample_ids.includes(d.related_sample_id)) throw invalid('The related sample is not part of this revision');
+    const row = await one(tx, `insert into assessment_evidence_dispositions (tenant_id,client_id,revision_id,sampling_event_id,kind,reason,consequence,related_sampling_event_id,recorded_by)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9) returning *`, [r.tenant_id, r.client_id, revId, d.sample_id, d.kind, d.reason, d.consequence, d.related_sample_id, a.userId]);
+    // The calculation no longer reflects the evidence: clear it so it must be rerun.
+    await tx.query('update assessment_revisions set calc_output=null, data_quality_state=null, benchmark_state=null, inputs_snapshot=null, inputs_hash=null where id=$1', [revId]);
+    await audit(tx, a, 'assessment.evidence_disposition', 'assessment_revision', revId, d);
+    return row;
   });
 }
 
@@ -166,10 +211,10 @@ export async function calculate(a: Actor, revId: string) {
     if (r.status !== 'draft') throw invalid('Only draft revisions can be recalculated');
     const snap = await buildSnapshot(tx, r, r.substance_id);
     const calc = calcOf(r.calc_code);
-    const output = runAssessment({ calc: calc.code, samples: snap.samples, parameters: { ...snap.parameters, recordedExposureMinutes: snap.recordedExposureMinutes }, benchmark: snap.benchmark, molecularWeight: snap.molecularWeight });
+    const output = runAssessment({ calc: calc.code, samples: snap.samples, parameters: { ...snap.parameters, exposureRecords: snap.exposureRecords }, benchmark: snap.benchmark, molecularWeight: snap.molecularWeight });
     const hash = hashOf(snap, calc.code);
     const out = await one(tx, `update assessment_revisions set calc_output=$2, data_quality_state=$3, benchmark_state=$4, inputs_snapshot=$5, inputs_hash=$6, calc_code=$8, calc_version=$7 where id=$1 returning *`,
-      [revId, JSON.stringify(output, (_, v) => (v === Infinity ? 'Infinity' : v)), output.dataQualityState, output.benchmarkState, snap, hash, calc.version, calc.code]);
+      [revId, serialiseOutput(output), output.dataQualityState, output.benchmarkState, snap, hash, calc.version, calc.code]);
     await audit(tx, a, 'assessment.calculated', 'assessment_revision', revId, { dq: output.dataQualityState, benchmark: output.benchmarkState, hash });
     return out;
   });

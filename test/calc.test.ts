@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { comparability, compareInterval, runAssessment, sampleConcentration, twa8h, type BenchmarkRef, type SampleInput } from '../src/calc/engine.js';
+import { CALCULATIONS, comparability, compareInterval, runAssessment, sampleConcentration, twa8h, type BenchmarkRef, type SampleInput } from '../src/calc/engine.js';
 
 const method = { code: 'TEST-GRAV', version: '1', resultBasis: 'mass_on_sample' as const, flowDriftTolerancePct: 5, minVolumeL: null, suitableForFormalAssessment: true };
 const inst = { assetTag: 'P-01', screeningOnly: false, calibrationValidAtSampling: true };
@@ -49,7 +49,13 @@ describe('sample_concentration v1', () => {
     expect(sampleConcentration(s({ endAt: '2026-03-02T07:00:00Z' })).flags.map((f) => f.code)).toContain('DURATION_INVALID');
   });
   it('flags flow drift beyond the method tolerance, and missing tolerance', () => {
-    expect(sampleConcentration(s({ flowPostLpm: 1.8 })).flags.map((f) => f.code)).toContain('FLOW_DRIFT_EXCEEDED');
+    // 1.4.0 (TR-05): the consequence is method-specific. Not stated → disposition required (sample excluded until accepted).
+    const undefinedRule = sampleConcentration(s({ flowPostLpm: 1.8 }));
+    expect(undefinedRule.flags.map((f) => f.code)).toEqual(expect.arrayContaining(['ACCEPTANCE_RULE_UNDEFINED', 'FLOW_DRIFT_DISPOSITION_REQUIRED']));
+    expect(undefinedRule.included).toBe(false);
+    const advisory = sampleConcentration(s({ flowPostLpm: 1.8, method: { ...method, acceptance: { flowDrift: 'advisory' } } }));
+    expect(advisory.flags.map((f) => f.code)).toContain('FLOW_DRIFT_ADVISORY');
+    expect(advisory.included).toBe(true);
     expect(sampleConcentration(s({ method: { ...method, flowDriftTolerancePct: null } })).flags.map((f) => f.code)).toContain('FLOW_TOLERANCE_UNDEFINED');
   });
   it('excludes a sample with an unresolved failed QC check and keeps the failure visible', () => {
@@ -193,8 +199,12 @@ describe('stel_15 v1', () => {
     const short = st({ endAt: '2026-03-02T10:10:00Z', result: { revision: 1, value: 40, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } }); // 2 mg/m³ for 10 min
     expect(stel15([short], {})[0].flags[0].code).toBe('STEL_SAMPLE_SHORT');
     expect(stel15([short], { shortSampleAssumption: 'zero_remainder', shortSampleJustification: 'short' })[0].result).toBeNull();
-    const [r] = stel15([short], { shortSampleAssumption: 'zero_remainder', shortSampleJustification: 'Task observed to last 10 minutes with no other source nearby.' });
-    expect(r.result!.upper).toBeCloseTo(4 / 3, 5);
+    // 1.4.0 (TR-01): a justification alone (task completion) is not enough; supporting evidence is required.
+    const just = 'Task observed to last 10 minutes with no other source nearby.';
+    expect(stel15([short], { shortSampleAssumption: 'zero_remainder', shortSampleJustification: just })[0].flags[0].code).toBe('STEL_REMAINDER_EVIDENCE_REQUIRED');
+    const [r] = stel15([short], { shortSampleAssumption: 'zero_remainder', shortSampleJustification: just, shortSampleEvidenceBasis: 'continuous_observation', shortSampleEvidenceRef: 'Observation log OB-12' });
+    expect(r.result!.upper).toBeCloseTo(4 / 3, 12);
+    expect(r.assumptionDependent).toBe(true);
   });
   it('compares only with a 15-minute benchmark', () => {
     const p = { exposureMinutesPerShift: null, unsampledAssumption: 'none' as const };
@@ -232,7 +242,7 @@ describe('engine 1.3.1 roll-up (Phase H1 finding H1-F01)', () => {
     expect(r.dataQualityState).toBe('incomplete');
     expect(r.benchmarkState).toBe('indeterminate');
     expect(r.benchmarkNote).toMatch(/could not be calculated/);
-    expect(r.calcVersion).toBe('1.2.1');
+    expect(r.calcVersion).toBe(CALCULATIONS.twa_8h.version);
   });
   it('names calibration as a reason for indicative-only results', () => {
     const r = runAssessment({ calc: 'twa_8h', parameters: P, benchmark: bm({ value: 1 }), samples: [s({ instrument: { ...inst, calibrationValidAtSampling: false } })] });
@@ -242,13 +252,17 @@ describe('engine 1.3.1 roll-up (Phase H1 finding H1-F01)', () => {
   it('does not blame static samples when every sample was excluded', () => {
     const r = runAssessment({ calc: 'twa_8h', parameters: P, benchmark: bm(), samples: [s({ qc: [{ checkType: 'flow', outcome: 'fail', disposition: null }] })] });
     expect(r.dataQualityState).toBe('failed');
-    expect(r.benchmarkNote).toMatch(/all samples excluded/);
+    // 1.4.0: the excluded result (0.25 mg/m³ ≥ 0.2) could be at or above the benchmark, so the outcome is
+    // indeterminate (not proof either way); static samples are not blamed.
+    expect(r.benchmarkState).toBe('indeterminate');
+    expect(r.benchmarkNote).not.toMatch(/static/);
+    expect(r.evidenceAdequacy).toBe('no_formal_evidence');
   });
   it('stel_15 1.1.1: an uncalculable 15-minute result is indeterminate, not "not comparable"', () => {
     const r = runAssessment({ calc: 'stel_15', parameters: { exposureMinutesPerShift: null, unsampledAssumption: 'none' as const },
       benchmark: bm({ averagingMinutes: 15, value: 1 }),
       samples: [s({ startAt: '2026-03-02T10:00:00Z', endAt: '2026-03-02T10:30:00Z', result: { revision: 1, value: 60, unit: 'ug', qualifier: '=', lod: 1, loq: 2 } })] });
-    expect(r.calcVersion).toBe('1.1.1');
+    expect(r.calcVersion).toBe(CALCULATIONS.stel_15.version);
     expect(r.benchmarkState).toBe('indeterminate');
     expect(r.benchmarkNote).toMatch(/could not be calculated/);
   });

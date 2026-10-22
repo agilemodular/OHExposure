@@ -1,3 +1,4 @@
+import { formatValue } from '../calc/engine.js';
 // Minimal auto-escaping HTML templating.
 export class Safe {
   constructor(public readonly value: string) {}
@@ -22,15 +23,17 @@ export const raw = (s: string) => new Safe(s);
 export const fmtDate = (d: unknown) => (d ? new Date(d as string).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', timeZone: 'Europe/London' }) : '—');
 export const fmtDateTime = (d: unknown, tz = 'Europe/London') =>
   d ? new Date(d as string).toLocaleString('en-GB', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: tz }) : '—';
-export const fmtNum = (n: unknown, dp = 3) => {
+/** Display policy (engine 1.4.0, TR-04): 4 significant figures; a positive value is never shown as zero. Calculations use full precision. */
+export const fmtNum = (n: unknown, _dp = 3) => {
   if (n === 'Infinity' || n === Infinity) return '∞';
   if (n === null || n === undefined || n === '') return '—';
   const x = Number(n);
-  return Number.isFinite(x) ? (Math.abs(x) >= 100 ? x.toFixed(1) : String(Number(x.toPrecision(4)))) : '—';
+  return Number.isFinite(x) ? formatValue(x) : '—';
 };
 export const label = (s: unknown) => String(s ?? '').replace(/_/g, ' ');
 export function interval(i: any) {
   if (!i) return html`<span class="muted">insufficient evidence — not calculated</span>`;
+  if (i.upperUnbounded || i.upper === 'Infinity' || i.upper === Infinity) return html`&gt; ${fmtNum(i.lower)} ${i.unit} <span class="tag tag-q">upper bound unknown</span>`;
   if (i.lower === i.upper) return html`${fmtNum(i.lower)} ${i.unit}`;
   if (i.lower === 0) return html`&lt; ${fmtNum(i.upper)} ${i.unit} <span class="tag tag-q">range 0–${fmtNum(i.upper)}</span>`;
   return html`${fmtNum(i.lower)}–${fmtNum(i.upper)} ${i.unit} <span class="tag tag-q">interval</span>`;

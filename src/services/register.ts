@@ -46,14 +46,20 @@ export async function createProcess(a: Actor, input: unknown) {
   });
 }
 
-const taskSchema = z.object({ name: reqStr(2, 200), description: optStr, frequency: optStr, duration_min_per_shift: optNum, duration_basis: BASIS.default('user_estimate') });
+const taskSchema = z.object({ name: reqStr(2, 200), description: optStr, frequency: optStr, duration_min_per_shift: optNum, duration_basis: BASIS.default('user_estimate'),
+  // Optional typical time within the shift (minutes from shift start), so overlapping tasks are not double counted (engine 1.4.0, item B).
+  typical_start_min: optNum, typical_end_min: optNum }).superRefine((d, ctx) => {
+  if (d.duration_min_per_shift != null && !(d.duration_min_per_shift > 0 && d.duration_min_per_shift <= 1440)) ctx.addIssue({ code: 'custom', path: ['duration_min_per_shift'], message: 'Duration must be between 0 and 1440 minutes' });
+  if ((d.typical_start_min == null) !== (d.typical_end_min == null)) ctx.addIssue({ code: 'custom', path: ['typical_end_min'], message: 'Give both the start and the end of the task, or neither' });
+  else if (d.typical_start_min != null && !(d.typical_start_min >= 0 && d.typical_end_min! > d.typical_start_min && d.typical_end_min! <= 1440)) ctx.addIssue({ code: 'custom', path: ['typical_end_min'], message: 'Task times must satisfy 0 ≤ start < end ≤ 1440 minutes from shift start' });
+});
 export async function createTask(a: Actor, input: unknown) {
   requirePerm(a, 'register.write');
-  const d = parse(taskSchema.extend({ process_id: uuid }), input);
+  const d = { ...parse(taskSchema, input), ...parse(z.object({ process_id: uuid }), input) };
   return withActor(a, async (tx) => {
     const c = await parentClient(tx, 'processes', d.process_id);
-    const r = await one(tx, `insert into tasks (tenant_id,client_id,process_id,name,description,frequency,duration_min_per_shift,duration_basis)
-      values ($1,$2,$3,$4,$5,$6,$7,$8) returning *`, [a.tenantId, c, d.process_id, d.name, d.description, d.frequency, d.duration_min_per_shift, d.duration_basis]);
+    const r = await one(tx, `insert into tasks (tenant_id,client_id,process_id,name,description,frequency,duration_min_per_shift,duration_basis,typical_start_min,typical_end_min)
+      values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) returning *`, [a.tenantId, c, d.process_id, d.name, d.description, d.frequency, d.duration_min_per_shift, d.duration_basis, d.typical_start_min, d.typical_end_min]);
     await audit(tx, a, 'task.create', 'task', r.id, d);
     return r;
   });
@@ -64,8 +70,8 @@ export async function updateTask(a: Actor, id: string, input: unknown) {
   return withActor(a, async (tx) => {
     const before = await one(tx, 'select * from tasks where id=$1', [id]);
     if (!before) throw notFound('Task');
-    const r = await one(tx, `update tasks set name=$2,description=$3,frequency=$4,duration_min_per_shift=$5,duration_basis=$6,updated_at=now() where id=$1 returning *`,
-      [id, d.name, d.description, d.frequency, d.duration_min_per_shift, d.duration_basis]);
+    const r = await one(tx, `update tasks set name=$2,description=$3,frequency=$4,duration_min_per_shift=$5,duration_basis=$6,typical_start_min=$7,typical_end_min=$8,updated_at=now() where id=$1 returning *`,
+      [id, d.name, d.description, d.frequency, d.duration_min_per_shift, d.duration_basis, d.typical_start_min, d.typical_end_min]);
     await flagGroupsForReview(tx, a, `Task "${before.name}" changed`, { taskId: id });
     await audit(tx, a, 'task.update', 'task', id, { before, after: d });
     return r;
