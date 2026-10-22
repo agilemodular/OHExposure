@@ -321,7 +321,9 @@ export async function syncBatch(a: Actor, items: unknown[], opts: { deviceNow?: 
         if (ctl.suspendedWorkflows.includes('field_sync')) {
           // TR-08: a held update of an existing sample conflicts with the share lock that submission and approval hold on
           // their evidence, so a hold cannot appear between an approval's hold check and its commit.
+          // R6-N1: also when the device only knows the client_uuid of a record the server already has.
           if (it.server_id) await tx.query('select 1 from sampling_events where id=$1 for no key update', [it.server_id]);
+          else await tx.query('select 1 from sampling_events where client_uuid=$1 for no key update', [it.client_uuid]);
           const h = await one(tx, `insert into field_intake_holds (tenant_id, client_uuid, server_id, base_version, payload, submitted_by, suspension_reason)
             values ($1,$2,$3,$4,$5,$6,$7) on conflict (tenant_id, client_uuid, md5(payload::text)) do nothing returning id`,
             [a.tenantId, it.client_uuid, it.server_id ?? null, it.base_version, it.payload, a.userId, ctl.suspensionReason]);

@@ -43,8 +43,8 @@ describe('TR-08 safeguards over the effective evidence set', () => {
   it('… and blocks approval when the hold appears after submission (service and database trigger)', async () => {
     const { x, revId } = await inReviewWithPending('TR-08 held after submit');
     await holdOn(x);
-    await expect(asmt.approve(S.w.a.rev, revId, approveIn)).rejects.toThrow(/during a suspension/);
-    await expect(directApprove(revId)).rejects.toThrow(/field records received during a suspension/);
+    await expect(asmt.approve(S.w.a.rev, revId, approveIn)).rejects.toThrow(/removal requested but not confirmed.*during a suspension/); // the service's own check
+    await expect(directApprove(revId)).rejects.toThrow(/field records received during a suspension/);                              // the trigger's
   });
   it('a sample awaiting suspension review with a pending removal keeps the review requirement (submission, approval, trigger)', async () => {
     const r = await T.suspensionReview(S);
@@ -169,5 +169,107 @@ describe('TR-08 removal workflow and resolver', () => {
     await asmt.submitForReview(S.w.a.prac, revision.id);
     const out = await asmt.approve(S.w.a.rev, revision.id, approveIn);
     expect(out.status).toBe('approved');
+  });
+});
+
+/** Pauses approve(r2) after its evidence check (the test holds r1, which approve must supersede), runs `write`, and reports. */
+async function duringPausedApproval(write: (x: any) => Promise<unknown>, waitingOn: RegExp, beforePause?: () => Promise<unknown>) {
+  const keep = await T.sample(S, { day: 13 }), x = await T.sample(S, { day: 14, pump: S.pump2 });
+  const { assessment, revision } = await asmt.createAssessment(S.w.a.prac, { group_id: S.group.id, substance_id: S.w.ref.substanceId, plan_id: S.plan.id, title: `TR-08 R6 ${Math.random()}`, assessment_question: 'Is exposure adequately controlled for the TR-08 group?' });
+  await updateDraftConfirmed(S.w.a.prac, revision.id, { ...draftBase(), sample_ids: [keep.id, x.id] });
+  await asmt.calculate(S.w.a.prac, revision.id); await asmt.submitForReview(S.w.a.prac, revision.id); await asmt.approve(S.w.a.rev, revision.id, approveIn);
+  const r2 = await asmt.newRevision(S.w.a.prac, assessment.id, { change_reason: 'TR-08 R6 concurrency' });
+  await asmt.updateDraft(S.w.a.prac, r2.id, { ...draftBase(), sample_ids: [keep.id], removal_reason: 'Practitioner removes this sample (R6 test)' });
+  await asmt.calculate(S.w.a.prac, r2.id); await asmt.submitForReview(S.w.a.prac, r2.id);
+  if (beforePause) await beforePause();
+  const ctl = await admin(), obs = await admin();
+  await ctl.query('begin'); await ctl.query('select id from assessment_revisions where id=$1 for update', [revision.id]);
+  let approved: string | null = null, written: string | null = null;
+  const seq: string[] = [];
+  const ap = T.attempt(() => asmt.approve(S.w.a.rev, r2.id, approveIn)).then((v) => { approved = v; seq.push('approval finished'); });
+  await T.waitFor(async () => (await T.lockWaiters(obs)).some((b) => /superseded/.test(b.query)), 'approval paused');
+  const wr = T.attempt(() => write(x)).then((v) => { written = v; seq.push('write finished'); });
+  await T.waitFor(async () => written !== null || (await T.lockWaiters(obs)).some((b) => waitingOn.test(b.query)), 'write done or waiting');
+  const blocked = written === null;
+  await ctl.query('commit'); await ap; await wr; await ctl.end(); await obs.end();
+  return { blocked, approved, written, seq, x, keep, assessmentId: assessment.id, r1: revision.id, r2: r2.id };
+}
+
+describe('R6 re-check fixes (application 1.1.1)', () => {
+  it('N1: a held record sent with only the client_uuid blocks approval (service and trigger), for pending and selected samples', async () => {
+    const { x, keep, revId } = await inReviewWithPending('TR-08 R6 client_uuid hold');
+    await suspendWorkflows(URL_(), S.w.A.tenant.id, ['field_sync'], 'R6 N1', 'TR-08 Operator');
+    const [d1] = await field.syncBatch(S.w.a.tech, [{ client_uuid: x.client_uuid, server_id: null, base_version: 1, payload: { ...x.payload, notes: 'Lost response: device kept no server id' } }]);
+    const [d2] = await field.syncBatch(S.w.a.tech, [{ client_uuid: keep.client_uuid, server_id: null, base_version: 1, payload: { ...keep.payload, notes: 'Lost response (selected sample)' } }]);
+    await resumeWorkflows(URL_(), S.w.A.tenant.id, ['field_sync'], 'TR-08 Operator', 'T8-REVAL');
+    expect([d1.outcome, d2.outcome]).toEqual(['deferred', 'deferred']);
+    await expect(asmt.approve(S.w.a.rev, revId, approveIn)).rejects.toThrow(/during a suspension/);
+    await expect(directApprove(revId)).rejects.toThrow(/field records received during a suspension/);
+  });
+  it('N1: placing a client_uuid-only held record waits for an in-flight approval', async () => {
+    const r = await duringPausedApproval((x) => field.syncBatch(S.w.a.tech, [{ client_uuid: x.client_uuid, server_id: null, base_version: 1, payload: { ...x.payload, notes: 'client_uuid hold during approval' } }]),
+      /for no key update/, () => suspendWorkflows(URL_(), S.w.A.tenant.id, ['field_sync'], 'R6 N1 race', 'TR-08 Operator'));
+    await resumeWorkflows(URL_(), S.w.A.tenant.id, ['field_sync'], 'TR-08 Operator', 'T8-REVAL');
+    expect(r.blocked).toBe(true);
+    expect(r.seq).toEqual(['approval finished', 'write finished']);
+    expect(r.approved).toBe('succeeded');
+  });
+  it('N2: a register change (task duration) waits for an in-flight approval', async () => {
+    const reg = await import('../src/services/register.js');
+    const task = (await withActor(S.w.a.prac, (tx) => tx.query(`select t.* from tasks t join hazards h on h.task_id=t.id join exposure_group_hazards gh on gh.hazard_id=h.id where gh.group_id=$1 limit 1`, [S.group.id]))).rows[0];
+    const r = await duringPausedApproval(() => reg.updateTask(S.w.a.prac, task.id, { name: task.name, duration_min_per_shift: '480', duration_basis: 'recorded_fact', typical_start_min: '0', typical_end_min: '480' }), /tasks/);
+    expect(r.blocked).toBe(true);
+    expect(r.seq).toEqual(['approval finished', 'write finished']);
+  });
+  it('N3: a laboratory import locking samples in id order does not deadlock with an approval', async () => {
+    const lab = await import('../src/services/lab.js');
+    const keep = await T.sample(S, { day: 15 }), x = await T.sample(S, { day: 16 });
+    const { revId } = await T.withPendingRemoval(S, keep.id, x.id, 'TR-08 R6 import order');
+    await asmt.calculate(S.w.a.prac, revId); await asmt.submitForReview(S.w.a.prac, revId);
+    const [lo, hi] = [keep, x].sort((a, b) => (a.id < b.id ? -1 : 1));
+    const csv = `sample_code,analyte,value,unit,qualifier,lod,loq,amendment_reason\n${hi.code},Demo Dust X (synthetic),310,ug,=,1,3,re-issue\n${lo.code},Demo Dust X (synthetic),310,ug,=,1,3,re-issue\n`;
+    const batch = await lab.stageImport(S.w.a.prac, { filename: 'order.csv', laboratory_id: S.lab.id, csv });
+    const ctl = await admin(), obs = await admin();
+    await ctl.query('begin'); await ctl.query('select id from sampling_events where id=$1 for share', [lo.id]);
+    let imported: string | null = null, approved: string | null = null;
+    const imp = T.attempt(() => lab.commitImport(S.w.a.prac, batch.id)).then((v) => { imported = v; });
+    await T.waitFor(async () => (await T.lockWaiters(obs)).some((b) => /sampling_events/.test(b.query)), 'import waiting on the lower id');
+    const ap = T.attempt(() => asmt.approve(S.w.a.rev, revId, approveIn)).then((v) => { approved = v; });
+    await T.waitFor(async () => approved !== null || (await T.lockWaiters(obs)).length >= 2, 'approval finished or waiting');
+    await ctl.query('commit'); await imp; await ap; await ctl.end(); await obs.end();
+    expect(approved).not.toMatch(/deadlock/);
+    expect(imported).toBe('succeeded');
+  });
+  it('N4: a sample awaiting removal confirmation can be dispositioned (it is still evidence)', async () => {
+    const keep = await T.sample(S, { day: 17 }), x = await T.sample(S, { day: 18, qcFail: true });
+    const { revId } = await T.withPendingRemoval(S, keep.id, x.id, 'TR-08 R6 disposition');
+    const before = (await asmt.calculate(S.w.a.prac, revId)).calc_output;
+    expect(before.unresolvedEvidence.map((u: any) => u.sampleCode)).toContain(x.code);
+    await asmt.recordEvidenceDisposition(S.w.a.prac, revId, { sample_id: x.id, kind: 'not_replaced', reason: 'Failed flow check; not replaced', consequence: 'This shift is not assessed for the worker' });
+    const after = (await asmt.calculate(S.w.a.prac, revId)).calc_output;
+    expect(after.evidenceAdequacy).toBe('coverage_gap');
+  });
+  it('N5: staleness is reported only when evidence changes', async () => {
+    const x = await T.sample(S, { day: 19 });
+    const { assessment, revision } = await asmt.createAssessment(S.w.a.prac, { group_id: S.group.id, substance_id: S.w.ref.substanceId, plan_id: S.plan.id, title: 'TR-08 R6 staleness', assessment_question: 'Is exposure adequately controlled for the TR-08 group?' });
+    await updateDraftConfirmed(S.w.a.prac, revision.id, { ...draftBase(), sample_ids: [x.id] });
+    await asmt.calculate(S.w.a.prac, revision.id); await asmt.submitForReview(S.w.a.prac, revision.id); await asmt.approve(S.w.a.rev, revision.id, approveIn);
+    const clean = await asmt.assessmentDetail(S.w.a.prac, assessment.id);
+    expect(clean.staleApproved.filter((m: string) => /evidence has changed/.test(m))).toEqual([]);
+    const lab = await import('../src/services/lab.js');
+    await lab.recordResult(S.w.a.prac, { sampling_event_id: x.id, substance_id: S.w.ref.substanceId, value: '320', unit: 'ug', qualifier: '=', lod: '1', loq: '3', amendment_reason: 'Laboratory re-issue (staleness test)' });
+    const stale = await asmt.assessmentDetail(S.w.a.prac, assessment.id);
+    expect(stale.staleApproved.join(' ')).toMatch(/evidence has changed/);
+  });
+  it('a new revision carries an unconfirmed removal forward as a removal request (history kept)', async () => {
+    const keep = await T.sample(S, { day: 20 }), x = await T.sample(S, { day: 21 });
+    const { assessmentId, revId } = await T.withPendingRemoval(S, keep.id, x.id, 'TR-08 R6 carry');
+    await asmt.calculate(S.w.a.prac, revId); await asmt.submitForReview(S.w.a.prac, revId); await asmt.approve(S.w.a.rev, revId, approveIn);
+    const r2 = await asmt.newRevision(S.w.a.prac, assessmentId, { change_reason: 'R6 carry-forward test' });
+    expect(r2.sample_ids).toEqual([keep.id]);
+    const d = await asmt.assessmentDetail(S.w.a.prac, assessmentId);
+    expect(d.removals).toEqual([expect.objectContaining({ sampleId: x.id, status: 'pending_reviewer_confirmation', reason: expect.stringMatching(/^Carried forward from r1: removal requested by .*not confirmed$/) })]);
+    const out = (await asmt.calculate(S.w.a.prac, r2.id)).calc_output;
+    expect(out.samples.map((s: any) => s.sampleCode).sort()).toEqual([keep.code, x.code].sort());
   });
 });

@@ -18,7 +18,7 @@ export async function tr08Impact(adminUrl: string) {
   try {
     await c.query('begin transaction read only');
     const revs = (await c.query(`select r.id, r.revision, r.status, r.sample_ids, r.inputs_snapshot, r.submitted_at, r.approved_at, r.reviewer_id, ru.name reviewer,
-        a.title assessment, t.name organisation,
+        a.title assessment, a.substance_id, t.name organisation,
         coalesce((select json_agg(json_build_object('id', p.id, 'version', p.version, 'status', p.status) order by p.version) from reports p where p.assessment_revision_id=r.id), '[]') reports
       from assessment_revisions r join assessments a on a.id=r.assessment_id join tenants t on t.id=r.tenant_id left join users ru on ru.id=r.reviewer_id
       where r.status in ('in_review','approved','superseded') and r.inputs_snapshot is not null order by t.name, a.title, r.revision`)).rows;
@@ -33,35 +33,39 @@ export async function tr08Impact(adminUrl: string) {
       const frozenResults = new Set((r.inputs_snapshot.refs ?? []).map((x: any) => x.resultRevisionId).filter(Boolean));
       const samples = [];
       for (const sid of outside) {
-        const e = (await c.query('select sample_code, instrument_id, suspension_review_required, suspension_reviewed_at from sampling_events where id=$1', [sid])).rows[0];
-        const holds = (await c.query(`select status, received_at, resolved_at from field_intake_holds where server_id=$1 or sampling_event_id=$1 order by received_at`, [sid])).rows;
-        const concerns: string[] = [], investigate: string[] = [];
+        const e = (await c.query('select sample_code, instrument_id, client_uuid, suspension_review_required, suspension_reviewed_at from sampling_events where id=$1', [sid])).rows[0];
+        // R6-N1: holds also match by client_uuid (a device that never learned the server id).
+        const holds = (await c.query(`select status, received_at, resolved_at from field_intake_holds where server_id=$1 or sampling_event_id=$1 or ($2::uuid is not null and client_uuid=$2) order by received_at`, [sid, e.client_uuid])).rows;
+        const concerns: string[] = [], investigate: string[] = [], atApproval: string[] = [];
         const removal = (await c.query(`select x.action, x.reason, x.recorded_at, u.name from assessment_sample_removals x join users u on u.id=x.recorded_by where x.revision_id=$1 and x.sampling_event_id=$2 order by x.seq`, [r.id, sid])).rows;
         const qc = r.reviewer_id ? (await c.query(`select check_type, disposition, disposition_at from sample_qc_checks where sampling_event_id=$1 and disposition_by=$2`, [sid, r.reviewer_id])).rows : [];
         // Writes after the calculation and up to 5 min after approval that are not reflected in the frozen inputs.
-        const labWrites = at && calcAt ? (await c.query(`select v.id, v.revision, v.entered_at from lab_result_revisions v join lab_results l on l.id=v.result_id where l.sampling_event_id=$1 and v.entered_at > $2::timestamptz and v.entered_at < $3::timestamptz + interval '5 minutes'`, [sid, calcAt, at])).rows.filter((v) => !frozenResults.has(v.id)) : [];
+        const labWrites = at && calcAt ? (await c.query(`select v.id, v.revision, v.entered_at from lab_result_revisions v join lab_results l on l.id=v.result_id where l.sampling_event_id=$1 and l.substance_id=$4 and v.entered_at > $2::timestamptz and v.entered_at < $3::timestamptz + interval '5 minutes'`, [sid, calcAt, at, r.substance_id])).rows.filter((v) => !frozenResults.has(v.id)) : [];
         const calWrites = at && calcAt && e.instrument_id ? (await c.query(`select outcome, recorded_at from calibrations where instrument_id=$1 and recorded_at > $2::timestamptz and recorded_at < $3::timestamptz + interval '5 minutes'`, [e.instrument_id, calcAt, at])).rows : [];
         if (at && !calcAt) investigate.push('the calculation time is not recorded, so writes around approval cannot be placed in sequence');
         // Holds (timestamps recorded): outstanding now, or in force at approval.
         for (const h of holds) {
           if (['held', 'in_conflict'].includes(h.status)) concerns.push(`held field record outstanding now (received ${h.received_at.toISOString()})`);
-          else if (at && h.received_at < at && (!h.resolved_at || h.resolved_at > at)) concerns.push(`held field record in force at approval (received ${h.received_at.toISOString()}, resolved ${h.resolved_at?.toISOString() ?? '—'})`);
+          if (at && h.received_at < at && (!h.resolved_at || h.resolved_at > at)) atApproval.push(`held record in force at approval (received ${h.received_at.toISOString()})`);
+          if (!['held', 'in_conflict'].includes(h.status) && at && h.received_at < at && (!h.resolved_at || h.resolved_at > at)) concerns.push(`held field record in force at approval (received ${h.received_at.toISOString()}, resolved ${h.resolved_at?.toISOString() ?? '—'})`);
         }
         // Suspension-review flag: set when a hold is synchronised (that hold's resolved_at); otherwise the time is not recorded.
         if (e.suspension_review_required) {
           const sync = holds.filter((h) => h.status === 'synchronised' && h.resolved_at).map((h) => h.resolved_at as Date).sort((x, y) => +x - +y).pop();
           if (!e.suspension_reviewed_at) concerns.push('suspension review outstanding now');
-          else if (at && sync && sync < at && e.suspension_reviewed_at > at) concerns.push(`suspension review pending at approval (flagged ${sync.toISOString()}, reviewed ${e.suspension_reviewed_at.toISOString()})`);
+          if (at && sync && sync < at && (!e.suspension_reviewed_at || e.suspension_reviewed_at > at)) atApproval.push(`suspension review pending at approval (flagged ${sync.toISOString()})`);
+          if (e.suspension_reviewed_at && at && sync && sync < at && e.suspension_reviewed_at > at) concerns.push(`suspension review pending at approval (flagged ${sync.toISOString()}, reviewed ${e.suspension_reviewed_at.toISOString()})`);
           else if (at && !sync && e.suspension_reviewed_at > at) investigate.push('suspension-review flag reviewed after approval; when the flag was set is not recorded');
         }
         for (const q of qc) {
+          if (at && q.disposition_at && q.disposition_at < at) atApproval.push(`approving reviewer's own QC disposition (${q.check_type})`);
           if (at && q.disposition_at && q.disposition_at < at) concerns.push(`approving reviewer recorded a QC disposition (${q.check_type}: ${q.disposition}) before approval`);
           else if (!at) concerns.push(`the reviewer recorded a QC disposition (${q.check_type}); approval by that reviewer is now refused`);
         }
         if (labWrites.length) investigate.push(`laboratory result revision(s) ${labWrites.map((x) => `r${x.revision} at ${x.entered_at.toISOString()}`).join(', ')} written after the calculation and not in the frozen inputs (within 5 min of approval); the approval may not have checked it`);
         if (calWrites.length) investigate.push(`calibration record(s) ${calWrites.map((x) => `${x.outcome} at ${x.recorded_at.toISOString()}`).join(', ')} for its instrument after the calculation (up to 5 min after approval); the approval may not have checked it`);
         if (!removal.length) investigate.push('no removal record for this sample in this revision (frozen inputs and selected list differ for another reason)');
-        samples.push({ sampleId: sid, sampleCode: e.sample_code, removalHistory: removal.map((x) => ({ action: x.action, by: x.name, at: x.recorded_at, reason: x.reason })), concerns, investigate,
+        samples.push({ sampleId: sid, sampleCode: e.sample_code, concernsEstablishedAtApproval: atApproval, removalHistory: removal.map((x) => ({ action: x.action, by: x.name, at: x.recorded_at, reason: x.reason })), concerns, investigate,
           classification: concerns.length ? 'concern' : investigate.length ? 'needs investigation' : 'no concern found in the records' });
       }
       const cls = samples.some((s) => s.classification === 'concern') ? 'concern' : samples.some((s) => s.classification === 'needs investigation') ? 'needs investigation' : 'potentially affected; no concern found in the records';
@@ -72,7 +76,9 @@ export async function tr08Impact(adminUrl: string) {
     }
     await c.query('rollback');
     return { generated: new Date().toISOString(), readOnly: true, scope: 'revisions in review, approved or superseded whose frozen inputs include samples outside the selected list',
-      summary: { revisionsFlagged: out.length, concern: out.filter((x) => x.classification === 'concern').length, needsInvestigation: out.filter((x) => x.classification === 'needs investigation').length,
+      summary: { revisionsFlagged: out.length, concern: out.filter((x) => x.classification === 'concern').length,
+        concernEstablishedAtApproval: out.filter((x) => x.samplesInCalculationNotSelected.some((s: any) => s.concernsEstablishedAtApproval.length)).length,
+        concernOutstandingNowOnly: out.filter((x) => x.classification === 'concern' && !x.samplesInCalculationNotSelected.some((s: any) => s.concernsEstablishedAtApproval.length)).length, needsInvestigation: out.filter((x) => x.classification === 'needs investigation').length,
         noConcernFound: out.filter((x) => x.classification.startsWith('potentially')).length, approved: out.filter((x) => x.status === 'approved').length, issuedReports: out.reduce((n, x) => n + x.issuedReports, 0) },
       revisions: out };
   } finally { await c.end(); }

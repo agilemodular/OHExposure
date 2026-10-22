@@ -248,8 +248,10 @@ export async function recordEvidenceDisposition(a: Actor, revId: string, input: 
     const r = await loadRev(tx, revId, true);
     await assertAssessmentNotOnHold(tx, r.assessment_id);
     if (r.status !== 'draft') throw invalid('Evidence can only be dispositioned on a draft revision');
-    if (!r.sample_ids.includes(d.sample_id)) throw invalid('The sample is not part of this revision');
-    if (d.related_sample_id && !r.sample_ids.includes(d.related_sample_id)) throw invalid('The related sample is not part of this revision');
+    // R6-N4: any sample of the effective evidence set may be dispositioned, including one awaiting removal confirmation.
+    const ev = await resolveEvidence(tx, r);
+    if (!ev.effective.includes(d.sample_id)) throw invalid('The sample is not part of the evidence of this revision (neither selected nor awaiting removal confirmation)');
+    if (d.related_sample_id && !ev.effective.includes(d.related_sample_id)) throw invalid('The related sample is not part of the evidence of this revision');
     const snap = await buildSnapshot(tx, r, r.substance_id);
     const pick = (id: string) => { const i = snap.samples.findIndex((x) => x.sampleId === id); return i < 0 ? undefined : { input: snap.samples[i], output: sampleConcentration(snap.samples[i]) }; };
     const self = pick(d.sample_id)!;
@@ -346,14 +348,22 @@ export async function calculate(a: Actor, revId: string) {
  * (and changes the hash) or waits until the approval has committed.
  */
 async function assertCurrent(tx: Tx, r: any) {
+  // Lock order: revision row (caller) → sampling events by id → instruments by id → tasks by id → hazards by id →
+  // substance → benchmark version. Writers lock one row of one kind, or several rows of one kind in id order.
   if (!r.calc_output || !r.inputs_hash) throw invalid('Run the calculation first');
   const ev = await resolveEvidence(tx, r);
   const ids = [...ev.effective].sort();
   await tx.query('select id from sampling_events where id = any($1) order by id for share', [ids]);
   await tx.query('select i.id from instruments i join sampling_events e on e.instrument_id = i.id where e.id = any($1) order by i.id for share of i', [ids]);
+  // R6-N2: register records that feed the snapshot (task and hazard durations and times, molecular weight) are
+  // share-locked too, so a register update waits for the approval instead of changing the frozen inputs unchecked.
+  await tx.query(`select t.id from exposure_group_hazards gh join hazards h on h.id=gh.hazard_id join tasks t on t.id=h.task_id where gh.group_id=$1 and h.substance_id=$2 order by t.id for share of t`, [r.group_id, r.substance_id]);
+  await tx.query(`select h.id from exposure_group_hazards gh join hazards h on h.id=gh.hazard_id where gh.group_id=$1 and h.substance_id=$2 order by h.id for share of h`, [r.group_id, r.substance_id]);
+  await tx.query('select id from substances where id=$1 for share', [r.substance_id]);
   if (r.benchmark_version_id) await tx.query('select id from benchmark_versions where id=$1 for share', [r.benchmark_version_id]);
+  // R6-N1: a held record also matches its sample by client_uuid (a device that never learned the server id).
   const pending = await one(tx, `select e.id, e.sample_code from sampling_events e where e.id = any($1) and ((e.suspension_review_required and e.suspension_reviewed_at is null)
-      or exists (select 1 from field_intake_holds h where h.status in ('held','in_conflict') and (h.server_id = e.id or h.sampling_event_id = e.id))) order by e.sample_code limit 1`, [ids]);
+      or exists (select 1 from field_intake_holds h where h.status in ('held','in_conflict') and (h.server_id = e.id or h.sampling_event_id = e.id or (e.client_uuid is not null and h.client_uuid = e.client_uuid)))) order by e.sample_code limit 1`, [ids]);
   if (pending) throw invalid(`Sample ${pending.sample_code}${ev.pending.includes(pending.id) ? ' (removal requested but not confirmed, so it is still part of the evidence)' : ''} reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.`);
   const snap = await buildSnapshot(tx, r, r.substance_id, ev.effective);
   if (hashOf(snap, r.calc_code) !== r.inputs_hash) throw conflict('Underlying evidence has changed since the calculation was run (e.g. an amended laboratory result or QC disposition). Recalculate before continuing.');
@@ -448,25 +458,33 @@ export async function newRevision(a: Actor, assessmentId: string, input: unknown
     const cur = await one(tx, 'select * from assessment_revisions where assessment_id=$1 and revision=$2', [assessmentId, as.current_revision]);
     if (['draft', 'in_review'].includes(cur.status)) throw invalid('The current revision is still open; edit it instead');
     const n = as.current_revision + 1;
-    // Removals still awaiting a reviewer's confirmation were part of the evidence of that revision; they stay in.
+    // Removals still awaiting a reviewer's confirmation were part of the evidence of that revision. They stay evidence in
+    // the new revision as carried-forward removal requests (R6 minor: previously they became selected and the request was lost).
     const pending = (await resolveEvidence(tx, cur)).pending;
+    const pendingInfo = (await sampleRemovals(tx, cur)).filter((x) => pending.includes(x.sampleId));
     const rev = await one(tx, `insert into assessment_revisions (tenant_id,client_id,assessment_id,revision,sample_ids,calc_code,calc_version,parameters,benchmark_version_id,interpretation,conclusion_category,limitations,supersedes_revision_id,change_reason,created_by)
       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15) returning *`,
-      [as.tenant_id, as.client_id, assessmentId, n, [...cur.sample_ids, ...pending], cur.calc_code ?? 'twa_8h', calcOf(cur.calc_code).version, cur.parameters, cur.benchmark_version_id, cur.interpretation, cur.conclusion_category, cur.limitations, cur.id, d.change_reason, a.userId]);
+      [as.tenant_id, as.client_id, assessmentId, n, cur.sample_ids, cur.calc_code ?? 'twa_8h', calcOf(cur.calc_code).version, cur.parameters, cur.benchmark_version_id, cur.interpretation, cur.conclusion_category, cur.limitations, cur.id, d.change_reason, a.userId]);
     await tx.query('update assessments set current_revision=$2 where id=$1', [assessmentId, n]);
+    for (const p of pendingInfo)
+      await tx.query(`insert into assessment_sample_removals (tenant_id,client_id,revision_id,sampling_event_id,action,reason,recorded_by) values ($1,$2,$3,$4,'requested',$5,$6)`,
+        [as.tenant_id, as.client_id, rev.id, p.sampleId, `Carried forward from r${cur.revision}: removal requested by ${p.requestedBy} (“${p.reason}”), not confirmed`, a.userId]);
     await audit(tx, a, 'assessment.new_revision', 'assessment', assessmentId, { revision: n, reason: d.change_reason });
     return rev;
   });
 }
 
 /** Detects evidence or reference changes since a revision was calculated/approved. Never mutates the revision. */
+const canonical = (x: unknown): string => JSON.stringify(x, (_k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, v[k]])) : v));
+
 export async function staleness(tx: Tx, r: any) {
   const reasons: string[] = [];
   if (r.inputs_snapshot) {
     // Evidence references (sample versions, result revisions, QC dispositions) are compared independently of the
     // calculation version, so an engine update never hides a real evidence change.
     const snap = await buildSnapshot(tx, r, r.substance_id);
-    if (JSON.stringify(snap.refs) !== JSON.stringify(r.inputs_snapshot.refs)) reasons.push('Underlying sample, QC or laboratory evidence has changed since this revision was calculated.');
+    // R6-N5: compare canonically (stored JSONB reorders object keys, so a plain string comparison always differed).
+    if (canonical(snap.refs) !== canonical(r.inputs_snapshot.refs)) reasons.push('Underlying sample, QC or laboratory evidence has changed since this revision was calculated.');
     const latest = calcOf(r.calc_code).version;
     if (r.calc_version && r.calc_version !== latest)
       reasons.push(`The calculation method has been updated (v${r.calc_version} → v${latest}) since this revision was calculated; reassessment may be required. This revision's results are unchanged.`);

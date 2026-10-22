@@ -1,10 +1,12 @@
 {
-  "generated": "2026-10-22T14:04:10.938Z",
+  "generated": "2026-10-22T16:48:53.235Z",
   "readOnly": true,
   "scope": "revisions in review, approved or superseded whose frozen inputs include samples outside the selected list",
   "summary": {
     "revisionsFlagged": 0,
     "concern": 0,
+    "concernEstablishedAtApproval": 0,
+    "concernOutstandingNowOnly": 0,
     "needsInvestigation": 0,
     "noConcernFound": 0,
     "approved": 0,

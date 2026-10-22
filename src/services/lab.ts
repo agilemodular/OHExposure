@@ -94,7 +94,7 @@ export async function createSubmission(a: Actor, input: unknown) {
   const d = parse(z.object({ laboratory_id: uuid, reference: reqStr(2, 100), sample_ids: strArray.pipe(z.array(uuid).min(1)), dispatched_at: z.string(), timezone: z.string().default('Europe/London'), courier_ref: optStr, notes: optStr }), input);
   return withActor(a, async (tx) => {
     await assertWorkflowActive(tx, 'lab_import');
-    const samples = await many(tx, 'select * from sampling_events where id = any($1) for update', [d.sample_ids]);
+    const samples = await many(tx, 'select * from sampling_events where id = any($1) order by id for update', [d.sample_ids]);
     if (samples.length !== d.sample_ids.length) throw notFound('One or more samples');
     const clients = new Set(samples.map((s) => s.client_id));
     if (clients.size > 1) throw invalid('A submission cannot mix samples from different clients');
@@ -125,7 +125,7 @@ export async function receiveSubmission(a: Actor, id: string, input: unknown) {
     const at = zonedToUtc(d.received_at, d.timezone);
     assertNotFuture('Receipt time', at, d.received_at, d.timezone);
     await tx.query('update lab_submissions set received_at=$2, received_condition=$3 where id=$1', [id, at, d.received_condition]);
-    const samples = await many(tx, 'select e.* from lab_submission_samples x join sampling_events e on e.id=x.sampling_event_id where x.submission_id=$1', [id]);
+    const samples = await many(tx, 'select e.* from lab_submission_samples x join sampling_events e on e.id=x.sampling_event_id where x.submission_id=$1 order by e.id for update of e', [id]);
     for (const s of samples) {
       await tx.query('insert into custody_events (tenant_id,client_id,sampling_event_id,event,at,condition,notes,recorded_by) values ($1,$2,$3,$4,$5,$6,$7,$8)',
         [s.tenant_id, s.client_id, s.id, 'received_by_lab', at, d.received_condition, `Submission ${sub.reference}`, a.userId]);
@@ -231,6 +231,8 @@ export async function commitImport(a: Actor, batchId: string) {
     await assertLinkableAttachment(tx, b.source_attachment_id);
     if (b.status !== 'validated') throw invalid('Only a fully validated batch can be committed; correct the file and re-import');
     const rows = await many(tx, 'select * from import_rows where batch_id=$1 order by row_no', [batchId]);
+    // R6-N3: lock every sample of the batch in id order first (the order approval uses), so a commit cannot deadlock with it.
+    await tx.query('select id from sampling_events where id = any($1) order by id for update', [rows.map((r) => r.parsed?.sampling_event_id).filter(Boolean)]);
     for (const r of rows) await writeResult(tx, a, parse(resultSchema, r.parsed), batchId);
     await tx.query(`update import_batches set status='committed', committed_at=now() where id=$1`, [batchId]);
     await audit(tx, a, 'import.committed', 'import_batch', batchId, { rows: rows.length });
