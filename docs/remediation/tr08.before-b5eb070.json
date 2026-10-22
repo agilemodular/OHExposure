@@ -1,0 +1,61 @@
+{
+  "commit": "b5eb070",
+  "run_at": "2026-10-22T13:56:38.391Z",
+  "scenarios": [
+    {
+      "scenario": "held record on a sample whose removal awaits confirmation",
+      "inCalculation": true,
+      "submit": "succeeded",
+      "approve": "succeeded"
+    },
+    {
+      "scenario": "suspension-review flag on a sample whose removal awaits confirmation",
+      "inCalculation": true,
+      "submit": "succeeded",
+      "approve": "succeeded"
+    },
+    {
+      "scenario": "approver recorded a QC disposition for a sample whose removal awaits confirmation",
+      "qcDispositionByApprover": "succeeded",
+      "inCalculation": true,
+      "submit": "succeeded",
+      "approve": "succeeded"
+    },
+    {
+      "scenario": "amendment of a pending-removal sample's evidence concurrent with approval",
+      "inCalculation": true,
+      "blockedByApproval": false,
+      "approval": "succeeded",
+      "write": "succeeded",
+      "finalStatus": "approved",
+      "evidenceChangedBeforeApprovalCommitted": true,
+      "sequence": [
+        "controller holds the previously approved revision row",
+        "approval paused after its evidence check (waiting to supersede r1)",
+        "amendment started",
+        "amendment finished: succeeded",
+        "amendment committed while the approval was paused",
+        "controller released the row",
+        "approval finished: succeeded"
+      ]
+    },
+    {
+      "scenario": "calibration of a pending-removal sample's evidence concurrent with approval",
+      "inCalculation": true,
+      "blockedByApproval": false,
+      "approval": "succeeded",
+      "write": "succeeded",
+      "finalStatus": "approved",
+      "evidenceChangedBeforeApprovalCommitted": true,
+      "sequence": [
+        "controller holds the previously approved revision row",
+        "approval paused after its evidence check (waiting to supersede r1)",
+        "calibration started",
+        "calibration finished: succeeded",
+        "calibration committed while the approval was paused",
+        "controller released the row",
+        "approval finished: succeeded"
+      ]
+    }
+  ]
+}

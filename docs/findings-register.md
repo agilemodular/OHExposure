@@ -301,3 +301,26 @@ Verdicts: TR-06 **not closed** (F1); TR-07 substantively closed (Lows below). Tr
 | R5-F7 | Relationship evidence not frozen in the audit event or shown in the report | Low | Audit event and report carry both samples' windows, instruments, pair references, tasks, group, shift and the retained result | `tr06-tr07.test.ts` F7 | Fixed (tests) |
 | R5-F8 | Impact scan counted a supported but conflicting duplicate as sufficient; did not flag evidence amended after approval; attribution could include earlier engine changes | Low | Compares results from the frozen inputs; lists results amended since the calculation; states attribution | Scenario re-run | Fixed |
 | R5-D | Documentation: "missing evidence never passes" and "later unsupported dispositions are rejected" were not true in 1.5.0; finite limits not enforced by the database; capability matrix stale; bytecode committed | Low (documentation) | Corrected with the fixes above; capability matrix updated; bytecode removed and ignored | — | Fixed |
+
+### 7.4 TR-08: effective sample list not used by the approval safeguards (22 Oct 2026, reviewed commit `b5eb070`)
+
+Source: application inconsistency raised with the independent technical re-review of `b5eb070` (engine 1.5.1). That re-review verified that the original TR-06 and TR-07 engine reproductions are fixed, that all 113 calculation fixtures pass, and that the TR-01–TR-05 reproduction outputs match; those closures are retained.
+
+**Finding.** Since 1.5.1, `buildSnapshot()` includes the selected samples **and** samples whose removal awaits a technical reviewer's confirmation (R5-F2). `assertCurrent()` used only `r.sample_ids` for the sampling-event and instrument locks and for the held-record and suspension-review checks. `approve()` used only `r.sample_ids` for the reviewer's own-QC-disposition check, and so did the database approval trigger (`enforce_pilot_approval`, migration 020). A sample could therefore stay in the calculation while falling outside these safeguards.
+
+**Evidence history.**
+
+| Date | Evidence | Status |
+|---|---|---|
+| 22 Oct 2026 | Source inspection (`src/services/assessments.ts` `assertCurrent`, `approve`; migration 020 trigger) | **Verified by source inspection; end-to-end impact awaiting integration reproduction** (status at registration) |
+| 22 Oct 2026 | Integration reproductions on `b5eb070` through the services and database roles used by normal users (`test/tr08-scenarios.ts`; output `docs/remediation/tr08.before-b5eb070.json`) | **Reproduced end to end** for all five paths below; no other control blocked them |
+
+| Path | Reproduction on `b5eb070` | Result |
+|---|---|---|
+| Held field record on a pending-removal sample | Sample in the calculation; submission and approval | **Both succeeded** (the hold was not checked) |
+| Suspension-review flag on a pending-removal sample | Same | **Both succeeded** |
+| Approver recorded a QC disposition for a pending-removal sample | Same reviewer approves | **Succeeded** (independence check missed it) |
+| Laboratory amendment of a pending-removal sample during approval | Approval paused after its evidence check (test holds the row it supersedes); amendment started | **Amendment committed while the approval was paused; the approval then succeeded** on evidence that had changed |
+| Calibration change of the pending-removal sample's instrument during approval | Same, failed calibration recorded for the instrument | **Committed while paused; approval succeeded** |
+
+Controls that do work for **selected** samples (unchanged, for comparison): held records and suspension flags block submission and approval (`h2.test.ts` "H2/M3", "holds records received while suspended …"); a laboratory amendment waits for the approval's share lock (`h2.test.ts` "a laboratory amendment cannot commit between the approval check and the approval").
