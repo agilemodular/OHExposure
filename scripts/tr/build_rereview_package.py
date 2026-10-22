@@ -13,7 +13,7 @@ git = lambda *a: subprocess.check_output(['git', *a], cwd=R).decode().strip()
 commit = git('rev-parse', 'HEAD'); short = commit[:7]
 assert git('status', '--porcelain') == '', 'working tree must be clean'
 BASE = 'b5eb070'
-name = f'OHEA-rereview-app-1.1.0-engine-1.5.1-{short}'
+name = f"OHEA-rereview-app-{json.load(open(os.path.join(R, 'package.json')))['version']}-engine-1.5.1-{short}"
 P = os.path.join(out_dir, name)
 shutil.rmtree(P, ignore_errors=True)
 
@@ -25,6 +25,9 @@ FILES = {
   '01-source/db/migrations/020_h2_review_fixes.sql': 'db/migrations/020_h2_review_fixes.sql',
   '01-source/db/migrations/029_sample_removals_finite_values.sql': 'db/migrations/029_sample_removals_finite_values.sql',
   '01-source/db/migrations/030_effective_sample_set.sql': 'db/migrations/030_effective_sample_set.sql',
+  '01-source/db/migrations/031_hold_client_uuid_disposition_scope.sql': 'db/migrations/031_hold_client_uuid_disposition_scope.sql',
+  '01-source/db/migrations/028_duplicate_relationship_value_meaning.sql': 'db/migrations/028_duplicate_relationship_value_meaning.sql',
+  '01-source/src/services/lab.ts': 'src/services/lab.ts',
   '01-source/scripts/tr/tr08-impact.ts': 'scripts/tr/tr08-impact.ts',
   '01-source/scripts/tr/tr08-scenario.ts': 'scripts/tr/tr08-scenario.ts',
   '01-source/scripts/tr/run-tr08-scenario.sh': 'scripts/tr/run-tr08-scenario.sh',
@@ -77,8 +80,8 @@ ident = {'repository': 'github.com/agilemodular/OHExposure', 'branch': 'main', '
          'methods': dict(re.findall(r"(twa_8h|stel_15): \{ code: '\w+', version: '([^']+)'", eng)),
          'application_version': json.load(open(os.path.join(R, 'package.json')))['version'],
          'previous': {'application': '1.0.0', 'engine': '1.5.1', 'twa_8h': '1.4.1', 'stel_15': '1.3.1', 'note': 'engine and methods unchanged by TR-08'},
-         'migrations_added': ['030_effective_sample_set.sql'],
-         'findings': {'TR-08': 'implemented — awaiting technical re-review', 'TR-06/TR-07 engine reproductions': 'verified fixed by the independent technical re-review of b5eb070', 'R5-F1..F8': 'fixed in 1.5.1 — awaiting technical re-review'},
+         'migrations_added': ['030_effective_sample_set.sql', '031_hold_client_uuid_disposition_scope.sql'],
+         'findings': {'TR-08 (with R6-N1..N5, M1..M2)': 'implemented — awaiting technical re-review', 'TR-06/TR-07 engine reproductions': 'verified fixed by the independent technical re-review of b5eb070', 'R5-F1..F8': 'fixed in 1.5.1 — awaiting technical re-review'},
          'evidence_classes': {'supplied_test_evidence': 'development workspace runs in this package', 'independent_technical_verification': 're-review of b5eb070 (TR-06/TR-07 engine reproductions, 113 fixtures, TR-01–TR-05 outputs); not yet TR-08', 'professional_approval': 'none for any version'},
          'classification': 'internal prototype; pilot gates open; no release or pilot readiness declared',
          'molar_volume_L_per_mol': re.search(r'MOLAR_VOLUME_L = ([0-9.]+)', eng).group(1),

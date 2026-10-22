@@ -1,10 +1,10 @@
-# OHEA re-review package — TR-08 (application 1.1.0, engine 1.5.1)
+# OHEA re-review package — TR-08 (application 1.1.1, engine 1.5.1)
 
 **Responds to:** the independent technical re-review of commit `b5eb070` (engine 1.5.1). The re-review verified that the original TR-06 and TR-07 engine reproductions are fixed, that all 113 calculation fixtures pass, and that the TR-01–TR-05 reproduction outputs match. It raised an application inconsistency, registered as **TR-08**: samples whose removal awaits a reviewer's confirmation stayed in the calculation but fell outside the approval safeguards.
 
 **Versions:**
-- **Application:** 1.0.0 → **1.1.0**.
-- **Migration:** **030** (schema 001–030).
+- **Application:** 1.0.0 → 1.1.0 → **1.1.1** (1.1.1: fixes from a re-check of 1.1.0 by a separate AI review agent, R6 — findings register §7.5).
+- **Migrations:** **030, 031** (schema 001–031).
 - **Engine and methods: unchanged** at 1.5.1 (`twa_8h` 1.4.1, `stel_15` 1.3.1), because no calculation behaviour changed.
 
 Commit, versions and checksums: `07-identifiers/identifiers.json`, `MANIFEST.sha256`.
@@ -16,7 +16,7 @@ Commit, versions and checksums: `07-identifiers/identifiers.json`, `MANIFEST.sha
 | Kind | What exists |
 |---|---|
 | **Supplied test evidence** (development workspace) | Before and after application reproductions, the full regression suite, TR-08 integration and concurrency tests, browser checks, impact checks — `02-…`, `03-…`, `06-…` |
-| **Independent technical verification** | The re-review of `b5eb070`: TR-06 and TR-07 engine reproductions fixed, 113 fixtures pass, TR-01–TR-05 outputs match (retained; all still pass here). **Not yet for TR-08.** Earlier AI-agent checks (R4, R5) are not external validation |
+| **Independent technical verification** | The re-review of `b5eb070`: TR-06 and TR-07 engine reproductions fixed, 113 fixtures pass, TR-01–TR-05 outputs match (retained; all still pass here). **Not yet for TR-08.** AI-agent checks (R4, R5, R6) are not external validation |
 | **Professional approval** | **None**, for any method version |
 
 ## Status at a glance
@@ -24,7 +24,7 @@ Commit, versions and checksums: `07-identifiers/identifiers.json`, `MANIFEST.sha
 | State | Items |
 |---|---|
 | **Verified by independent technical re-review** | TR-06 and TR-07 engine reproductions; 113 fixtures; TR-01–TR-05 outputs |
-| **Implemented — awaiting technical re-review** | TR-08 (resolver, locks, trigger, held-record placement lock); the R5 fixes F1–F8 |
+| **Implemented — awaiting technical re-review** | TR-08 with the R6 fixes (resolver, locks incl. register and client_uuid holds, triggers, lock order, staleness); the R5 fixes F1–F8 |
 | **Awaiting professional judgement** | As before (specification §0): duplicate thresholds and conflict rule, value-field boundaries, reviewer confirmation of removals, and the 1.4.0 conventions |
 | **Still open** | Any reassessment decisions for real records flagged by the impact checks (none in the development database); professional approval of every method version (G3) |
 
@@ -32,12 +32,12 @@ Commit, versions and checksums: `07-identifiers/identifiers.json`, `MANIFEST.sha
 
 | Folder | Content | Source |
 |---|---|---|
-| `01-source/` | Assessment and field services, the assessment route, migrations 029 and 030, impact checks and scenario scripts; `changes-since-b5eb070.diff` | Repository; the diff is *generated at export* |
-| `02-reproductions/` | TR-08 **before** (`b5eb070`) and **after** (application 1.1.0), produced by the same scenario code; the probe source; the TR-01–TR-07 reproductions on 1.5.1 | Repository |
+| `01-source/` | Assessment, field and laboratory services, the assessment route, migrations 029–031, impact checks and scenario scripts; `changes-since-b5eb070.diff` | Repository; the diff is *generated at export* |
+| `02-reproductions/` | TR-08 **before** (`b5eb070`) and **after** (application 1.1.1), produced by the same scenario code; the probe source; the TR-01–TR-07 reproductions on 1.5.1 | Repository |
 | `03-fixtures-and-tests/` | `tr08.test.ts`, `tr08-scenarios.ts`, `fixtures.ts`; the fixtures file and its builder; `results/` (*generated at export*): full test run with per-test status, browser logs | Repository; results generated at export |
 | `04-specifications/` | Calculation specification (§0.11: effective evidence set) | Repository |
-| `05-synthetic-report/` | Reassessment report regenerated with the version actually used (engine 1.5.1, `stel_15` 1.3.1, application 1.1.0), and the demonstration report | Repository |
-| `06-findings/` | Findings register (§7.4 TR-08), TR-08 and TR-06/TR-07 remediation summaries, TR-08 impact checks (development database; synthetic history made with `b5eb070`), TR-06/07 impact and scenario results, test evidence, readiness report | Repository |
+| `05-synthetic-report/` | Reassessment report regenerated with the version actually used (engine 1.5.1, `stel_15` 1.3.1), and the demonstration report | Repository |
+| `06-findings/` | Findings register (§7.4 TR-08, §7.5 R6), TR-08 and TR-06/TR-07 remediation summaries, TR-08 impact checks (development database; synthetic history made with `b5eb070`), TR-06/07 impact and scenario results, test evidence, readiness report | Repository |
 | `07-identifiers/` | Commit, application, engine and method versions, migration list, per-file last commit (*generated at export*) | — |
 
 ## Reproduce

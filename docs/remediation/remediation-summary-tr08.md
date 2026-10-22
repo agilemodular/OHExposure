@@ -1,6 +1,6 @@
 # Effective evidence set for approval safeguards — TR-08
 
-**Reviewed commit:** `b5eb070` (engine 1.5.1) · **Date:** 22 October 2026 · **Application:** 1.0.0 → **1.1.0** · **Migration:** 030 · **Engine and methods:** unchanged (1.5.1; `twa_8h` 1.4.1, `stel_15` 1.3.1).
+**Reviewed commit:** `b5eb070` (engine 1.5.1) · **Date:** 22 October 2026 · **Application:** 1.0.0 → 1.1.0 → **1.1.1** · **Migrations:** 030, 031 · **Engine and methods:** unchanged (1.5.1; `twa_8h` 1.4.1, `stel_15` 1.3.1).
 **Classification unchanged: internal prototype — pilot gates remain open.** Passing automated tests is not occupational-hygiene approval or authorisation for pilot use.
 
 ## 1. Status
@@ -8,7 +8,7 @@
 | Item | State |
 |---|---|
 | TR-06, TR-07 engine reproductions; 113 fixtures; TR-01–TR-05 outputs | **Verified by the independent technical re-review of `b5eb070`** — retained; all still pass |
-| TR-08 effective sample list not used by the approval safeguards | **Implemented — awaiting technical re-review** |
+| TR-08 effective sample list not used by the approval safeguards | **Implemented — awaiting technical re-review** (application 1.1.1, after the R6 AI-agent re-check, §7) |
 | Historical records | Read-only check provided; nothing flagged in the development database; any hosted database needs its own run |
 
 The evidence classes are kept apart:
@@ -33,7 +33,7 @@ Since 1.5.1, a practitioner's removal of a sample from the list is a request, an
 | Held record on a pending-removal sample | Submission and approval **succeeded** | Submission refused; if the hold appears after submission, approval refused by the service **and** the database trigger |
 | Suspension-review flag on a pending-removal sample | Submission and approval **succeeded** | Refused at submission, approval and in the trigger |
 | Approver recorded a QC disposition for a pending-removal sample | Approval **succeeded** | Refused (service and trigger) |
-| Laboratory amendment of a pending-removal sample during approval | Amendment committed while the approval was paused after its check; approval **succeeded** | Amendment **waits** for the approval's lock and commits afterwards (the approved evidence is what was checked; the later amendment is reported as staleness) |
+| Laboratory amendment of a pending-removal sample during approval | Amendment committed while the approval was paused after its check; approval **succeeded** | Amendment **waits** for the approval's lock and commits afterwards (the approved evidence is what was checked; the later amendment is reported as staleness — reliable from 1.1.1, R6-N5) |
 | Calibration change of that sample's instrument during approval | Same | Same: waits |
 
 No other control blocked the reproduced paths before the fix. For **selected** samples, the existing controls already worked (cited in the findings register, §7.4).
@@ -68,10 +68,12 @@ How the rules are met:
 | Draft update (`sample_ids`), removal request or confirmation | Revision row `FOR UPDATE` (the trigger on removals also takes `FOR SHARE`) | Serialised with submission and approval, which hold the same row `FOR UPDATE`; membership cannot change during the check |
 | Laboratory result or amendment, QC check, QC disposition, void | Sample `FOR UPDATE` | Waits for the approval's `FOR SHARE` on every effective sample (locked in id order) |
 | Calibration | Instrument `FOR UPDATE` | Waits for the approval's `FOR SHARE` on the effective samples' instruments (id order) |
-| Held field record on an existing sample | **New:** sample `FOR NO KEY UPDATE` | Previously took no sample lock, so it could appear after an approval's hold check, also for selected samples. Now it waits |
+| Held field record on an existing sample | **New:** sample `FOR NO KEY UPDATE` — by server id (1.1.0) and by `client_uuid` when the device has no server id (1.1.1, R6-N1) | Previously took no sample lock, so it could appear after an approval's hold check, also for selected samples. Now it waits |
+| Task or hazard update (register) | Row `FOR UPDATE` | **1.1.1 (R6-N2):** submission and approval share-lock the tasks, hazards and substance that feed the snapshot, so the update waits |
+| Laboratory import commit; submission dispatch and receipt | **1.1.1 (R6-N3):** samples `FOR UPDATE` in id order before writing | Same order as approval, so no deadlock |
 | Hold on the assessment | Assessment row (existing) | Unchanged |
 
-Lock order: revision row, then sampling events by id, then instruments by id, then benchmark version. The trigger re-locks the effective samples (already held) and re-checks holds, suspension review and independence inside the approving transaction.
+Lock order in submission and approval: revision row, then sampling events by id, then instruments by id, then tasks, hazards and substance (1.1.1), then benchmark version. Writers lock rows of one kind, several of them in id order. The trigger re-locks the effective samples (already held) and re-checks holds, suspension review and independence inside the approving transaction.
 
 The concurrency tests do not rely on comparing a hash. An approval is paused after its evidence check by holding the row it must supersede. The other writer is then observed (through `pg_stat_activity`) to be waiting for the approval's lock, and the sequence of events is recorded. A separate test shows that a change committed **before** the check makes approval fail on freshness.
 
@@ -107,3 +109,21 @@ Mutation checks were run by hand. Each of these broke the expected tests:
 - the service resolver use reverted to the selected list;
 - the trigger reverted to the selected list;
 - the hold-placement lock removed.
+
+## 7. R6 re-check (an AI review agent) and application 1.1.1
+
+R6 checked application 1.1.0 at `a9a4fff`. It is not the requested re-review. It found the resolver sound and found three Medium, two Low and two minor issues, plus documentation overclaims (`findings-register.md` §7.5). All are fixed in **1.1.1** with migration 031, with 7 more tests, and every fix was mutation-checked:
+- **N1:** held records sent with only a `client_uuid` now match and lock their sample.
+- **N2:** register records feeding the snapshot are locked during approval.
+- **N3:** writers lock samples in id order, so a laboratory import no longer deadlocks with an approval.
+- **N4:** samples awaiting removal can be given a disposition.
+- **N5:** staleness now compares evidence canonically, so it is reported only when evidence actually changed.
+- **Minor:** unconfirmed removals carry into a new revision as removal requests, and the impact check counts concerns at approval separately from concerns outstanding now.
+
+Corrected statements:
+- hold placement locks the sample whether the device sends the server id or only the `client_uuid`;
+- the deterministic lock order covers the writers listed in §3;
+- the staleness report is reliable from 1.1.1;
+- evidence dispositions and `client_uuid` holds also use the effective set.
+
+The scenario and development-database checks were re-run, with the same classifications plus separate "at approval" and "now" counts. The engine and method versions are unchanged.

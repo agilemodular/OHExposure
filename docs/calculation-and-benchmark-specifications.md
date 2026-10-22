@@ -176,7 +176,7 @@ A new assessment starts with every analysed sample of the group and substance (a
 
 This closes a route by which adverse or contradictory evidence (TR-06, TR-07) could be dropped without a reviewer, which existed before 1.4.0.
 
-**Effective evidence set (application 1.1.0, TR-08; no calculation change).** Every safeguard that concerns the evidence used by an assessment uses the same set: selected samples ∪ samples whose latest removal request has no later reviewer confirmation, resolved by one shared function (`assessment_effective_sample_ids`, migration 030) in the service and in the database approval trigger. That covers the calculation, locks, held-record and suspension-review checks, reviewer QC independence and freshness. An earlier confirmation never authorises a later request for the same sample.
+**Effective evidence set (application 1.1.0, TR-08; no calculation change).** Every safeguard that concerns the evidence used by an assessment uses the same set: selected samples ∪ samples whose latest removal request has no later reviewer confirmation, resolved by one shared function (`assessment_effective_sample_ids`, migration 030) in the service and in the database approval and disposition triggers. That covers the calculation, locks, held-record (including records known only by `client_uuid`) and suspension-review checks, reviewer QC independence, evidence dispositions and freshness (application 1.1.1). An earlier confirmation never authorises a later request for the same sample.
 
 ## Capability matrix (Phase H1)
 

@@ -134,7 +134,7 @@ Closed since the H2 report: R-L4, R-L5, R-L7, R2-M7 residual, R2-P1, R2-P2, R2-P
 | TR-01–TR-05, TR-A–D, TR-R | High/Medium (calculation and reporting) | Fixed and tested; TR-01–TR-05 reproduction outputs verified to match by the independent technical re-review of `b5eb070`; the rest awaiting technical re-review (§7) | Re-review of engine 1.4.0; professional judgement on the conventions listed in §7 |
 | TR-N1–N3, TR-N5–N8 | High–Low | Fixed and tested; awaiting technical re-review (§7.1) | As above |
 | TR-06 (supersedes TR-N4), TR-07; R5-F1–F8 | High (calculation; reachable through the application) | Engine reproductions and fixtures verified by the independent technical re-review of `b5eb070`; R5 fixes awaiting re-review (§7.2, §7.3), engine 1.5.1 | Re-review of the R5 fixes; professional judgement on the duplicate thresholds and conflict rule, and the value-field boundaries |
-| TR-08 | High (approval safeguards; reproduced end to end) | **Implemented — awaiting technical re-review** (§7.4), application 1.1.0 | Re-review of the resolver, locks and trigger |
+| TR-08 (with R6-N1–N5, M1–M2) | High (approval safeguards; reproduced end to end) | **Implemented — awaiting technical re-review** (§7.4, §7.5), application 1.1.1 | Re-review of the resolver, locks and trigger |
 | R2-Q5 | Low | Partly fixed (tests); remaining edge cases fall under R-X1 | Accept with R-X1 (§6) |
 | R-H2a, R-M5, R-M6, R-M8, R-L1, OO-R7 | Low | Open / mitigated (offline capability) | Defer while offline capture is off |
 | R-X1 (with R2-Q5) | Low | Mitigated | Accept for the pilot with controls |
@@ -366,3 +366,20 @@ Controls that do work for **selected** samples (unchanged, for comparison): held
   Approved revisions were unchanged by the check (row hash).
 
 **Status: implemented — awaiting technical re-review.** The re-review's verified closure of the TR-06 and TR-07 engine reproductions, the 113 fixtures and the TR-01–TR-05 outputs stands; they pass unchanged.
+
+### 7.5 Re-check of the TR-08 change (R6, 22 Oct 2026, commit `a9a4fff`)
+
+R6 was a separate AI review agent, working in its own worktree and database. **It is not the requested technical re-review and not professional validation.** It ran the full suite (333 passed) and probe tests, and found the resolver semantics sound. It found the gaps below. Treatment: **application 1.1.1**, migration **031**; engine 1.5.1 and method versions unchanged (no calculation change). All are fixed with tests; **not re-reviewed**.
+
+| ID | Finding | Severity | Treatment | Evidence | Status |
+|---|---|---|---|---|---|
+| R6-N1 | A held field record sent with only its `client_uuid` (device never learned the server id, e.g. a lost response) did not match its sample: approval succeeded for pending and selected samples, and placing such a hold took no lock. Predates TR-08 | Medium | Holds match by `client_uuid` too (service, approval trigger re-created in 031, impact check); placing one locks the existing sample `FOR NO KEY UPDATE` | `tr08.test.ts` N1 ×2; mutations detected | Fixed (tests); awaiting technical re-review |
+| R6-N2 | Register records in the snapshot (task and hazard durations and times, substance) were not locked: a task update committed during a paused approval, which then approved stale exposure records. Predates TR-08 | Medium | Tasks, hazards and the substance share-locked in submission and approval (fixed order after samples and instruments) | `tr08.test.ts` N2; mutation detected | Fixed (tests); awaiting technical re-review |
+| R6-N5 | `staleness()` reported "evidence has changed" for every calculated revision (stored JSONB reorders keys), so the staleness signal relied on in the TR-08 documents was meaningless. Pre-existing | Medium | Canonical comparison | `tr08.test.ts` N5 (no warning when unchanged; warning after an amendment); mutation detected | Fixed (tests); awaiting technical re-review |
+| R6-N3 | Laboratory import commit locked samples in file order: deadlock with an approval (failed closed with a raw database error) | Low | Import commit, submission dispatch and receipt lock samples in id order first | `tr08.test.ts` N3 reproduces the R6 sequence; mutation (deadlock) detected | Fixed (tests) |
+| R6-N4 | A sample awaiting removal confirmation could not be dispositioned ("not part of this revision"), and the disposition form hid it | Low | Dispositions over the effective set (service; disposition trigger re-created in 031 from its 028 body); form lists pending samples | `tr08.test.ts` N4 | Fixed (tests) |
+| R6-M1 | A new revision turned unconfirmed removals into selected samples, losing the request | Low | Carried forward as removal requests in the new revision ("Carried forward from rN …"), so they stay evidence and visible until confirmed | `tr08.test.ts` carry-forward | Fixed (tests) |
+| R6-M2 | Impact check: laboratory writes for any substance counted; "now" and "at approval" concerns mixed in the counts | Low | Assessed substance only; separate counts (`concernEstablishedAtApproval`, `concernOutstandingNowOnly`) | Scenario re-run | Fixed |
+| R6-D | Documentation overclaims: hold placement always locks (only with server id); deterministic lock order system-wide (not for writers); later amendment "reported as staleness" (staleness always fired); every safeguard uses the effective set (dispositions and client_uuid holds did not) | Low (documentation) | Corrected with the fixes above (`remediation-summary-tr08.md` §7) | — | Fixed |
+
+**Status of TR-08 after R6: implemented — awaiting technical re-review** (application 1.1.1).

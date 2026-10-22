@@ -1,17 +1,17 @@
 {
-  "commit": "1d9aa6b",
-  "run_at": "2026-10-22T14:03:03.476Z",
+  "commit": "b1f4dd0",
+  "run_at": "2026-10-22T16:49:06.909Z",
   "scenarios": [
     {
       "scenario": "held record on a sample whose removal awaits confirmation",
       "inCalculation": true,
-      "submit": "refused: Sample T8-2-e9340b6f (removal requested but not confirmed, so it is still part of the evidence) reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.",
+      "submit": "refused: Sample T8-2-2db683e8 (removal requested but not confirmed, so it is still part of the evidence) reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.",
       "approve": "not reached"
     },
     {
       "scenario": "suspension-review flag on a sample whose removal awaits confirmation",
       "inCalculation": true,
-      "submit": "refused: Sample T8-4-e9340b6f (removal requested but not confirmed, so it is still part of the evidence) reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.",
+      "submit": "refused: Sample T8-4-2db683e8 (removal requested but not confirmed, so it is still part of the evidence) reached the server during a suspension and must be reviewed (Sync conflicts → Held field records) before this assessment can be submitted or approved.",
       "approve": "not reached"
     },
     {
@@ -19,7 +19,7 @@
       "qcDispositionByApprover": "succeeded",
       "inCalculation": true,
       "submit": "succeeded",
-      "approve": "refused: You recorded a QC disposition for sample T8-6-e9340b6f (samples awaiting removal confirmation count as evidence) in this assessment, so another reviewer must approve it"
+      "approve": "refused: You recorded a QC disposition for sample T8-6-2db683e8 (samples awaiting removal confirmation count as evidence) in this assessment, so another reviewer must approve it"
     },
     {
       "scenario": "amendment of a pending-removal sample's evidence concurrent with approval",
